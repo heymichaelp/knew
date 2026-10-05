@@ -1,12 +1,12 @@
 {
-  "name": "@knewpeople/intelligence",
+  "name": "@popjoker/knew",
   "version": "0.1.0",
   "description": "The people-intelligence engine's pure core: the contract, the lenses, the brief, the reconciliation plan, the prompt text, and the HTTP client. No database, no model, no React.",
   "license": "UNLICENSED",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/heymichaelp/knewpeople.git",
-    "directory": "packages/intelligence"
+    "directory": "packages/knew"
   },
   "keywords": [
     "people",

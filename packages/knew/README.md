@@ -1,4 +1,4 @@
-# @knewpeople/intelligence
+# @popjoker/knew
 
 The people-intelligence engine's pure core. One engine, distinct clients: a client registers a
 **lens** (what to remember about a person, how the page reads, what to ask next), keeps a
@@ -27,11 +27,11 @@ This package has no database, no model and no React. It is:
   so "implements the contract" means one thing.
 
 ```sh
-npm install @knewpeople/intelligence
+npm install @popjoker/knew
 ```
 
 ```ts
-import { intelligenceClient } from "@knewpeople/intelligence";
+import { intelligenceClient } from "@popjoker/knew";
 
 const intelligence = intelligenceClient({ baseUrl: process.env.INTELLIGENCE_URL!, serviceKey: process.env.INTELLIGENCE_SERVICE_KEY! });
 const scope = { clientId: "my-app", subjectId: user.id };

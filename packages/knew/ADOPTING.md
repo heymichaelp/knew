@@ -1,18 +1,18 @@
 # Adopting the engine
 
-How a client takes `@knewpeople/intelligence` on, in the order the questions come up. The
+How a client takes `@popjoker/knew` on, in the order the questions come up. The
 knewpeople app and the service in the same repo follow all of it; a second client follows it
 without reading their code.
 
 ## 1. Install, and bind once per process
 
 ```sh
-npm install @knewpeople/intelligence
+npm install @popjoker/knew
 ```
 
 The package is ES modules for Node 22 or later, or any bundler that reads `exports`. Until it is
-on a registry, `npm pack` in `packages/intelligence` makes a tarball that installs the same way
-(`npm install ./knewpeople-intelligence-0.1.0.tgz`).
+on a registry, `npm pack` in `packages/knew` makes a tarball that installs the same way
+(`npm install ./popjoker-knew-0.1.0.tgz`).
 
 Make one `PeopleIntelligence` per process and hand it around; never build one per request. The
 HTTP client holds no connection, so the cost is only the discipline: one place knows the URL and
@@ -20,7 +20,7 @@ the key, and one place can swap the driver.
 
 ```ts
 // intelligence.ts
-import { intelligenceClient, type PeopleIntelligence } from "@knewpeople/intelligence";
+import { intelligenceClient, type PeopleIntelligence } from "@popjoker/knew";
 
 export const intelligence: PeopleIntelligence = intelligenceClient({
   baseUrl: process.env.INTELLIGENCE_URL!,
@@ -40,7 +40,7 @@ A lens is JSON. Write it in the client's repo, validate it in a test, register i
 version at boot or by hand.
 
 ```ts
-import { parseLensDefinition } from "@knewpeople/intelligence";
+import { parseLensDefinition } from "@popjoker/knew";
 import definition from "./lens.json" with { type: "json" };
 
 parseLensDefinition(definition); // throws with the field named when the JSON is not a lens
@@ -141,7 +141,7 @@ From a checkout of the knewpeople repo:
 npm run db:start                                   # the repo's local Postgres, on 54322
 docker exec supabase_db_knewpeople psql -U postgres -c 'create database intelligence'
 cp apps/intelligence/.env.example apps/intelligence/.env
-npm run build -w @knewpeople/intelligence
+npm run build -w @popjoker/knew
 npm run db:migrate -w @knewpeople/intelligence-service
 npm run cli -w @knewpeople/intelligence-service -- client add my-app --name "My app"
 npm run cli -w @knewpeople/intelligence-service -- lens set my-app lens.json
@@ -162,11 +162,11 @@ episodes; extraction fails on its first call and the episodes stay pending.
 
 ## 9. Testing a client
 
-`fakeIntelligence()` from `@knewpeople/intelligence/testing` is an in-memory driver that passes
+`fakeIntelligence()` from `@popjoker/knew/testing` is an in-memory driver that passes
 the contract suite. A client's tests bind it where `intelligenceClient` would be bound.
 
 ```ts
-import { fakeIntelligence, fixtureLens } from "@knewpeople/intelligence/testing";
+import { fakeIntelligence, fixtureLens } from "@popjoker/knew/testing";
 
 const fake = fakeIntelligence(compileLens(parseLensDefinition(myLens)));   // or fixtureLens()
 await fake.upsertPerson(scope, { id: "linda", name: "Linda" });
@@ -186,7 +186,7 @@ suite the service runs:
 
 ```ts
 import { test } from "node:test";
-import { contractSuite } from "@knewpeople/intelligence/testing";
+import { contractSuite } from "@popjoker/knew/testing";
 
 contractSuite({
   test,

@@ -15,7 +15,7 @@ import type { Fact, IntelligenceScope, NewFact, PeopleIntelligence } from "./typ
  * extract nothing can still prove its roster, its episodes, its scopes and its deletions.
  *
  *     import { test } from "node:test";
- *     import { contractSuite } from "@knewpeople/intelligence/testing";
+ *     import { contractSuite } from "@popjoker/knew/testing";
  *     contractSuite({ open, test, scripted: true });
  */
 
