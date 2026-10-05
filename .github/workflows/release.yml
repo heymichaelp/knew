@@ -1,0 +1,63 @@
+name: Release
+
+# A release is a version bump on main and nothing else. This compares the
+# version in the repo against the one on npm and publishes only when they
+# differ, so an ordinary merge that touches the package is a no-op.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "packages/knew/**"
+      - ".github/workflows/release.yml"
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write # npm trusted publishing (OIDC); no token lives in this repo
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+          cache: npm
+
+      # trusted publishing needs npm >= 11.5.1; the runner ships 10.x
+      - run: npm install -g npm@latest
+
+      - id: version
+        name: Compare the repo against the registry
+        run: |
+          local_version=$(node -p "require('./packages/knew/package.json').version")
+          published=$(npm view @popjoker/knew version 2>/dev/null || echo "none")
+          echo "local=$local_version"  >> "$GITHUB_OUTPUT"
+          echo "published=$published"  >> "$GITHUB_OUTPUT"
+          if [ "$local_version" = "$published" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "@popjoker/knew $published is already published; nothing to do."
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "publishing @popjoker/knew $local_version (registry has $published)"
+          fi
+
+      - if: steps.version.outputs.changed == 'true'
+        run: npm ci
+
+      # prepublishOnly inside the package regenerates the prompts, builds and
+      # runs the tests, so this is the last gate as well as the first.
+      - if: steps.version.outputs.changed == 'true'
+        run: npm publish --workspace @popjoker/knew
+
+      - if: steps.version.outputs.changed == 'true'
+        run: |
+          echo "### Published \`@popjoker/knew@${{ steps.version.outputs.local }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Previously \`${{ steps.version.outputs.published }}\`. https://www.npmjs.com/package/@popjoker/knew" >> "$GITHUB_STEP_SUMMARY"

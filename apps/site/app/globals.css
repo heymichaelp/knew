@@ -1,0 +1,443 @@
+@import "tailwindcss";
+
+/*
+  knew.dev — "a kept notebook".
+
+  This is a slow, sentimental thing: one person paying attention to the people
+  around them, and keeping what they noticed. So the site reads like a notebook
+  somebody loves — soft paper, thin drawn serifs, dusty rose rather than red
+  ink, wide leading, and nothing that hurries.
+
+  Every colour is a token. Light is the default; dark redefines the same tokens
+  under prefers-color-scheme, so nothing here needs a `dark:` variant.
+*/
+
+:root {
+  --paper: #fcf8f5;
+  --paper-raised: #fffdfb;
+  --paper-sunken: #f6efe9;
+  --ink: #2c2420;
+  --ink-soft: #6b5d55;
+  --ink-faint: #9b8c82;
+  --rule: #e6dad1;
+  --rule-strong: #d2c1b5;
+  --stamp: #a35d5b;
+  --stamp-wash: #a35d5b12;
+  --derived: #6c8073;
+  --derived-wash: #6c807312;
+  --grain: 0.022;
+  --shadow-page: 0 1px 0 var(--rule), 0 24px 50px -36px #4a362c40;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #17120f;
+    --paper-raised: #1f1816;
+    --paper-sunken: #120e0c;
+    --ink: #f1e7df;
+    --ink-soft: #b7a69c;
+    --ink-faint: #85756c;
+    --rule: #332925;
+    --rule-strong: #4a3b35;
+    --stamp: #d99a95;
+    --stamp-wash: #d99a9518;
+    --derived: #9ab3a4;
+    --derived-wash: #9ab3a416;
+    --grain: 0.04;
+    --shadow-page: 0 1px 0 var(--rule), 0 24px 50px -36px #0007;
+  }
+}
+
+@theme inline {
+  --color-paper: var(--paper);
+  --color-paper-raised: var(--paper-raised);
+  --color-paper-sunken: var(--paper-sunken);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-ink-faint: var(--ink-faint);
+  --color-rule: var(--rule);
+  --color-rule-strong: var(--rule-strong);
+  --color-stamp: var(--stamp);
+  --color-stamp-wash: var(--stamp-wash);
+  --color-derived: var(--derived);
+  --color-derived-wash: var(--derived-wash);
+
+  --font-display: var(--font-playfair), ui-serif, Georgia, serif;
+  --font-sans: var(--font-lato), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, "SF Mono", monospace;
+
+  --text-hero: clamp(2.75rem, 8vw, 5.25rem);
+  --text-title: clamp(2rem, 4.5vw, 3.25rem);
+}
+
+/* ------------------------------------------------------------------ ground */
+
+html {
+  color-scheme: light dark;
+  -webkit-text-size-adjust: 100%;
+  scroll-behavior: smooth;
+  scroll-padding-top: 6rem;
+}
+
+body {
+  background-color: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-weight: 300;
+  font-size: 1.0625rem;
+  line-height: 1.78;
+  font-synthesis-weight: none;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Paper, not a flat fill: a faint warm vignette and a grain that sits over it. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(120% 70% at 50% -10%, var(--stamp-wash), transparent 60%),
+    radial-gradient(90% 60% at 12% 100%, var(--derived-wash), transparent 70%);
+}
+
+body::after {
+  content: "";
+  position: fixed;
+  inset: -50%;
+  z-index: 0;
+  pointer-events: none;
+  opacity: var(--grain);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+main,
+header,
+footer {
+  position: relative;
+  z-index: 1;
+}
+
+::selection {
+  background: color-mix(in oklab, var(--stamp) 22%, transparent);
+  color: var(--ink);
+}
+
+:focus-visible {
+  outline: 2px solid var(--stamp);
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+
+/* ------------------------------------------------------------- typography */
+
+.display {
+  font-family: var(--font-display);
+  font-weight: 400;
+  letter-spacing: -0.005em;
+  line-height: 1.12;
+  text-wrap: balance;
+}
+
+.label {
+  font-family: var(--font-sans);
+  font-size: 0.75rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.measure {
+  max-width: 36rem;
+}
+
+/* The marginal section number, like a clause in a document. */
+.clause {
+  font-family: var(--font-sans);
+  font-size: 0.8125rem;
+  font-style: italic;
+  letter-spacing: 0.01em;
+  color: var(--stamp);
+}
+
+/* --------------------------------------------------------------- the stamp */
+
+/*
+  A soft note in the margin rather than a stamp: blush, round, unhurried, and
+  set in the reading face so it murmurs instead of announcing.
+*/
+.stamp {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding: 0.4rem 1rem;
+  border: 1px solid color-mix(in oklab, var(--stamp) 28%, transparent);
+  border-radius: 999px;
+  color: var(--stamp);
+  font-family: var(--font-sans);
+  font-size: 0.8125rem;
+  font-style: italic;
+  letter-spacing: 0.01em;
+  background: var(--stamp-wash);
+}
+
+/*
+  The only place a monospace is allowed outside a code block: an identifier,
+  a route, a header name — things that are literally code. Labels, dates and
+  numbers are set in the reading face.
+*/
+.code {
+  font-family: var(--font-mono);
+  font-size: 0.875em;
+  letter-spacing: -0.01em;
+}
+
+/* ---------------------------------------------------------------- surfaces */
+
+.card {
+  background: var(--paper-raised);
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  box-shadow: var(--shadow-page);
+}
+
+.rule-t {
+  border-top: 1px solid var(--rule);
+}
+
+/*
+  A ledger row: hairline above, the type in mono, the fact in prose, the date
+  in the margin. It stacks on its *container*, not the viewport, because these
+  rows sit in a three-up spread where each column is narrow on a wide screen.
+*/
+.panel {
+  container-type: inline-size;
+}
+
+.ledger-row {
+  display: grid;
+  grid-template-columns: 7.5rem minmax(0, 1fr) auto;
+  gap: 0.6rem 1rem;
+  align-items: baseline;
+  padding: 0.7rem 0;
+  border-top: 1px solid var(--rule);
+}
+
+@container (max-width: 30rem) {
+  .ledger-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.2rem;
+  }
+}
+
+@media (max-width: 40rem) {
+  .ledger-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.2rem;
+  }
+}
+
+/* ------------------------------------------------------------------- prose */
+
+/*
+  Shipped markdown (README, ADOPTING, CHANGELOG) renders through here. Written
+  out by hand rather than pulling in a typography plugin — the engine ships one
+  new dependency to this site, and it is the markdown parser.
+*/
+.prose {
+  color: var(--ink);
+  font-size: 1.0625rem;
+  line-height: 1.82;
+}
+
+.prose > * + * {
+  margin-top: 1.1em;
+}
+
+.prose h2 {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 1.7rem;
+  line-height: 1.25;
+  letter-spacing: -0.005em;
+  margin-top: 2.75em;
+  padding-top: 1.1em;
+  border-top: 1px solid var(--rule);
+}
+
+.prose h3 {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 1.3rem;
+  margin-top: 2em;
+}
+
+.prose h2 .anchor,
+.prose h3 .anchor {
+  color: inherit;
+  text-decoration: none;
+}
+
+.prose h2 .anchor:hover,
+.prose h3 .anchor:hover {
+  color: var(--stamp);
+}
+
+.prose a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--stamp);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.2em;
+}
+
+.prose a:hover {
+  color: var(--stamp);
+}
+
+.prose strong {
+  font-weight: 700;
+}
+
+.prose ul,
+.prose ol {
+  padding-left: 1.3em;
+}
+
+.prose ul {
+  list-style: none;
+}
+
+.prose ul > li {
+  position: relative;
+}
+
+.prose ul > li::before {
+  content: "—";
+  position: absolute;
+  left: -1.3em;
+  color: var(--stamp);
+}
+
+.prose ol {
+  list-style: decimal;
+}
+
+.prose ol > li::marker {
+  font-size: 0.9em;
+  color: var(--ink-faint);
+}
+
+.prose li + li {
+  margin-top: 0.4em;
+}
+
+.prose code {
+  font-family: var(--font-mono);
+  font-size: 0.86em;
+  background: var(--paper-sunken);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  padding: 0.1em 0.32em;
+}
+
+.prose pre {
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  line-height: 1.7;
+  background: var(--paper-sunken);
+  border: 1px solid var(--rule);
+  border-left: 2px solid var(--rule-strong);
+  border-radius: 8px;
+  padding: 1rem 1.1rem;
+  overflow-x: auto;
+}
+
+.prose pre code {
+  background: none;
+  border: 0;
+  padding: 0;
+  font-size: inherit;
+}
+
+.prose blockquote {
+  border-left: 2px solid var(--stamp);
+  padding-left: 1rem;
+  color: var(--ink-soft);
+  font-style: italic;
+}
+
+.prose table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9375rem;
+  display: block;
+  overflow-x: auto;
+}
+
+.prose th {
+  text-align: left;
+  font-family: var(--font-sans);
+  font-size: 0.75rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  font-weight: 400;
+  padding: 0.5rem 0.75rem 0.5rem 0;
+  border-bottom: 1px solid var(--rule-strong);
+}
+
+.prose td {
+  padding: 0.55rem 0.75rem 0.55rem 0;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+}
+
+.prose hr {
+  border: 0;
+  border-top: 1px solid var(--rule);
+}
+
+/* ------------------------------------------------------------------ motion */
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(1rem);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes press {
+  from {
+    opacity: 0;
+    transform: translateY(0.4rem);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.rise {
+  animation: rise 1.15s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+
+.press {
+  animation: press 1.3s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  .rise,
+  .press {
+    animation: none;
+  }
+}

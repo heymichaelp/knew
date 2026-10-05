@@ -4,6 +4,38 @@ The package follows semver from 1.0.0: a change to the lens schema that keeps ev
 lens valid is a minor; a change to `PeopleIntelligence`, to the wire types or to what a driver
 must do under the contract suite is a major. Before 1.0.0 a minor may break; the entries say so.
 
+## 0.2.0 — 2026-10-05
+
+A home of its own, and a licence. Nothing in the contract moved.
+
+- The package lives in `heymichaelp/knew` now, with the knew.dev site beside it and the service
+  in its own repo. `repository`, `homepage` and `bugs` point there.
+- **MIT.** The licence field said `UNLICENSED` and there was no licence file; both are fixed and
+  `LICENSE` ships in the tarball. `publishConfig.access` is explicit rather than implied.
+- `DEFAULT_TIMEOUTS` is exported. It was module-private, so an adopter could not read the budget
+  a call falls under without timing it; knew.dev now documents the shipped values by importing
+  them.
+- `README.md` and `ADOPTING.md` §8 describe running the service from its own repo, and the
+  quickstart is wrapped so it reads on a narrow page.
+- Releases publish from CI on a version bump, with npm trusted publishing and provenance. The
+  `prepublishOnly` gate — prompts, build, tests — still runs.
+
+### Toward 1.0
+
+Two changes are planned, and both are breaking, so they wait for 1.0.0:
+
+- **Noun-neutral names.** `PeopleIntelligence`, `upsertPerson` and `personHints` read as though
+  the engine only knows people. It does not: the schema already calls the thing an entity, and
+  `entityKinds` already widens it. The contract, the wire types and the roster become neutral,
+  while "subject" keeps its data-protection sense in the wire and the code.
+- **Vocabulary separated from lens.** Extraction writes in a vocabulary per noun kind, and
+  several lenses read the same facts with their own sections and asks. Today a lens is both at
+  once, which is why two lenses cannot share a person's facts. This is the one architectural
+  change the framework implies.
+
+Both are a change to `PeopleIntelligence` and to what a driver must do, so both are a major, and
+the contract suite changes first.
+
 ## 0.1.1 — 2026-10-05
 
 The first live lens found two things.

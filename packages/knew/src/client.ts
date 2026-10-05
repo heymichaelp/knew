@@ -56,7 +56,8 @@ export interface IntelligenceClientOptions {
 
 export const SUBJECT_HEADER = "x-intelligence-subject";
 
-const DEFAULT_TIMEOUTS = { read: 1_500, write: 5_000, search: 3_000, export: 10_000, extractNow: 60_000, stateless: 120_000 };
+/** The timeout budget each call falls under, in milliseconds. Override any of them via `timeouts`. */
+export const DEFAULT_TIMEOUTS = { read: 1_500, write: 5_000, search: 3_000, export: 10_000, extractNow: 60_000, stateless: 120_000 };
 
 type Json = Record<string, unknown>;
 

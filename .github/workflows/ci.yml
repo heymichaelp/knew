@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # turbo builds the package before the site typechecks against its dist
+      - run: npm run build
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run lint
+
+      # the tarball is what adopters get: prove it packs and carries its docs
+      - name: Pack the package and check what ships
+        run: |
+          npm pack --workspace @popjoker/knew --pack-destination /tmp
+          tar -tzf /tmp/popjoker-knew-*.tgz | sort
+          for f in package/LICENSE package/README.md package/ADOPTING.md package/CHANGELOG.md package/dist/index.js; do
+            tar -tzf /tmp/popjoker-knew-*.tgz | grep -qx "$f" || { echo "missing from the tarball: $f"; exit 1; }
+          done

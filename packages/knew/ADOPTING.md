@@ -135,26 +135,28 @@ is a spend.
 
 ## 8. Running the service locally
 
-From a checkout of the knewpeople repo:
+The service is its own repo, and takes the package from npm like any other client:
 
 ```sh
-npm run db:start                                   # the repo's local Postgres, on 54322
-docker exec supabase_db_knewpeople psql -U postgres -c 'create database intelligence'
-cp apps/intelligence/.env.example apps/intelligence/.env
-npm run build -w @popjoker/knew
-npm run db:migrate -w @knewpeople/intelligence-service
-npm run cli -w @knewpeople/intelligence-service -- client add my-app --name "My app"
-npm run cli -w @knewpeople/intelligence-service -- lens set my-app lens.json
-npm run dev -w @knewpeople/intelligence-service     # http on 8080
+git clone https://github.com/heymichaelp/knew-service
+cd knew-service
+npm install
+cp .env.example .env
+npm run db:start                            # one Postgres in docker compose
+npm run db:migrate
+npm run cli -- client add my-app --name "My app"
+npm run cli -- lens set my-app lens.json
+npm run dev                                 # http on 8080
+npm run worker                              # the sweep, in a second terminal
 ```
 
-Or the container, from the repo root, against any Postgres:
+Or the container, against any Postgres:
 
 ```sh
-docker build -f apps/intelligence/Dockerfile -t knewpeople-intelligence .
-docker run --rm -p 8080:8080 -e DATABASE_URL=postgresql://… -e OPENROUTER_API_KEY=… knewpeople-intelligence
-docker run --rm -e DATABASE_URL=… knewpeople-intelligence node apps/intelligence/dist/migrate.js
-docker run --rm -e DATABASE_URL=… -e OPENROUTER_API_KEY=… knewpeople-intelligence node apps/intelligence/dist/worker.js
+docker build -t knew-service .
+docker run --rm -p 8080:8080 -e DATABASE_URL=postgresql://… -e OPENROUTER_API_KEY=… knew-service
+docker run --rm -e DATABASE_URL=… knew-service node dist/migrate.js
+docker run --rm -e DATABASE_URL=… -e OPENROUTER_API_KEY=… knew-service node dist/worker.js
 ```
 
 Without `OPENROUTER_API_KEY` the service runs, registers clients and lenses, and records

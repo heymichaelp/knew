@@ -1,0 +1,24 @@
+{
+  "name": "knew",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "typecheck": "turbo run typecheck",
+    "lint": "turbo run lint",
+    "test": "turbo run test",
+    "site": "npm run dev -w @knew/site",
+    "knew": "npm run --workspace @popjoker/knew"
+  },
+  "devDependencies": {
+    "turbo": "^2.5.0"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "packageManager": "npm@10.9.8"
+}

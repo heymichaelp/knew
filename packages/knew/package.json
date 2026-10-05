@@ -1,26 +1,33 @@
 {
   "name": "@popjoker/knew",
-  "version": "0.1.1",
-  "description": "The people-intelligence engine's pure core: the contract, the lenses, the brief, the reconciliation plan, the prompt text, and the HTTP client. No database, no model, no React.",
-  "license": "UNLICENSED",
+  "version": "0.2.0",
+  "description": "The attention engine's pure core: the contract, the lenses, the brief, the reconciliation plan, the prompt text, and the HTTP client. No database, no model, no React.",
+  "license": "MIT",
+  "homepage": "https://knew.dev",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/heymichaelp/knewpeople.git",
+    "url": "git+https://github.com/heymichaelp/knew.git",
     "directory": "packages/knew"
   },
+  "bugs": {
+    "url": "https://github.com/heymichaelp/knew/issues"
+  },
   "keywords": [
-    "people",
+    "attention",
     "intelligence",
     "memory",
     "facts",
     "bi-temporal",
     "lens",
-    "knewpeople"
+    "people"
   ],
   "type": "module",
   "sideEffects": false,
   "engines": {
     "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "exports": {
     ".": {
@@ -36,6 +43,7 @@
   "files": [
     "dist",
     "prompts",
+    "LICENSE",
     "README.md",
     "ADOPTING.md",
     "CHANGELOG.md"

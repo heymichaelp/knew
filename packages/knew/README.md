@@ -1,6 +1,6 @@
 # @popjoker/knew
 
-The people-intelligence engine's pure core. One engine, distinct clients: a client registers a
+The attention engine's pure core. One engine, distinct clients: a client registers a
 **lens** (what to remember about a person, how the page reads, what to ask next), keeps a
 **roster** per subject, and records **episodes**, what the subject said, verbatim and dated. The
 engine reads them into typed, dated, sourced **facts** per person, reconciles them against what
@@ -12,9 +12,9 @@ This package has no database, no model and no React. It is:
 
 - **The contract**, `PeopleIntelligence`: the one door a client reaches the engine through. It
   carries a scope (`{ clientId, subjectId }`) on every call and never a database handle.
-- **Drivers** of it: `intelligenceClient`, the HTTP client for the hosted service
-  (`apps/intelligence` in the knewpeople repo), and `fakeIntelligence` in `./testing` for a
-  client's own tests. The service's Postgres driver is a third, on the other side of the HTTP one.
+- **Drivers** of it: `intelligenceClient`, the HTTP client for the hosted service, and
+  `fakeIntelligence` in `./testing` for a client's own tests. The service's Postgres driver is a
+  third, on the other side of the HTTP one.
 - **Stateless mode** for a client that keeps its own store: `intelligenceClient(...).extract`
   sends a roster, the facts in hand and one episode, and gets back a `ReconciliationPlan` to
   apply itself. Nothing is stored and no subject is named.
@@ -33,15 +33,30 @@ npm install @popjoker/knew
 ```ts
 import { intelligenceClient } from "@popjoker/knew";
 
-const intelligence = intelligenceClient({ baseUrl: process.env.INTELLIGENCE_URL!, serviceKey: process.env.INTELLIGENCE_SERVICE_KEY! });
+const intelligence = intelligenceClient({
+  baseUrl: process.env.INTELLIGENCE_URL!,
+  serviceKey: process.env.INTELLIGENCE_SERVICE_KEY!,
+});
+
 const scope = { clientId: "my-app", subjectId: user.id };
 
-await intelligence.upsertPerson(scope, { id: "linda", name: "Linda", fields: { relationship: "mother" } });
-await intelligence.addEpisode(scope, { source: "note", sourceRef: note.id, content: note.text, personHints: ["linda"] });
-await intelligence.requestExtract(scope);               // after your own transaction commits
+await intelligence.upsertPerson(scope, {
+  id: "linda",
+  name: "Linda",
+  fields: { relationship: "mother" },
+});
+
+await intelligence.addEpisode(scope, {
+  source: "note",
+  sourceRef: note.id,
+  content: note.text,
+  personHints: ["linda"],
+});
+
+await intelligence.requestExtract(scope); // after your own transaction commits
 
 const brief = await intelligence.brief(scope, "linda"); // null until something is known
-const gaps = await intelligence.gaps(scope, "linda");   // what is worth asking next
+const gaps = await intelligence.gaps(scope, "linda"); // what is worth asking next
 ```
 
 `ADOPTING.md` is the guide: binding once per process, the outbox pattern, idempotency, holds and
