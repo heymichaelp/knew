@@ -1,6 +1,6 @@
 {
   "name": "@popjoker/knew",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "The people-intelligence engine's pure core: the contract, the lenses, the brief, the reconciliation plan, the prompt text, and the HTTP client. No database, no model, no React.",
   "license": "UNLICENSED",
   "repository": {
@@ -30,7 +30,8 @@
     "./testing": {
       "types": "./dist/testing.d.ts",
       "default": "./dist/testing.js"
-    }
+    },
+    "./package.json": "./package.json"
   },
   "files": [
     "dist",

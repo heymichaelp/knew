@@ -34,11 +34,14 @@ export function extractSchemaFor(lens: Lens) {
     /** People mentioned who are not on the roster — never given facts. */
     unresolvedNames: z.array(z.string()),
     /** Changes to fields the person owns; proposed, never written. A lens
-     *  with no routing fields gets a schema that accepts none. */
+     *  with no routing fields takes any field name here, because the one
+     *  schema that accepts none (`never`, compiled to `not`) is refused by
+     *  the structured-output endpoints; `cleanProposals` drops every update
+     *  naming a field the lens does not route. */
     fieldUpdates: z.array(
       z.object({
         personId: z.string(),
-        field: lens.routingFields.length > 0 ? z.enum(lens.routingFields as [string, ...string[]]) : z.never(),
+        field: lens.routingFields.length > 0 ? z.enum(lens.routingFields as [string, ...string[]]) : z.string(),
         value: z.string(),
       }),
     ),
@@ -65,8 +68,9 @@ export const reconcileSchema = z.object({
 export type Reconciliation = z.infer<typeof reconcileSchema>;
 
 /** Keywords a structured-output endpoint may refuse. A lens whose compiled
- *  schema carries one would fail every live episode. */
-export const REFUSED_SCHEMA_KEYWORDS = ["propertyNames", "patternProperties"] as const;
+ *  schema carries one would fail every live episode: `not` is what `never`
+ *  compiles to, and the first live lens with no routing fields found it. */
+export const REFUSED_SCHEMA_KEYWORDS = ["propertyNames", "patternProperties", "not"] as const;
 
 export function compiledSchemaProblems(schema: z.ZodTypeAny): string[] {
   const compiled = JSON.stringify(z.toJSONSchema(schema));

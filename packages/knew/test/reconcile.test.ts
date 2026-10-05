@@ -152,6 +152,20 @@ describe("Scenario: Attribution is checked, never trusted", () => {
     assert.equal(droppedForCap, 2);
   });
 
+  it("keeps a field update only for a field the lens routes, so a lens with no routing fields proposes none", () => {
+    const extraction = {
+      unresolvedNames: [],
+      aliases: [],
+      fieldUpdates: [
+        { personId: "linda", field: "city", value: "Denver" },
+        { personId: "linda", field: "shoe_size", value: "8" },
+      ],
+    };
+    assert.deepEqual(cleanProposals(extraction, new Set(["linda"]), ["city", "relationship"]).fieldUpdates, [{ personId: "linda", field: "city", value: "Denver" }]);
+    assert.deepEqual(cleanProposals(extraction, new Set(["linda"]), []).fieldUpdates, []);
+    assert.deepEqual(cleanProposals(extraction, new Set(["linda"])).fieldUpdates, []);
+  });
+
   it("trims and deduplicates proposals, keeping only on-roster field updates and aliases", () => {
     const cleaned = cleanProposals(
       {
@@ -167,6 +181,7 @@ describe("Scenario: Attribution is checked, never trusted", () => {
         ],
       },
       new Set(["linda"]),
+      ["relationship", "city"],
     );
     assert.deepEqual(cleaned.unresolvedNames, ["Aunt Carol"]);
     assert.deepEqual(cleaned.fieldUpdates, [{ personId: "linda", field: "city", value: "Portland" }]);

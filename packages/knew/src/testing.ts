@@ -199,7 +199,7 @@ export function fakeIntelligence(lens: Lens = fixtureLens()): FakeIntelligence {
     const roster = new Set([...s.people.values()].filter((p) => p.active).map((p) => p.id));
     const { byPerson, offRoster } = attributeFacts(turn.extraction.facts, roster);
     const { kept, droppedForCap } = orderSubjects(byPerson, episode.personHints, SUBJECTS_PER_EPISODE);
-    const proposals = cleanProposals(turn.extraction, roster);
+    const proposals = cleanProposals(turn.extraction, roster, lens.routingFields);
     const changed = { added: 0, merged: 0, superseded: 0 };
     for (const personId of kept) {
       const person = s.people.get(personId)!;

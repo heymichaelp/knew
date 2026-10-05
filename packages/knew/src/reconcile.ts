@@ -168,7 +168,8 @@ export function orderSubjects(
   return { kept, droppedForCap };
 }
 
-/** Proposals as the sweep keeps them: trimmed, deduplicated, on-roster only. */
+/** Proposals as the sweep keeps them: trimmed, deduplicated, on-roster only,
+ *  and a field update only for a field the lens routes. */
 export function cleanProposals(
   extraction: {
     unresolvedNames: string[];
@@ -176,6 +177,7 @@ export function cleanProposals(
     aliases: Array<{ personId: string; alias: string }>;
   },
   onRoster: ReadonlySet<string>,
+  routingFields: readonly string[] = [],
 ): {
   unresolvedNames: string[];
   fieldUpdates: Array<{ personId: string; field: string; value: string }>;
@@ -184,7 +186,7 @@ export function cleanProposals(
   return {
     unresolvedNames: [...new Set(extraction.unresolvedNames.map((name) => trimTo(name, 100)).filter(Boolean))].slice(0, 20),
     fieldUpdates: extraction.fieldUpdates
-      .filter((update) => onRoster.has(update.personId))
+      .filter((update) => onRoster.has(update.personId) && routingFields.includes(update.field))
       .map((update) => ({ ...update, value: trimTo(update.value, 200) })),
     aliases: extraction.aliases
       .filter((alias) => onRoster.has(alias.personId))
