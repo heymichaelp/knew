@@ -1,12 +1,30 @@
 import { factsKnownAt, mustHonorFrom, renderBrief } from "./brief.ts";
+import type { ScriptedTurn } from "./contract.ts";
 import { gapsFor } from "./gaps.ts";
-import { compileLens, type Lens, type LensDefinition } from "./lens.ts";
-import type { Entity, Episode, Fact, IntelligenceScope, PeopleIntelligence, Person, Proposal } from "./types.ts";
+import { compileLens, parseFactAttributes, type Lens, type LensDefinition } from "./lens.ts";
+import { attributeFacts, cleanProposals, orderSubjects, planReconciliation } from "./reconcile.ts";
+import type {
+  Entity,
+  Episode,
+  EpisodeOutcome,
+  Fact,
+  IntelligenceScope,
+  NewFact,
+  PeopleIntelligence,
+  Person,
+  Proposal,
+  ReconciliationPlan,
+} from "./types.ts";
+
+export * from "./contract.ts";
 
 /**
- * Test doubles for clients of the contract. Nothing here is a real engine:
- * `fakeIntelligence` stores what it is given and extracts nothing, so a
- * client's tests can run without a service, a database or a model.
+ * Test doubles for clients of the contract, and the contract suite itself
+ * (`contract.ts`). `fakeIntelligence` is an in-memory driver: it keeps what it
+ * is given and runs no model. Facts arrive through `seedFacts`, or through
+ * `script` — what the next extraction would find — so a client's tests can
+ * walk the whole path from a note to the page without a service, a database
+ * or a model. It passes the contract suite like the real drivers do.
  */
 
 /** A small lens with one type of every kind and two asks, for tests that
@@ -66,10 +84,15 @@ export function fixtureLens(): Lens {
   return compileLens(fixtureLensDefinition());
 }
 
+/** The service reads at most this many people's facts out of one episode. */
+const SUBJECTS_PER_EPISODE = 3;
+
 interface FakeState {
   people: Map<string, Person>;
   entities: Map<string, Entity & { facts: Fact[] }>;
   episodes: Episode[];
+  /** Episodes recorded `hold: "until-hinted"` and not yet hinted. */
+  held: Set<string>;
   proposals: Proposal[];
 }
 
@@ -79,21 +102,28 @@ const nextId = () => {
   return `00000000-0000-4000-8000-${String(counter).padStart(12, "0")}`;
 };
 
-/**
- * An in-memory `PeopleIntelligence`. Facts are added through `seedFacts`,
- * since no model runs; briefs, gaps and searches read them through the same
- * pure functions the service uses.
- */
-export function fakeIntelligence(lens: Lens = fixtureLens()): PeopleIntelligence & {
+export interface FakeIntelligence extends PeopleIntelligence {
+  /** Facts as if extracted, with today's known-at; `seedFacts` for a page without an episode. */
   seedFacts(scope: IntelligenceScope, personId: string, facts: Array<Partial<Fact> & Pick<Fact, "type" | "fact">>): void;
   setSummary(scope: IntelligenceScope, personId: string, summary: string): void;
-} {
+  /** What the next pending episode is read into, when `extractNow` runs: the model, scripted. */
+  script(turn: ScriptedTurn): void;
+}
+
+/**
+ * An in-memory `PeopleIntelligence`. Briefs, gaps and searches read through
+ * the same pure functions the service uses; an extraction applies the same
+ * reconciliation plan the service applies, from a scripted answer in place
+ * of a model's.
+ */
+export function fakeIntelligence(lens: Lens = fixtureLens()): FakeIntelligence {
   const states = new Map<string, FakeState>();
+  const turns: ScriptedTurn[] = [];
   const state = (scope: IntelligenceScope): FakeState => {
     const key = `${scope.clientId}/${scope.subjectId}`;
     let found = states.get(key);
     if (!found) {
-      found = { people: new Map(), entities: new Map(), episodes: [], proposals: [] };
+      found = { people: new Map(), entities: new Map(), episodes: [], held: new Set(), proposals: [] };
       states.set(key, found);
     }
     return found;
@@ -107,6 +137,119 @@ export function fakeIntelligence(lens: Lens = fixtureLens()): PeopleIntelligence
       s.entities.set(personId, entity);
     }
     return entity;
+  };
+  const claimable = (s: FakeState) =>
+    s.episodes
+      .filter((e) => !e.ingestedAt && !(s.held.has(e.id) && e.personHints.length === 0))
+      .sort((a, b) => a.referenceAt.getTime() - b.referenceAt.getTime());
+
+  /** The plan, applied the way the service's `applyPlan` applies it. */
+  const applyPlan = (entity: Entity & { facts: Fact[] }, episodeId: string, plan: ReconciliationPlan, changed: { added: number; merged: number; superseded: number }) => {
+    const insert = (fact: NewFact): Fact => {
+      const type = fact.type in lens.factTypes ? fact.type : lens.fallbackType;
+      const row: Fact = {
+        id: nextId(),
+        subjectId: entity.id,
+        objectId: null,
+        type,
+        fact: fact.fact,
+        attributes: parseFactAttributes(lens, type, fact.attributes),
+        validAt: fact.validAt ?? null,
+        invalidAt: fact.invalidAt ?? null,
+        createdAt: plan.knownAt,
+        expiredAt: null,
+        supersededById: null,
+        episodeIds: [episodeId],
+      };
+      entity.facts.push(row);
+      return row;
+    };
+    const retire = (factId: string, invalidAt: Date, supersededById: string | null) => {
+      const fact = entity.facts.find((f) => f.id === factId && !f.expiredAt);
+      if (!fact) return;
+      fact.expiredAt = plan.knownAt;
+      // An end date the fact already carried is kept: it was said first.
+      fact.invalidAt ??= invalidAt;
+      fact.supersededById = supersededById;
+    };
+    for (const fact of plan.adds) {
+      insert(fact);
+      changed.added += 1;
+    }
+    for (const merge of plan.merges) {
+      const fact = entity.facts.find((f) => f.id === merge.factId);
+      if (fact && !fact.episodeIds.includes(episodeId)) fact.episodeIds.push(episodeId);
+      changed.merged += 1;
+    }
+    for (const supersession of plan.supersessions) {
+      const replacement = insert(supersession.replacement);
+      retire(supersession.factId, supersession.invalidAt ?? supersession.replacement.validAt ?? plan.knownAt, replacement.id);
+      changed.superseded += 1;
+    }
+    for (const retraction of plan.retractions) retire(retraction.factId, retraction.invalidAt ?? plan.knownAt, null);
+    if (plan.summary != null) {
+      entity.summary = plan.summary;
+      entity.summaryUpdatedAt = new Date();
+    }
+    for (const alias of plan.aliases) if (!entity.aliases.includes(alias)) entity.aliases.push(alias);
+  };
+
+  /** One episode read with one scripted answer: attribution checked, people capped, proposals kept. */
+  const readEpisode = (s: FakeState, episode: Episode, turn: ScriptedTurn): EpisodeOutcome => {
+    const roster = new Set([...s.people.values()].filter((p) => p.active).map((p) => p.id));
+    const { byPerson, offRoster } = attributeFacts(turn.extraction.facts, roster);
+    const { kept, droppedForCap } = orderSubjects(byPerson, episode.personHints, SUBJECTS_PER_EPISODE);
+    const proposals = cleanProposals(turn.extraction, roster);
+    const changed = { added: 0, merged: 0, superseded: 0 };
+    for (const personId of kept) {
+      const person = s.people.get(personId)!;
+      const entity = entityFor(s, personId)!;
+      const current = entity.facts.filter((f) => !f.expiredAt);
+      const incoming = byPerson.get(personId)!;
+      const reconciliation = turn.reconcile?.({ name: person.name, current }, incoming) ?? { decisions: [], summary: `About ${person.name}.` };
+      const plan = planReconciliation({
+        lens,
+        personId,
+        current,
+        incoming,
+        reconciliation,
+        knownAt: episode.referenceAt,
+        summaryVersion: "fake",
+        aliases: proposals.aliases.filter((alias) => alias.personId === personId).map((alias) => alias.alias),
+      });
+      applyPlan(entity, episode.id, plan, changed);
+    }
+    const now = new Date();
+    for (const name of proposals.unresolvedNames) {
+      s.proposals.push({ id: nextId(), episodeId: episode.id, kind: "unresolved_name", name, personId: null, field: null, value: null, status: "pending", createdAt: now, resolvedAt: null });
+    }
+    for (const update of proposals.fieldUpdates) {
+      s.proposals.push({
+        id: nextId(),
+        episodeId: episode.id,
+        kind: "field_update",
+        name: null,
+        personId: update.personId,
+        field: update.field,
+        value: update.value,
+        status: "pending",
+        createdAt: now,
+        resolvedAt: null,
+      });
+    }
+    episode.ingestedAt = now;
+    s.held.delete(episode.id);
+    return {
+      episodeId: episode.id,
+      status: "ingested",
+      facts: changed,
+      people: kept.length,
+      unresolvedNames: proposals.unresolvedNames,
+      offRoster,
+      droppedForCap,
+      calls: 0,
+      costUsd: null,
+    };
   };
 
   return {
@@ -122,10 +265,13 @@ export function fakeIntelligence(lens: Lens = fixtureLens()): PeopleIntelligence
     },
     async deletePerson(scope, personId) {
       const s = state(scope);
+      if (!s.people.has(personId)) return { episodesRemoved: 0 };
+      // Gone means gone: the episodes hinted at them, and every episode their facts cite.
+      const cited = new Set(s.entities.get(personId)?.facts.flatMap((f) => f.episodeIds) ?? []);
       s.people.delete(personId);
       s.entities.delete(personId);
       const before = s.episodes.length;
-      s.episodes = s.episodes.filter((e) => !e.personHints.includes(personId));
+      s.episodes = s.episodes.filter((e) => !e.personHints.includes(personId) && !cited.has(e.id));
       return { episodesRemoved: before - s.episodes.length };
     },
     async addEpisode(scope, input) {
@@ -137,18 +283,21 @@ export function fakeIntelligence(lens: Lens = fixtureLens()): PeopleIntelligence
         source: input.source,
         sourceRef: input.sourceRef ?? null,
         content: input.content,
-        personHints: input.personHints ?? [],
+        personHints: [...(input.personHints ?? [])],
         referenceAt: input.referenceAt ?? new Date(),
         ingestedAt: null,
       };
       s.episodes.push(episode);
+      if (input.hold === "until-hinted") s.held.add(episode.id);
       return { kind: "recorded", episodeId: episode.id };
     },
     async hintEpisodes(scope, { sourceRefs, personId }) {
+      const s = state(scope);
       let hinted = 0;
-      for (const episode of state(scope).episodes) {
+      for (const episode of s.episodes) {
         if (episode.sourceRef && sourceRefs.includes(episode.sourceRef) && !episode.personHints.includes(personId)) {
           episode.personHints.push(personId);
+          s.held.delete(episode.id);
           hinted += 1;
         }
       }
@@ -156,12 +305,19 @@ export function fakeIntelligence(lens: Lens = fixtureLens()): PeopleIntelligence
     },
     async requestExtract() {},
     async extractNow(scope, options) {
-      const pending = state(scope).episodes.filter((e) => !e.ingestedAt);
+      const s = state(scope);
+      const done: EpisodeOutcome[] = [];
+      for (const episode of claimable(s).slice(0, options.maxEpisodes)) {
+        const turn = turns.shift();
+        if (!turn) break;
+        done.push(readEpisode(s, episode, turn));
+      }
+      const asked = options.askedSourceRef ? s.episodes.find((e) => e.sourceRef === options.askedSourceRef) : null;
       return {
-        outcome: "none",
-        episodes: [],
-        remaining: pending.length,
-        askedIngested: options.askedSourceRef ? false : null,
+        outcome: done.length > 0 ? "extracted" : "none",
+        episodes: done,
+        remaining: claimable(s).length,
+        askedIngested: options.askedSourceRef ? asked?.ingestedAt != null : null,
         calls: [],
       };
     },
@@ -195,7 +351,7 @@ export function fakeIntelligence(lens: Lens = fixtureLens()): PeopleIntelligence
       const s = state(scope);
       const person = s.people.get(personId);
       if (!person) return null;
-      return gapsFor(lens, person, s.entities.get(personId)?.facts ?? []);
+      return gapsFor(lens, person, factsKnownAt(s.entities.get(personId)?.facts ?? []));
     },
     async searchFacts(scope, query, options = {}) {
       const s = state(scope);
@@ -257,10 +413,8 @@ export function fakeIntelligence(lens: Lens = fixtureLens()): PeopleIntelligence
     },
     async resetForReplay(scope) {
       const s = state(scope);
-      for (const entity of s.entities.values()) {
-        entity.facts = [];
-        entity.summary = "";
-      }
+      s.entities.clear();
+      s.proposals = [];
       for (const episode of s.episodes) episode.ingestedAt = null;
       return { episodes: s.episodes.length };
     },
@@ -288,6 +442,9 @@ export function fakeIntelligence(lens: Lens = fixtureLens()): PeopleIntelligence
       if (!entity) throw new Error(`fakeIntelligence: no person ${personId} on the roster`);
       entity.summary = summary;
       entity.summaryUpdatedAt = new Date();
+    },
+    script(turn) {
+      turns.push(turn);
     },
   };
 }

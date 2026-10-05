@@ -1,9 +1,27 @@
 {
   "name": "@knewpeople/intelligence",
   "version": "0.1.0",
-  "private": true,
   "description": "The people-intelligence engine's pure core: the contract, the lenses, the brief, the reconciliation plan, the prompt text, and the HTTP client. No database, no model, no React.",
+  "license": "UNLICENSED",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/heymichaelp/knewpeople.git",
+    "directory": "packages/intelligence"
+  },
+  "keywords": [
+    "people",
+    "intelligence",
+    "memory",
+    "facts",
+    "bi-temporal",
+    "lens",
+    "knewpeople"
+  ],
   "type": "module",
+  "sideEffects": false,
+  "engines": {
+    "node": ">=22"
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -16,13 +34,18 @@
   },
   "files": [
     "dist",
-    "prompts"
+    "prompts",
+    "README.md",
+    "ADOPTING.md",
+    "CHANGELOG.md"
   ],
   "scripts": {
     "build": "tsc -p .",
     "typecheck": "tsc --noEmit -p .",
     "prompts": "node scripts/embed-prompts.mjs",
-    "test": "node --import tsx --test test/*.test.ts"
+    "test": "node --import tsx --test test/*.test.ts",
+    "prepack": "npm run build",
+    "prepublishOnly": "npm run prompts && npm run build && npm test"
   },
   "dependencies": {
     "zod": "^4.5.4"
