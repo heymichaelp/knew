@@ -131,7 +131,9 @@ function reviveEntity(raw: Json): EntityView {
   };
 }
 
-function revivePlan(raw: Json): ReconciliationPlan {
+/** A plan as the service wrote it to JSON, with its dates back. Exported for a
+ *  client whose own API relays the service's answer verbatim. */
+export function revivePlan(raw: Json): ReconciliationPlan {
   const newFact = (f: Json) => ({
     type: String(f.type),
     fact: String(f.fact),
