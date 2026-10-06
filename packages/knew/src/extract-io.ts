@@ -1,20 +1,22 @@
 import { dayOf } from "./dates.ts";
-import { whoLabel, type Lens } from "./lens.ts";
 import type { Fact, RosterEntry } from "./types.ts";
+import { whoLabel, type Vocabulary } from "./vocabulary.ts";
 
 /**
  * What the two model calls are shown — pure, so what the model sees is
- * testable without a model. The lens supplies the source labels and which of
- * a person's fields are shown beside their name; everything else is the
- * engine's one wording.
+ * testable without a model. The vocabulary supplies its kind, the source
+ * labels and which of an entity's fields are shown beside its name;
+ * everything else is the engine's one wording, and names no domain.
  */
 
 export function extractInput(
-  lens: Lens,
+  vocabulary: Vocabulary,
   input: {
     content: string;
     /** What the phone read off the turn's photographs, when it carried any. */
     observed?: string | null;
+    /** The question the knower was answering, when this is a reply. */
+    inReplyTo?: string | null;
     source: string;
     referenceAt: Date;
     roster: RosterEntry[];
@@ -23,11 +25,11 @@ export function extractInput(
 ): string {
   const roster =
     input.roster.length === 0
-      ? "(none yet — every person mentioned is unresolved)"
+      ? "(none yet — everything mentioned is unresolved)"
       : input.roster
           .map((entry) => {
             const parts = [`id: ${entry.id}`, `name: ${entry.name}`];
-            for (const field of lens.promptFields) {
+            for (const field of vocabulary.promptFields) {
               const value = entry.fields[field];
               if (typeof value === "string" && value.trim() !== "") parts.push(`${field}: ${value}`);
             }
@@ -38,8 +40,12 @@ export function extractInput(
           .join("\n");
   return [
     `Today (when this was said): ${dayOf(input.referenceAt)}`,
-    `Where it came from: ${lens.sourceLabels[input.source] ?? input.source}`,
-    `People (attach facts only to these ids):\n${roster}`,
+    `Where it came from: ${vocabulary.sourceLabels[input.source] ?? input.source}`,
+    `The entries on their list, each of kind "${vocabulary.kind}" (attach facts only to these ids):\n${roster}`,
+    // THE QUESTION THEY WERE ANSWERING, when this is a reply — quoted apart
+    // and labelled, because it is the client's wording, not testimony: it
+    // tells the model what the answer is about and is never itself a fact.
+    ...(input.inReplyTo ? [`The question they were answering (context, not something they said):\n"""\n${input.inReplyTo}\n"""`] : []),
     `What was said:\n"""\n${input.content}\n"""`,
     // WHAT THEIR PHONE SAW, when the turn carried photographs — labelled as
     // such and quoted apart, because it is not testimony. The two halves are
@@ -72,9 +78,9 @@ export interface NewFactForReconcile {
 }
 
 export function reconcileInput(
-  lens: Lens,
+  vocabulary: Vocabulary,
   input: {
-    person: { name: string; fields: Record<string, string | null> };
+    entity: { name: string; fields: Readonly<Record<string, string | null>> };
     referenceAt: Date;
     current: Fact[];
     incoming: NewFactForReconcile[];
@@ -101,7 +107,7 @@ export function reconcileInput(
     })
     .join("\n");
   return [
-    `Person: ${whoLabel(lens, input.person)}`,
+    `About this ${vocabulary.kind}: ${whoLabel(vocabulary, input.entity)}`,
     `Today (when the new facts were said): ${dayOf(input.referenceAt)}`,
     `Current facts (id | type | fact | dates):\n${current}`,
     `New facts (index | type | fact | dates):\n${incoming}`,

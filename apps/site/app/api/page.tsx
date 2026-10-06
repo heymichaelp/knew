@@ -46,8 +46,9 @@ export default function ApiPage() {
                 Bearer &lt;serviceKey&gt;
               </p>
               <p className="mt-4 text-[0.9375rem] text-ink-soft">
-                Identifies the client. The key is minted per client with the service’s CLI and decides which lens the
-                request reads through. A client never sees another client’s rows.
+                Identifies the client. The key is minted per client with the service’s CLI and decides whose vocabulary
+                and lenses the request reads; a read names its lens with <code className="code">?lens=</code>, or gets
+                the client’s default. A client never sees another client’s rows.
               </p>
             </div>
             <div className="card p-6">
@@ -56,8 +57,9 @@ export default function ApiPage() {
                 &lt;subjectId&gt;
               </p>
               <p className="mt-4 text-[0.9375rem] text-ink-soft">
-                Identifies whose ledger it is. A subject id means nothing outside the client that sent it. Every row a
-                subject touches carries both ids, and every query puts both in its WHERE.
+                Identifies the knower: whose ledger it is, the data subject in the data-protection sense. A subject id
+                means nothing outside the client that sent it. Every row a knower touches carries both ids, and every
+                query puts both in its WHERE.
               </p>
             </div>
           </div>

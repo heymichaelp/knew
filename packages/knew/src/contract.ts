@@ -1,18 +1,20 @@
 import assert from "node:assert/strict";
 import type { ReconcileDecisions } from "./reconcile.ts";
 import type { Extraction } from "./schemas.ts";
-import type { Fact, IntelligenceScope, NewFact, PeopleIntelligence } from "./types.ts";
+import type { Fact, Intelligence, IntelligenceScope, NewFact, Readiness } from "./types.ts";
 
 /**
- * The contract, as tests. Every driver of `PeopleIntelligence` — the service's Postgres
- * driver, the HTTP client in front of it, a client's own in-process driver, the fake — runs the
- * same cases from its own test file, so "it implements the contract" means one thing.
+ * The contract, as tests. Every driver of `Intelligence` — the service's Postgres driver, the
+ * HTTP client in front of it, a client's own in-process driver, the fake — runs the same cases
+ * from its own test file, so "it implements the contract" means one thing.
  *
  * A driver's test file supplies `open`: a fresh, empty pair of scopes under one client whose
- * lens is `fixtureLensDefinition()`, and a way to tell the engine what the next extraction
- * finds when the driver has one (a scripted model behind the service; the fake's own script).
- * Without a script, the cases that need facts are withheld rather than run: a driver that can
- * extract nothing can still prove its roster, its episodes, its scopes and its deletions.
+ * vocabulary is `fixtureVocabularyDefinition()` and whose lenses are `fixtureLensDefinition()`
+ * (the default) and `fixtureVisitLensDefinition()`, and a way to tell the engine what the next
+ * extraction finds when the driver has one (a scripted model behind the service; the fake's own
+ * script). Without a script, the cases that need facts are withheld rather than run: a driver
+ * that can extract nothing can still prove its roster, its episodes, its scopes and its
+ * deletions.
  *
  *     import { test } from "node:test";
  *     import { contractSuite } from "@popjoker/knew/testing";
@@ -23,15 +25,15 @@ import type { Fact, IntelligenceScope, NewFact, PeopleIntelligence } from "./typ
 export interface ScriptedTurn {
   extraction: Extraction;
   /**
-   * Decisions for a person the extraction names, given what the model is shown: their name,
-   * their current facts, and the incoming ones in order. Left out: everything is added and the
+   * Decisions for an entity the extraction names, given what the model is shown: its name, its
+   * current facts, and the incoming ones in order. Left out: everything is added and the
    * summary is "About <name>.".
    */
-  reconcile?: (person: { name: string; current: Fact[] }, incoming: NewFact[]) => ReconcileDecisions;
+  reconcile?: (entity: { name: string; current: Fact[] }, incoming: NewFact[]) => ReconcileDecisions;
 }
 
 export interface ContractContext {
-  intelligence: PeopleIntelligence;
+  intelligence: Intelligence;
   /** Two scopes under one client, both empty when opened; the second proves nothing crosses. */
   scope: IntelligenceScope;
   otherScope: IntelligenceScope;
@@ -48,7 +50,7 @@ export interface ContractCase {
   run(context: ContractContext): Promise<void>;
 }
 
-/** An extraction as the model would answer it: facts about people by id, and what it could not place. */
+/** An extraction as the model would answer it: facts about entities by id, and what it could not place. */
 export function extraction(
   facts: Extraction["facts"],
   extras: Partial<Pick<Extraction, "aliases" | "unresolvedNames" | "fieldUpdates">> = {},
@@ -58,13 +60,13 @@ export function extraction(
 
 /** One extracted fact, attributed to a roster id. */
 export function extracted(
-  personId: string,
+  entityId: string,
   type: string,
   fact: string,
   options: { validAt?: string | null; invalidAt?: string | null; attributes?: Record<string, unknown> | null } = {},
 ): Extraction["facts"][number] {
   return {
-    personId,
+    entityId,
     type,
     fact,
     attributes: options.attributes ?? null,
@@ -75,23 +77,24 @@ export function extracted(
 
 const at = (iso: string) => new Date(iso);
 const ids = <T extends { id: string }>(items: T[] | null) => (items ?? []).map((item) => item.id);
+const standing = (readiness: Readiness, id: string) => readiness.asks.find((ask) => ask.id === id)!;
 
 export function contractCases(): ContractCase[] {
   return [
     {
-      name: "the roster: someone known by name has every ask open, fields merge and null clears, and someone unknown is nobody",
+      name: "the roster: an entity known by name has every ask open, fields merge and null clears, and one unknown is nothing",
       scripted: false,
       async run({ intelligence: i, scope }) {
-        await i.upsertPerson(scope, { id: "linda", name: "Linda", fields: { relationship: "mother" } });
+        await i.upsertEntity(scope, { id: "linda", name: "Linda", fields: { relationship: "mother" } });
         assert.deepEqual(ids(await i.gaps(scope, "linda")), ["what-they-love", "how-the-days-go"]);
-        await i.upsertPerson(scope, { id: "al", name: "Al" });
+        await i.upsertEntity(scope, { id: "al", name: "Al" });
         assert.deepEqual(ids(await i.gaps(scope, "al")), ["what-they-love"], "an ask with a when clause waits for the field");
         assert.equal(await i.gaps(scope, "nobody"), null);
         assert.equal(await i.getEntity(scope, "linda"), null, "nothing is known yet");
         assert.equal(await i.brief(scope, "linda"), null);
-        await i.upsertPerson(scope, { id: "linda", name: "Linda", fields: { city: "Austin" } });
+        await i.upsertEntity(scope, { id: "linda", name: "Linda", fields: { city: "Austin" } });
         assert.deepEqual(ids(await i.gaps(scope, "linda")), ["what-they-love", "how-the-days-go"], "a field not sent is kept");
-        await i.upsertPerson(scope, { id: "linda", name: "Linda", fields: { relationship: null } });
+        await i.upsertEntity(scope, { id: "linda", name: "Linda", fields: { relationship: null } });
         assert.deepEqual(ids(await i.gaps(scope, "linda")), ["what-they-love"], "null clears a field");
       },
     },
@@ -131,29 +134,29 @@ export function contractCases(): ContractCase[] {
       },
     },
     {
-      name: "a hint names the person, once, and the feed shows the episode under them",
+      name: "a hint names the entity, once, and the feed shows the episode under it",
       scripted: false,
       async run({ intelligence: i, scope }) {
-        await i.upsertPerson(scope, { id: "linda", name: "Linda" });
+        await i.upsertEntity(scope, { id: "linda", name: "Linda" });
         await i.addEpisode(scope, { source: "message", sourceRef: "m-1", content: "Took up gardening", extract: "inline" });
-        assert.deepEqual(await i.episodes(scope, { personId: "linda" }), []);
-        assert.deepEqual(await i.hintEpisodes(scope, { sourceRefs: ["m-1"], personId: "linda" }), { hinted: 1 });
-        assert.deepEqual(await i.hintEpisodes(scope, { sourceRefs: ["m-1"], personId: "linda" }), { hinted: 0 }, "a hint already given counts nothing");
-        assert.deepEqual(await i.hintEpisodes(scope, { sourceRefs: ["m-9"], personId: "linda" }), { hinted: 0 }, "a ref never recorded counts nothing");
-        const under = await i.episodes(scope, { personId: "linda" });
+        assert.deepEqual(await i.episodes(scope, { entityId: "linda" }), []);
+        assert.deepEqual(await i.hintEpisodes(scope, { sourceRefs: ["m-1"], entityId: "linda" }), { hinted: 1 });
+        assert.deepEqual(await i.hintEpisodes(scope, { sourceRefs: ["m-1"], entityId: "linda" }), { hinted: 0 }, "a hint already given counts nothing");
+        assert.deepEqual(await i.hintEpisodes(scope, { sourceRefs: ["m-9"], entityId: "linda" }), { hinted: 0 }, "a ref never recorded counts nothing");
+        const under = await i.episodes(scope, { entityId: "linda" });
         assert.equal(under.length, 1);
-        assert.deepEqual(under[0]!.personHints, ["linda"]);
+        assert.deepEqual(under[0]!.entityHints, ["linda"]);
       },
     },
     {
-      name: "nothing crosses scopes, and deleting a subject leaves the other alone",
+      name: "nothing crosses scopes, and deleting a knower leaves the other alone",
       scripted: false,
       async run({ intelligence: i, scope, otherScope }) {
-        await i.upsertPerson(scope, { id: "linda", name: "Linda" });
-        await i.addEpisode(scope, { source: "note", sourceRef: "n-1", content: "Mine", personHints: ["linda"], extract: "inline" });
-        await i.upsertPerson(otherScope, { id: "linda", name: "Another Linda" });
+        await i.upsertEntity(scope, { id: "linda", name: "Linda" });
+        await i.addEpisode(scope, { source: "note", sourceRef: "n-1", content: "Mine", entityHints: ["linda"], extract: "inline" });
+        await i.upsertEntity(otherScope, { id: "linda", name: "Another Linda" });
         const theirs = await i.addEpisode(otherScope, { source: "note", sourceRef: "n-1", content: "Theirs", extract: "inline" });
-        assert.equal(theirs.kind, "recorded", "the same ref under another subject is another episode");
+        assert.equal(theirs.kind, "recorded", "the same ref under another knower is another episode");
         assert.deepEqual((await i.episodes(scope)).map((e) => e.content), ["Mine"]);
         assert.deepEqual((await i.episodes(otherScope)).map((e) => e.content), ["Theirs"]);
         assert.deepEqual((await i.exportSubject(otherScope)).episodes.map((e) => e.said), ["Theirs"]);
@@ -181,18 +184,80 @@ export function contractCases(): ContractCase[] {
       },
     },
     {
-      name: "removing a person takes their words with them",
+      name: "removing an entity takes the words about it with it",
       scripted: false,
       async run({ intelligence: i, scope }) {
-        await i.upsertPerson(scope, { id: "linda", name: "Linda" });
-        await i.upsertPerson(scope, { id: "al", name: "Al" });
-        await i.addEpisode(scope, { source: "note", sourceRef: "n-1", content: "About Linda", personHints: ["linda"], extract: "inline" });
-        await i.addEpisode(scope, { source: "note", sourceRef: "n-2", content: "About Al", personHints: ["al"], extract: "inline" });
-        assert.deepEqual(await i.deletePerson(scope, "linda"), { episodesRemoved: 1 });
+        await i.upsertEntity(scope, { id: "linda", name: "Linda" });
+        await i.upsertEntity(scope, { id: "al", name: "Al" });
+        await i.addEpisode(scope, { source: "note", sourceRef: "n-1", content: "About Linda", entityHints: ["linda"], extract: "inline" });
+        await i.addEpisode(scope, { source: "note", sourceRef: "n-2", content: "About Al", entityHints: ["al"], extract: "inline" });
+        assert.deepEqual(await i.deleteEntity(scope, "linda"), { episodesRemoved: 1 });
         assert.equal(await i.gaps(scope, "linda"), null);
         assert.deepEqual((await i.exportSubject(scope)).episodes.map((e) => e.said), ["About Al"]);
-        assert.deepEqual(await i.deletePerson(scope, "linda"), { episodesRemoved: 0 }, "gone is gone");
+        assert.deepEqual(await i.deleteEntity(scope, "linda"), { episodesRemoved: 0 }, "gone is gone");
         assert.ok(await i.gaps(scope, "al"));
+      },
+    },
+    {
+      name: "an answer given in reply keeps its question beside it, never inside what was said",
+      scripted: false,
+      async run({ intelligence: i, scope }) {
+        await i.upsertEntity(scope, { id: "linda", name: "Linda" });
+        await i.addEpisode(scope, {
+          source: "reply",
+          sourceRef: "r-1",
+          content: "Two, both at university",
+          inReplyTo: "Do they have kids?",
+          entityHints: ["linda"],
+          referenceAt: at("2026-03-01T10:00:00Z"),
+          extract: "inline",
+        });
+        await i.addEpisode(scope, { source: "note", sourceRef: "n-1", content: "Took up gardening", entityHints: ["linda"], referenceAt: at("2026-03-02T10:00:00Z"), extract: "inline" });
+        const [note, reply] = await i.episodes(scope);
+        assert.equal(reply!.content, "Two, both at university");
+        assert.equal(reply!.inReplyTo, "Do they have kids?");
+        assert.equal(note!.inReplyTo, null);
+        const exported = await i.exportSubject(scope);
+        assert.equal(exported.episodes.find((e) => e.said === "Two, both at university")!.inReplyTo, "Do they have kids?", "the question is kept, apart from the words");
+        assert.equal(exported.episodes.find((e) => e.said === "Took up gardening")!.inReplyTo, null);
+      },
+    },
+    {
+      name: "readiness: an entity known by name has every applicable ask open, an ask waits for the one it comes after, and one unknown is nothing",
+      scripted: false,
+      async run({ intelligence: i, scope }) {
+        await i.upsertEntity(scope, { id: "linda", name: "Linda", fields: { relationship: "mother" } });
+        await i.upsertEntity(scope, { id: "al", name: "Al" });
+
+        const plain = (await i.readiness(scope, "linda"))!;
+        assert.equal(plain.lens, "fixture", "a read without a lens reads through the default");
+        assert.equal(plain.objective, "Treat them well next time.");
+        assert.equal(plain.overall, 0);
+        assert.deepEqual(plain.asks.map((a) => [a.id, a.state]), [["what-they-love", "open"], ["how-the-days-go", "open"]]);
+        assert.deepEqual(plain.next.map((s) => [s.kind, s.ask, s.value]), [["ask", "what-they-love", 1], ["ask", "how-the-days-go", 1]]);
+        assert.deepEqual(plain.dimensions.map((d) => [d.id, d.facts, d.due, d.lastSaidAt]), [
+          ["never-cross", 0, 0, null],
+          ["has", 0, 0, null],
+          ["likes", 0, 0, null],
+          ["life", 0, 0, null],
+          ["people", 0, 0, null],
+          ["other", 0, 0, null],
+        ]);
+
+        const visit = (await i.readiness(scope, "linda", { lens: "fixture-visit" }))!;
+        assert.equal(visit.lens, "fixture-visit");
+        assert.deepEqual(visit.asks.map((a) => [a.id, a.state, a.waitingOn]), [
+          ["how-the-days-go", "open", []],
+          ["what-they-love", "waiting", ["how-the-days-go"]],
+          ["people", "open", []],
+        ]);
+        assert.deepEqual(visit.next.map((s) => [s.ask, s.value]), [["how-the-days-go", 2], ["people", 1]], "the heavier ask first; one waiting is not offered");
+        assert.equal(visit.next[1]!.question, "Who is in their life?", "an ask of a dimension borrows its question");
+
+        const al = (await i.readiness(scope, "al", { lens: "fixture-visit" }))!;
+        assert.deepEqual(al.asks.map((a) => [a.id, a.state]), [["what-they-love", "open"], ["people", "open"]], "an ask that does not apply holds nothing back");
+        assert.equal(await i.readiness(scope, "nobody"), null);
+        await assert.rejects(i.readiness(scope, "linda", { lens: "no-such-lens" }), "a lens the client never registered is refused");
       },
     },
     {
@@ -200,12 +265,12 @@ export function contractCases(): ContractCase[] {
       scripted: true,
       async run({ intelligence: i, scope, script }) {
         const said = at("2026-03-01T10:00:00Z");
-        await i.upsertPerson(scope, { id: "linda", name: "Linda", fields: { relationship: "mother", city: "Austin" } });
+        await i.upsertEntity(scope, { id: "linda", name: "Linda", fields: { relationship: "mother", city: "Austin" } });
         const first = await i.addEpisode(scope, {
           source: "message",
           sourceRef: "m-1",
           content: "Mom took up gardening",
-          personHints: ["linda"],
+          entityHints: ["linda"],
           referenceAt: said,
           extract: "inline",
         });
@@ -222,7 +287,7 @@ export function contractCases(): ContractCase[] {
         assert.equal(done.status, "ingested");
         if (done.status === "ingested") {
           assert.deepEqual(done.facts, { added: 2, merged: 0, superseded: 0 });
-          assert.equal(done.people, 1);
+          assert.equal(done.entities, 1);
           assert.deepEqual(done.unresolvedNames, ["Aunt Carol"]);
         }
 
@@ -232,20 +297,23 @@ export function contractCases(): ContractCase[] {
         assert.deepEqual(ids(brief.gaps), ["how-the-days-go"]);
 
         const view = (await i.getEntity(scope, "linda", { includeBrief: true }))!;
-        assert.equal(view.personId, "linda");
+        assert.equal(view.id, "linda", "an entity is known by the client's own id");
+        assert.equal(view.kind, "person", "and is of the vocabulary's kind");
         assert.equal(view.summary, "About Linda.");
         assert.equal(view.facts.length, 2);
         assert.equal(view.brief!.text, brief.text);
         for (const fact of view.facts) {
+          assert.equal(fact.entityId, "linda");
           assert.ok(fact.createdAt instanceof Date);
           assert.equal(fact.createdAt.getTime(), said.getTime(), "known-at is when it was said, never when it was read");
+          assert.equal(fact.lastSaidAt?.getTime(), said.getTime(), "said once, it was last said when it was first said");
           assert.deepEqual(fact.episodeIds, [first.episodeId]);
           assert.equal(fact.expiredAt, null);
         }
 
         const found = await i.searchFacts(scope, "gardening");
         assert.deepEqual(found.map((f) => f.fact), ["Took up gardening"]);
-        assert.deepEqual(await i.searchFacts(scope, "gardening", { personId: "nobody" }), []);
+        assert.deepEqual(await i.searchFacts(scope, "gardening", { entityId: "nobody" }), []);
         assert.deepEqual((await i.searchFacts(scope, "gardening", { types: ["LINE"] })).length, 0);
         const learned = await i.factsLearnedBy(scope, ["m-1", "m-9"]);
         assert.deepEqual(Object.keys(learned), ["m-1"]);
@@ -277,24 +345,24 @@ export function contractCases(): ContractCase[] {
       },
     },
     {
-      name: "a correction supersedes, dated by when it was said, and what was known then stays answerable",
+      name: "a correction supersedes and a retelling merges, each dated by when it was said, and what was known then stays answerable",
       scripted: true,
       async run({ intelligence: i, scope, script }) {
         const t1 = at("2026-01-10T00:00:00Z");
         const t2 = at("2026-02-10T00:00:00Z");
         const between = at("2026-01-20T00:00:00Z");
-        await i.upsertPerson(scope, { id: "linda", name: "Linda" });
-        await i.addEpisode(scope, { source: "note", sourceRef: "n-1", content: "Mom lives in Austin", personHints: ["linda"], referenceAt: t1, extract: "inline" });
+        await i.upsertEntity(scope, { id: "linda", name: "Linda" });
+        await i.addEpisode(scope, { source: "note", sourceRef: "n-1", content: "Mom lives in Austin", entityHints: ["linda"], referenceAt: t1, extract: "inline" });
         script!({ extraction: extraction([extracted("linda", "CIRCUMSTANCE", "Lives in Austin")]) });
         assert.equal((await i.extractNow(scope, { maxEpisodes: 1 })).outcome, "extracted");
         const [austin] = await i.searchFacts(scope, "Austin");
         assert.ok(austin);
 
-        await i.addEpisode(scope, { source: "note", sourceRef: "n-2", content: "Mom moved to Denver", personHints: ["linda"], referenceAt: t2, extract: "inline" });
+        await i.addEpisode(scope, { source: "note", sourceRef: "n-2", content: "Mom moved to Denver", entityHints: ["linda"], referenceAt: t2, extract: "inline" });
         script!({
           extraction: extraction([extracted("linda", "CIRCUMSTANCE", "Lives in Denver")]),
-          reconcile: (person) => ({
-            decisions: [{ newIndex: 0, action: "supersede", factId: person.current[0]!.id, invalidAt: null }],
+          reconcile: (entity) => ({
+            decisions: [{ newIndex: 0, action: "supersede", factId: entity.current[0]!.id, invalidAt: null }],
             summary: "Linda, in Denver now.",
           }),
         });
@@ -324,20 +392,127 @@ export function contractCases(): ContractCase[] {
         const briefThen = (await i.brief(scope, "linda", { asOf: between }))!;
         assert.match(briefThen.text, /Lives in Austin/);
         assert.doesNotMatch(briefThen.text, /Denver/);
+
+        // Said again, it is the same fact, last said later: a merge moves when it was last said
+        // and nothing else, and a read from before the retelling never sees it.
+        const t3 = at("2026-03-15T00:00:00Z");
+        await i.addEpisode(scope, { source: "note", sourceRef: "n-3", content: "Mom is settling into Denver", entityHints: ["linda"], referenceAt: t3, extract: "inline" });
+        script!({
+          extraction: extraction([extracted("linda", "CIRCUMSTANCE", "Lives in Denver")]),
+          reconcile: (entity) => ({
+            decisions: [{ newIndex: 0, action: "merge", factId: entity.current[0]!.id, invalidAt: null }],
+            summary: "Linda, settling into Denver.",
+          }),
+        });
+        const third = await i.extractNow(scope, { maxEpisodes: 1 });
+        assert.equal(third.outcome, "extracted");
+        if (third.episodes[0]!.status === "ingested") assert.deepEqual(third.episodes[0]!.facts, { added: 0, merged: 1, superseded: 0 });
+        const [retold] = (await i.getEntity(scope, "linda"))!.facts;
+        assert.equal(retold!.id, denver.id);
+        assert.equal(retold!.createdAt.getTime(), t2.getTime(), "first said stays when it was first said");
+        assert.equal(retold!.lastSaidAt?.getTime(), t3.getTime(), "a retelling moves when it was last said");
+        assert.equal(retold!.episodeIds.length, 2);
+        const [beforeRetelling] = (await i.getEntity(scope, "linda", { asOf: at("2026-03-01T00:00:00Z") }))!.facts;
+        assert.equal(beforeRetelling!.lastSaidAt, null, "as of a day before the retelling, it had not happened");
       },
     },
     {
-      name: "an episode held until hinted waits, and goes once its person is named",
+      name: "readiness over time: a fact meets its ask, is due for a revisit once its window passes unsaid, and is fresh again when said again",
       scripted: true,
       async run({ intelligence: i, scope, script }) {
-        await i.upsertPerson(scope, { id: "linda", name: "Linda" });
+        const t1 = at("2026-01-10T00:00:00Z");
+        await i.upsertEntity(scope, { id: "linda", name: "Linda", fields: { relationship: "mother" } });
+        await i.addEpisode(scope, { source: "note", sourceRef: "n-1", content: "Mom works days at the hospital now", entityHints: ["linda"], referenceAt: t1, extract: "inline" });
+        script!({ extraction: extraction([extracted("linda", "CIRCUMSTANCE", "Works days at the hospital")]) });
+        assert.equal((await i.extractNow(scope, { maxEpisodes: 1 })).outcome, "extracted");
+        const [days] = await i.searchFacts(scope, "hospital");
+        assert.ok(days);
+
+        const fresh = (await i.readiness(scope, "linda", { asOf: at("2026-01-20T00:00:00Z") }))!;
+        assert.deepEqual([standing(fresh, "how-the-days-go").state, standing(fresh, "how-the-days-go").strength], ["met", 1]);
+        assert.deepEqual(fresh.next.map((s) => [s.kind, s.ask]), [["ask", "what-they-love"]]);
+        assert.equal(fresh.overall, 0.5);
+        const life = fresh.dimensions.find((d) => d.id === "life")!;
+        assert.deepEqual([life.facts, life.due, life.lastSaidAt?.getTime(), life.factIds], [1, 0, t1.getTime(), [days.id]]);
+
+        // A hundred days on and unsaid: on the page as it always was, and due for a revisit.
+        const quietly = at("2026-04-20T00:00:00Z");
+        const quiet = (await i.readiness(scope, "linda", { asOf: quietly }))!;
+        assert.deepEqual([standing(quiet, "how-the-days-go").state, standing(quiet, "how-the-days-go").strength], ["due", 0.5]);
+        assert.deepEqual(quiet.next.map((s) => [s.kind, s.ask, s.value, s.factIds]), [
+          ["ask", "what-they-love", 1, []],
+          ["revisit", "how-the-days-go", 0.5, [days.id]],
+        ]);
+        assert.equal(quiet.overall, 0.25);
+        assert.equal(quiet.dimensions.find((d) => d.id === "life")!.due, 1);
+        assert.deepEqual(ids(await i.gaps(scope, "linda", { asOf: quietly })), ["what-they-love"], "a fact due for a revisit still answers its ask");
+        assert.match((await i.brief(scope, "linda", { asOf: quietly }))!.text, /Works days at the hospital/);
+
+        // Said again, it is fresh again; read from before the retelling, it is still due.
+        const t2 = at("2026-04-25T00:00:00Z");
+        await i.addEpisode(scope, { source: "note", sourceRef: "n-2", content: "Mom is still on days at the hospital", entityHints: ["linda"], referenceAt: t2, extract: "inline" });
+        script!({
+          extraction: extraction([extracted("linda", "CIRCUMSTANCE", "Works days at the hospital")]),
+          reconcile: (entity) => ({
+            decisions: [{ newIndex: 0, action: "merge", factId: entity.current[0]!.id, invalidAt: null }],
+            summary: "Linda, on days.",
+          }),
+        });
+        assert.equal((await i.extractNow(scope, { maxEpisodes: 1 })).outcome, "extracted");
+        const again = (await i.readiness(scope, "linda", { asOf: at("2026-04-30T00:00:00Z") }))!;
+        assert.equal(standing(again, "how-the-days-go").state, "met");
+        assert.equal(again.dimensions.find((d) => d.id === "life")!.lastSaidAt?.getTime(), t2.getTime());
+        const before = (await i.readiness(scope, "linda", { asOf: quietly }))!;
+        assert.equal(standing(before, "how-the-days-go").state, "due", "as of a day before the retelling, it had not happened");
+      },
+    },
+    {
+      name: "two lenses read one ledger: the same facts make a different page and a different next question under each",
+      scripted: true,
+      async run({ intelligence: i, scope, script }) {
+        await i.upsertEntity(scope, { id: "linda", name: "Linda", fields: { relationship: "mother" } });
+        await i.addEpisode(scope, {
+          source: "note",
+          sourceRef: "n-1",
+          content: "Mom is vegan, has a pottery wheel and loves gardening",
+          entityHints: ["linda"],
+          referenceAt: at("2026-03-01T10:00:00Z"),
+          extract: "inline",
+        });
+        script!({
+          extraction: extraction([extracted("linda", "LINE", "Vegan"), extracted("linda", "HAS", "Owns a pottery wheel"), extracted("linda", "LIKES", "Gardening")]),
+        });
+        assert.equal((await i.extractNow(scope, { maxEpisodes: 1 })).outcome, "extracted");
+
+        const plain = (await i.brief(scope, "linda"))!;
+        const visit = (await i.brief(scope, "linda", { lens: "fixture-visit" }))!;
+        assert.ok(plain.text.startsWith("What we know about Linda (mother):"), plain.text);
+        assert.ok(visit.text.startsWith("Before you visit Linda (mother):"), visit.text);
+        assert.ok(plain.text.includes("Already has:\n- Owns a pottery wheel"), plain.text);
+        assert.ok(visit.text.includes("Mind:\n- Vegan"), visit.text);
+        assert.deepEqual(plain.mustHonor.map((m) => m.type).sort(), ["HAS", "LINE"]);
+        assert.deepEqual(visit.mustHonor.map((m) => m.type), ["LINE"], "a lens names what it must honor");
+        assert.deepEqual(ids(plain.gaps), ["how-the-days-go"]);
+        assert.deepEqual(ids(visit.gaps), ["how-the-days-go", "people"]);
+        assert.deepEqual(ids(await i.gaps(scope, "linda", { lens: "fixture-visit" })), ["how-the-days-go", "people"]);
+        const loves = standing((await i.readiness(scope, "linda", { lens: "fixture-visit" }))!, "what-they-love");
+        assert.deepEqual([loves.state, loves.facts, loves.strength], ["waiting", 1, 0.5], "one fact of the two it needs, and it waits its turn");
+        assert.equal((await i.getEntity(scope, "linda", { includeBrief: true, lens: "fixture-visit" }))!.brief!.text, visit.text);
+        await assert.rejects(i.brief(scope, "linda", { lens: "no-such-lens" }));
+      },
+    },
+    {
+      name: "an episode held until hinted waits, and goes once its entity is named",
+      scripted: true,
+      async run({ intelligence: i, scope, script }) {
+        await i.upsertEntity(scope, { id: "linda", name: "Linda" });
         await i.addEpisode(scope, { source: "message", sourceRef: "m-1", content: "She took up gardening", hold: "until-hinted", extract: "inline" });
         const held = await i.extractNow(scope, { maxEpisodes: 3 });
         assert.equal(held.outcome, "none");
         assert.equal(held.remaining, 0, "a held episode is not pending");
         assert.equal((await i.episodes(scope))[0]!.ingestedAt, null);
 
-        await i.hintEpisodes(scope, { sourceRefs: ["m-1"], personId: "linda" });
+        await i.hintEpisodes(scope, { sourceRefs: ["m-1"], entityId: "linda" });
         script!({ extraction: extraction([extracted("linda", "LIKES", "Gardening")]) });
         const freed = await i.extractNow(scope, { maxEpisodes: 3, askedSourceRef: "m-1" });
         assert.equal(freed.outcome, "extracted");
@@ -346,14 +521,14 @@ export function contractCases(): ContractCase[] {
       },
     },
     {
-      name: "a fact pinned on an id not on the roster is dropped, and a routing field is proposed rather than written",
+      name: "a fact pinned on an id not on the roster is dropped, and a field is proposed rather than written",
       scripted: true,
       async run({ intelligence: i, scope, script }) {
-        await i.upsertPerson(scope, { id: "linda", name: "Linda", fields: { city: "Austin" } });
-        await i.addEpisode(scope, { source: "note", sourceRef: "n-1", content: "Mom and Carol moved to Denver", personHints: ["linda"], extract: "inline" });
+        await i.upsertEntity(scope, { id: "linda", name: "Linda", fields: { city: "Austin" } });
+        await i.addEpisode(scope, { source: "note", sourceRef: "n-1", content: "Mom and Carol moved to Denver", entityHints: ["linda"], extract: "inline" });
         script!({
           extraction: extraction([extracted("linda", "EVENT", "Moved to Denver"), extracted("carol", "EVENT", "Moved to Denver")], {
-            fieldUpdates: [{ personId: "linda", field: "city", value: "Denver" }],
+            fieldUpdates: [{ entityId: "linda", field: "city", value: "Denver" }],
           }),
         });
         const now = await i.extractNow(scope, { maxEpisodes: 1 });
@@ -364,7 +539,7 @@ export function contractCases(): ContractCase[] {
           assert.deepEqual(done.facts, { added: 1, merged: 0, superseded: 0 });
         }
         assert.deepEqual((await i.getEntity(scope, "linda"))!.facts.map((f) => f.fact), ["Moved to Denver"]);
-        const proposals = await i.listProposals(scope, { personId: "linda", status: "pending" });
+        const proposals = await i.listProposals(scope, { entityId: "linda", status: "pending" });
         assert.equal(proposals.length, 1);
         assert.equal(proposals[0]!.kind, "field_update");
         assert.equal(proposals[0]!.field, "city");

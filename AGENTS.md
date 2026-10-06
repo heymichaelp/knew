@@ -12,19 +12,31 @@ knew.dev site. The Postgres service is `heymichaelp/knew-service`.
 
 ## Rules
 
-- **Nothing client-specific lives in the package.** It ships no lens of its own: no fact type,
-  no heading, no charter, no question. A lens is data a client registers. knewpeople's
-  `relationships` lens is that client's content and stays in its repo — the site uses the
-  fixture lens from `@popjoker/knew/testing` as its worked example.
+- **Nothing client-specific lives in the package.** The core ships no vocabulary and no lens: no
+  fact type, no heading, no charter, no question. Vocabularies and lenses are data a client
+  registers. The one exception is `@popjoker/knew/presets` — opt-in starter vocabularies and
+  lenses per kind (`person` today), generic on purpose and reviewed like API: an addition is a
+  minor, a change to what an existing preset type means is a major. A product's own content —
+  knewpeople's `relationships` lens, Sweeket's gifting charter — stays in its repo, and
+  `test/presets.test.ts` fails if a preset's type key appears in the core's code. The site's
+  worked example is the person preset; the fixture vocabulary and its two lenses in
+  `@popjoker/knew/testing` back the contract suite.
+- **Weights order what to learn; they never weigh what is believed.** Readiness ranks asks and
+  revisits; it never reorders, filters or annotates a page, and a fact due for a revisit is still
+  printed exactly as before. Revisit windows are opt-in per fact type and refused on enduring
+  types.
 - **The site imports the engine; it never transcribes it.** Long-form pages render the package's
-  own `ADOPTING.md`/`CHANGELOG.md`, read from the installed tarball at build time. The lens table
-  comes from `lensDefinitionSchema` via `z.toJSONSchema`, the contract list from `contractCases()`,
-  the API surface check from the client's runtime keys, and the front page's example from
-  `renderBrief` and `gapsFor`. If you find yourself typing a fact the package already knows, stop
-  and import it instead.
-- **Three drift guards live in `apps/site/test/drift.test.ts`** and are the reason the above holds.
-  Adding a lens field without a note in `apps/site/lib/lens-notes.ts`, or a client method without a
-  row in `apps/site/lib/api-routes.ts`, fails the build. Do not loosen them to get green.
+  own `ADOPTING.md`/`CHANGELOG.md`, read from the installed tarball at build time. The vocabulary
+  and lens tables come from `vocabularyDefinitionSchema` and `lensDefinitionSchema` via
+  `z.toJSONSchema`, the defaults table from `ENGINE_DEFAULTS`, the preset from
+  `@popjoker/knew/presets`, the contract list from `contractCases()`, the API surface check from
+  the client's runtime keys, and the front page's example from `renderBrief` and `readinessFor`.
+  If you find yourself typing a fact the package already knows, stop and import it instead.
+- **The drift guards live in `apps/site/test/drift.test.ts`** and are the reason the above holds.
+  Adding a vocabulary or lens field — top-level, or inside a fact type, a dimension, an ask or a
+  section — without a note in `apps/site/lib/vocabulary-notes.ts` or `lens-notes.ts`, an engine
+  default without a note in `default-notes.ts`, or a client method without a row in
+  `apps/site/lib/api-routes.ts`, fails the build. Do not loosen them to get green.
 - **A monospace is for code only.** Geist Mono appears in `<pre>` blocks and in `.code` spans that
   wrap something you would actually type — an identifier, a route, a header, a regex. Labels,
   dates, counts and HTTP verbs are set in Lato. This is a deliberate softening; it reverts easily

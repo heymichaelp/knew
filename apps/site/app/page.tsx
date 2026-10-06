@@ -1,26 +1,35 @@
 import Link from "next/link";
 
+import { contractCaseSummaries } from "@/lib/engine";
 import {
   AT,
   exampleEpisode,
   exampleFacts,
-  exampleGaps,
   examplePage,
   exampleProposal,
+  exampleReadiness,
 } from "@/lib/example";
 import { codeBlocks, packageManifest, readShipped } from "@/lib/package-docs";
 
 const day = (date: Date) => date.toISOString().slice(0, 10);
+
+const WORDS = ["No", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten", "Eleven", "Twelve"];
+/** "Five facts" — a count as the sentence would say it. */
+const counted = (n: number, noun: string) => `${WORDS[n] ?? n} ${noun}${n === 1 ? "" : "s"}`;
+
+const dimensionLabel = new Map(exampleReadiness.dimensions.map((d) => [d.id, d.label]));
+const asks = new Map(exampleReadiness.asks.map((a) => [a.id, a]));
+const leanIn = exampleReadiness.next.slice(0, 3);
 
 const quickstart = codeBlocks(readShipped("README.md"));
 const install = quickstart.find((b) => b.lang === "sh")?.code ?? "npm install @popjoker/knew";
 const usage = quickstart.find((b) => b.lang === "ts")?.code ?? "";
 
 const DOCS = [
-  { href: "/lenses", label: "Lenses", blurb: "The definition field by field, generated from the schema." },
+  { href: "/lenses", label: "Lenses", blurb: "The vocabulary and the lens, field by field, generated from the schemas — and the defaults and the preset to start from." },
   { href: "/adopting", label: "Adopting", blurb: "The guide, rendered from the package's own ADOPTING.md." },
   { href: "/api", label: "The API", blurb: "Every route, the envelope, and the two headers." },
-  { href: "/contract", label: "The contract", blurb: "The ten cases a driver must pass, listed by the suite." },
+  { href: "/contract", label: "The contract", blurb: `The ${contractCaseSummaries().length} cases a driver must pass, listed by the suite.` },
   { href: "/privacy", label: "Privacy", blurb: "What it will not do, and why that is structural." },
   { href: "/changelog", label: "Changelog", blurb: "The version rule, and what each release changed." },
 ] as const;
@@ -81,7 +90,7 @@ export default function Home() {
           {/* became */}
           <article className="panel min-w-0 bg-paper-raised p-7">
             <p className="clause">02 — What it became</p>
-            <p className="label mt-5">Four facts, typed and dated</p>
+            <p className="label mt-5">{counted(exampleFacts.length, "fact")}, typed and dated</p>
             <div className="mt-3">
               {exampleFacts.map((f) => (
                 <div key={f.id} className="ledger-row">
@@ -104,7 +113,7 @@ export default function Home() {
               <p className="label">Proposed, not written</p>
               <p className="mt-1.5 text-sm text-ink-soft">
                 <code className="code text-stamp">{exampleProposal.field}</code> is a
-                routing field — the client’s business. The engine noticed the move and asks; it does not write.
+                field the knower owns — the client’s business. The engine noticed the move and asks; it does not write.
               </p>
             </div>
           </article>
@@ -116,18 +125,32 @@ export default function Home() {
             <pre className="mt-4 border-l-2 border-rule-strong bg-paper-sunken p-4 code text-[0.75rem] leading-relaxed whitespace-pre-wrap">
               {examplePage}
             </pre>
-            {exampleGaps.map((gap) => (
-              <div key={gap.id} className="mt-5 border-l-2 border-derived pl-4">
-                <p className="label" style={{ color: "var(--derived)" }}>
-                  Lean in here · {gap.answeredBy.join(", ")}
-                </p>
-                <p className="mt-1.5 text-[0.9375rem] leading-snug">{gap.question}</p>
+            <div className="mt-6">
+              <p className="label">What is known, by dimension</p>
+              <div className="mt-2 grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-1 text-sm">
+                {exampleReadiness.dimensions.map((dimension) => (
+                  <div key={dimension.id} className="contents">
+                    <span className={dimension.facts > 0 ? "text-ink" : "text-ink-faint"}>{dimension.label}</span>
+                    <span className="text-right text-ink-faint">{dimension.facts > 0 ? counted(dimension.facts, "fact") : "nothing yet"}</span>
+                  </div>
+                ))}
               </div>
-            ))}
+            </div>
+            {leanIn.map((step, index) => {
+              const ask = asks.get(step.ask)!;
+              return (
+                <div key={step.ask} className="mt-5 border-l-2 border-derived pl-4">
+                  <p className="label" style={{ color: "var(--derived)" }}>
+                    {index === 0 ? "Lean in here" : "Then"} · {ask.dimension ? dimensionLabel.get(ask.dimension) : ask.answeredBy.join(", ")}
+                  </p>
+                  <p className="mt-1.5 text-[0.9375rem] leading-snug">{step.question}</p>
+                </div>
+              );
+            })}
             <p className="mt-6 text-sm text-ink-faint">
-              Both panels above come from <code className="code">renderBrief</code> and{" "}
-              <code className="code">gapsFor</code>, run at build time through the
-              fixture lens, as of {day(AT)}.
+              Everything in this panel comes from <code className="code">renderBrief</code> and{" "}
+              <code className="code">readinessFor</code>, run at build time through the
+              person preset, as of {day(AT)}. The objective it reads for: “{exampleReadiness.objective}”
             </p>
           </article>
         </div>
@@ -144,8 +167,9 @@ export default function Home() {
             <p className="label">Hosted</p>
             <h3 className="display mt-3 text-2xl">The engine keeps it for you</h3>
             <p className="mt-4 text-ink-soft">
-              The client registers a lens, names people, and posts episodes. Postgres holds the episodes, the facts and
-              their history; a worker runs extraction. The client reads the page and the gaps.
+              The client registers a vocabulary and its lenses, names the entities its knower knows, and posts episodes.
+              Postgres holds the episodes, the facts and their history; a worker runs extraction. The client reads the
+              page, the gaps and how ready it is, through whichever lens fits the moment.
             </p>
             <p className="mt-5 text-sm text-ink-faint">
               For a client that wants the ledger, the bi-temporal history and the replay to be somebody else’s problem.
@@ -158,7 +182,8 @@ export default function Home() {
             <h3 className="display mt-3 text-2xl">The engine keeps nothing</h3>
             <p className="mt-4 text-ink-soft">
               One call carries the roster, the facts in hand and a single episode. Back comes a reconciliation plan the
-              client applies to its own store. No subject is named and nothing is kept.
+              client applies to its own store, and the page and readiness are pure functions it runs itself. No knower is
+              named and nothing is kept.
             </p>
             <p className="mt-5 text-sm text-ink-faint">
               For a client that already owns its data and will not hand it over — including one that cannot.

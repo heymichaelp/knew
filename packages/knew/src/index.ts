@@ -1,10 +1,14 @@
 export * from "./types.ts";
+export * from "./defaults.ts";
+export * from "./vocabulary.ts";
 export * from "./lens.ts";
 export * from "./brief.ts";
-export * from "./gaps.ts";
+export * from "./readiness.ts";
 export * from "./reconcile.ts";
 export * from "./extract-io.ts";
 export * from "./schemas.ts";
+export * from "./extend.ts";
+export * from "./legacy.ts";
 export * from "./dates.ts";
 export * from "./client.ts";
-export { EXTRACT_V1, RECONCILE_V1, PROMPT_TEXT } from "./prompts/index.ts";
+export { EXTRACT_V1, EXTRACT_V2, RECONCILE_V1, RECONCILE_V2, PROMPT_TEXT } from "./prompts/index.ts";

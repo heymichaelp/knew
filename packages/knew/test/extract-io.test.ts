@@ -1,13 +1,13 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { extractInput, reconcileInput, type Fact } from "../src/index.ts";
-import { fixtureLens } from "../src/testing.ts";
+import { fixtureVocabulary } from "../src/testing.ts";
 
 const at = (iso: string) => new Date(iso);
 
 describe("Scenario: The model is shown the roster it must choose from, with the hinted one marked", () => {
-  it("prints each person with the lens's prompt fields and aliases", () => {
-    const input = extractInput(fixtureLens(), {
+  it("prints each entry with the vocabulary's prompt fields and aliases, under its kind", () => {
+    const input = extractInput(fixtureVocabulary(), {
       content: "She loves it",
       source: "note",
       referenceAt: at("2026-03-02T12:00:00Z"),
@@ -19,14 +19,30 @@ describe("Scenario: The model is shown the roster it must choose from, with the 
     });
     assert.ok(input.includes("Today (when this was said): 2026-03-02"));
     assert.ok(input.includes("Where it came from: a note they wrote"));
+    assert.ok(input.includes('The entries on their list, each of kind "person" (attach facts only to these ids):'));
     assert.ok(input.includes("- id: r-1 | name: Linda | relationship: mother | also called: Mom (recorded about them)"));
     assert.ok(input.includes("- id: r-2 | name: Priya\n"));
     assert.ok(input.includes('What was said:\n"""\nShe loves it\n"""'));
     assert.ok(!input.includes("read off the photograph"));
+    assert.ok(!input.includes("The question they were answering"));
+  });
+
+  it("shows the question an answer was given to, quoted apart and ahead of what was said", () => {
+    const input = extractInput(fixtureVocabulary(), {
+      content: "Two, both at university",
+      inReplyTo: "Do they have kids?",
+      source: "reply",
+      referenceAt: at("2026-03-02T12:00:00Z"),
+      roster: [{ id: "r-1", name: "Linda", fields: {}, aliases: [] }],
+      hints: ["r-1"],
+    });
+    const question = input.indexOf('The question they were answering (context, not something they said):\n"""\nDo they have kids?\n"""');
+    assert.ok(question > 0, input);
+    assert.ok(question < input.indexOf('What was said:\n"""\nTwo, both at university\n"""'));
   });
 
   it("names an unknown source by its own string and an empty roster as unresolved", () => {
-    const input = extractInput(fixtureLens(), {
+    const input = extractInput(fixtureVocabulary(), {
       content: "x",
       source: "carrier-pigeon",
       referenceAt: at("2026-03-02T12:00:00Z"),
@@ -34,11 +50,11 @@ describe("Scenario: The model is shown the roster it must choose from, with the 
       hints: [],
     });
     assert.ok(input.includes("Where it came from: carrier-pigeon"));
-    assert.ok(input.includes("(none yet — every person mentioned is unresolved)"));
+    assert.ok(input.includes("(none yet — everything mentioned is unresolved)"));
   });
 
   it("weighs what was read off a photograph differently from what was guessed", () => {
-    const input = extractInput(fixtureLens(), {
+    const input = extractInput(fixtureVocabulary(), {
       content: "Here are 2 photos.",
       observed: "From two photos of her bookshelf: a wooden shelf packed with paperbacks. Words I can read in them: “Normal People”, “Pachinko”.",
       source: "message",
@@ -54,10 +70,10 @@ describe("Scenario: The model is shown the roster it must choose from, with the 
 });
 
 describe("Scenario: Reconcile sees the current facts by id and the new ones by index", () => {
-  it("lays out the person, the dates, both lists and the summary", () => {
+  it("lays out the entity, the dates, both lists and the summary", () => {
     const current: Fact = {
       id: "00000000-0000-4000-8000-000000000001",
-      subjectId: "s",
+      entityId: "s",
       objectId: null,
       type: "LIKES",
       fact: "Gardens",
@@ -65,18 +81,19 @@ describe("Scenario: Reconcile sees the current facts by id and the new ones by i
       validAt: at("2025-03-01T00:00:00Z"),
       invalidAt: null,
       createdAt: at("2025-03-02T00:00:00Z"),
+      lastSaidAt: null,
       expiredAt: null,
       supersededById: null,
       episodeIds: ["e"],
     };
-    const input = reconcileInput(fixtureLens(), {
-      person: { name: "Linda", fields: { relationship: "mother" } },
+    const input = reconcileInput(fixtureVocabulary(), {
+      entity: { name: "Linda", fields: { relationship: "mother" } },
       referenceAt: at("2026-04-20T18:00:00Z"),
       current: [current],
       incoming: [{ type: "EVENT", fact: "Moved to Portland", validAt: at("2025-09-01T00:00:00Z"), invalidAt: null }],
       summary: "",
     });
-    assert.ok(input.startsWith("Person: Linda (mother)\n\nToday (when the new facts were said): 2026-04-20"));
+    assert.ok(input.startsWith("About this person: Linda (mother)\n\nToday (when the new facts were said): 2026-04-20"));
     assert.ok(input.includes("- 00000000-0000-4000-8000-000000000001 | LIKES | Gardens | true since 2025-03-01; told us 2025-03-02"));
     assert.ok(input.includes("- 0 | EVENT | Moved to Portland | true since 2025-09-01"));
     assert.ok(input.endsWith('Current summary:\n"""\n(none yet)\n"""'));
