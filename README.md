@@ -28,8 +28,9 @@ Node 22 or later. npm workspaces, one lockfile at the root.
 knew.dev describes the engine by importing it, not by transcribing it. `ADOPTING.md` and
 `CHANGELOG.md` are read out of the installed package at build time; the vocabulary and lens field
 tables are generated from their schemas and the defaults table from `ENGINE_DEFAULTS`; the
-contract page lists whatever `contractCases()` returns; the front page's worked example is the
-person preset, rendered by the engine's own `renderBrief` and `readinessFor`. The tests in
+presets page outlines every preset `@popjoker/knew/presets` exports; the contract page lists
+whatever `contractCases()` returns; the front page's worked example is the person preset, rendered
+by the engine's own `renderBrief` and `readinessFor`. The tests in
 `apps/site/test` fail the build if the prose beside any of that falls behind — add a field to a
 definition schema without documenting it and `npm test` goes red.
 

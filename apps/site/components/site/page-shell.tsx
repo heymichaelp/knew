@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { ReactNode } from "react";
 
 import type { Heading } from "@/lib/package-docs";
@@ -85,5 +86,14 @@ export function Section({
       <h2 className="display mt-2 text-3xl">{title}</h2>
       <div className="mt-6">{children}</div>
     </section>
+  );
+}
+
+/** A link in running text: ink, underlined in the stamp's colour, as the shipped docs' links are. */
+export function TextLink({ href, children }: { readonly href: string; readonly children: ReactNode }) {
+  return (
+    <Link href={href} className="text-ink underline decoration-stamp decoration-1 underline-offset-4 hover:text-stamp">
+      {children}
+    </Link>
   );
 }

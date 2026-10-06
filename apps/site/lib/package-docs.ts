@@ -102,3 +102,19 @@ export function codeBlocks(markdown: string): { lang: string; code: string }[] {
   }
   return out;
 }
+
+/**
+ * The guide's own example of extending a preset, and the section of the guide
+ * it sits in, so the presets page need not write one or guess where it lives.
+ * Throws, failing the build, if the guide stops showing one.
+ */
+export function presetExtensionExample(): { code: string; section: Heading } {
+  const markdown = readShipped("ADOPTING.md");
+  const block = codeBlocks(markdown).find((b) => b.lang === "ts" && b.code.includes("@popjoker/knew/presets"));
+  if (!block) throw new Error("ADOPTING.md no longer shows a preset being extended, and the presets page quotes its example");
+  const section = headingsOf(markdown.slice(0, markdown.indexOf(block.code)))
+    .filter((heading) => heading.level === 2)
+    .at(-1);
+  if (!section) throw new Error("ADOPTING.md shows a preset being extended before its first section");
+  return { code: block.code, section };
+}

@@ -4,6 +4,7 @@ import { packageManifest } from "@/lib/package-docs";
 
 const NAV = [
   { href: "/lenses", label: "Lenses" },
+  { href: "/presets", label: "Presets" },
   { href: "/adopting", label: "Adopting" },
   { href: "/api", label: "The API" },
   { href: "/contract", label: "The contract" },
