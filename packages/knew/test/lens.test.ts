@@ -77,6 +77,8 @@ describe("Scenario: A lens whose own shape cannot be read is refused with every 
   it("refuses an ask listed twice, a weight that is not positive, and an enough that is not a whole number of facts", () => {
     assert.throws(() => parseLensDefinition({ ...base, asks: [asks[2]!, asks[2]!] }), /ask people is listed twice/);
     assert.throws(() => parseLensDefinition({ ...base, asks: [{ ...asks[2]!, weight: 0 }] }));
+    assert.throws(() => parseLensDefinition({ ...base, asks: [{ ...asks[2]!, weight: 1001 }] }), "a weight is relative, and at most 1,000");
+    parseLensDefinition({ ...base, asks: [{ ...asks[2]!, weight: 1000 }] });
     assert.throws(() => parseLensDefinition({ ...base, asks: [{ ...asks[2]!, enough: 1.5 }] }));
   });
 

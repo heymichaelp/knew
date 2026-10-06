@@ -50,7 +50,7 @@ export const ROUTE_GROUPS: RouteGroup[] = [
     blurb: "What was said. Episodes are the truth; facts are derived from them and can always be rebuilt.",
     routes: [
       { method: "POST", path: "/v1/episodes", client: "addEpisode", budget: "write", summary: "Write an episode, once per source ref — with the question it answers, when it is a reply. Idempotent on that ref." },
-      { method: "GET", path: "/v1/episodes", client: "episodes", budget: "read", summary: "The knower's episodes, newest first." },
+      { method: "GET", path: "/v1/episodes", client: "episodes", budget: "search", summary: "The knower's episodes, newest first." },
       { method: "POST", path: "/v1/episodes/hints", client: "hintEpisodes", budget: "write", summary: "Name the entity an episode was about, so one held for a hint can go." },
     ],
   },

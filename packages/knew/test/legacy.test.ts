@@ -189,6 +189,10 @@ describe("Scenario: A 0.x lens splits into a vocabulary and a lens that read exa
   const vocabulary = compileVocabulary(parseVocabularyDefinition(split.vocabulary));
   const lens = compileLens(parseLensDefinition(split.lens), vocabulary);
 
+  it("says nothing changed when nothing did", () => {
+    assert.deepEqual(split.notes, []);
+  });
+
   it("moves each field to its 1.0 home", () => {
     assert.deepEqual(Object.keys(split.vocabulary.dimensions), ["never-cross", "has", "likes", "life", "people", "other"]);
     assert.equal(split.vocabulary.dimensions["has"]!.label, "Already has");
@@ -268,12 +272,31 @@ describe("Scenario: A 0.x lens splits into a vocabulary and a lens that read exa
       briefSections: [...LEGACY_FIXTURE.briefSections.filter((s) => s.section !== "other"), { section: "Odds & Ends", heading: "Other" }, { section: "empty", heading: "Nothing" }],
     });
     assert.equal(odd.vocabulary.factTypes.OTHER!.dimension, "section-odds-ends");
+    assert.deepEqual(odd.notes, [
+      'section Odds & Ends is dimension section-odds-ends: a dimension id matches /^[a-z][a-z0-9-]{1,63}$/',
+      'section empty ("Nothing") holds no type, so it is not a dimension; the page no longer budgets for its heading',
+    ]);
     assert.equal(odd.vocabulary.dimensions["section-odds-ends"]!.label, "Other");
     assert.ok(!("empty" in odd.vocabulary.dimensions));
     parseVocabularyDefinition(odd.vocabulary);
 
     const lost = fromLegacyLens({ ...LEGACY_FIXTURE, factTypes: { ...LEGACY_FIXTURE.factTypes, LOST: { description: "x", section: "limbo" } } });
     assert.throws(() => parseVocabularyDefinition(lost.vocabulary), /LOST informs dimension limbo/);
+  });
+
+  it("slugs a 0.x kind the pattern refuses, drops every kind after the first, and says so", () => {
+    const kinds = fromLegacyLens({ ...LEGACY_FIXTURE, entityKinds: ["Contact Person", "place"] });
+    assert.equal(kinds.vocabulary.kind, "contact-person");
+    parseVocabularyDefinition(kinds.vocabulary);
+    assert.deepEqual(kinds.notes, [
+      "entity kind Contact Person is kind contact-person: a kind matches /^[a-z][a-z0-9-]{1,31}$/",
+      "entity kinds place are dropped: a 1.0 vocabulary describes one kind, contact-person",
+    ]);
+  });
+
+  it("names a section listed twice, which 0.x printed twice and 1.0 prints once", () => {
+    const twice = fromLegacyLens({ ...LEGACY_FIXTURE, briefSections: [...LEGACY_FIXTURE.briefSections, { section: "likes", heading: "Likes again" }] });
+    assert.deepEqual(twice.notes, ['section likes was listed twice; its facts now print once, under "Likes"']);
   });
 
   it("keeps a lens with no asks asking nothing, rather than every dimension's question", () => {

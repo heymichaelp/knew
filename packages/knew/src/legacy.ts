@@ -1,16 +1,19 @@
 import { z } from "zod";
 import type { LensDefinition } from "./lens.ts";
-import { KEY_RE } from "./patterns.ts";
+import { ID_RE, KEY_RE } from "./patterns.ts";
 import type { AttributeSpec, VocabularyDefinition } from "./vocabulary.ts";
 
 /**
  * The 0.x lens — taxonomy and reading in one object — and the mechanical move
  * that splits it into a vocabulary and a lens. A client, or the service for
- * every lens it stored, runs `fromLegacyLens` once; the vocabulary renders
- * the same page and reports the same gaps the 0.x lens did, because each
- * section becomes a dimension with the section's heading as its label, and
- * the lens leaves its sections, pinned types and asks to the defaults that
- * reproduce them.
+ * every lens it stored, runs `fromLegacyLens` once. Each section becomes a
+ * dimension with the section's heading as its label, and the lens leaves its
+ * sections, pinned types and asks to the defaults that reproduce them, so the
+ * result reports the same gaps the 0.x lens did and renders the same page —
+ * byte for byte, unless the 0.x lens had a heading no type used (0.x counted
+ * its heading against the page budget, so the 1.0 page has a little more
+ * room) or listed a section twice (0.x printed its facts under both headings).
+ * Every such difference is named in the result's `notes`.
  *
  * Kept only to read 0.x JSON. Nothing in the engine reads a legacy lens.
  */
@@ -98,20 +101,26 @@ export const legacyLensDefinitionSchema: z.ZodType<LegacyLensDefinition> = z.obj
   extractAttributeKeys: z.array(z.string()).optional(),
 }) as z.ZodType<LegacyLensDefinition>;
 
+const slug = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+
 /** A section id as a dimension id. 0.x took any string; a dimension id has a
  *  pattern, so one that misses it is slugged, and marked so it cannot
  *  collide with a section that already fit. Dimension ids are never stored
  *  on a fact, so renaming one costs nothing. */
 function dimensionIdFor(section: string, taken: Set<string>): string {
   let id = section;
-  if (!KEY_RE.test(id)) {
-    const slug = section.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
-    id = `section-${slug || "unnamed"}`.slice(0, 64).replace(/-+$/, "");
-  }
+  if (!KEY_RE.test(id)) id = `section-${slug(section) || "unnamed"}`.slice(0, 64).replace(/-+$/, "");
   let unique = id;
   for (let n = 2; taken.has(unique); n += 1) unique = `${id}-${n}`;
   taken.add(unique);
   return unique;
+}
+
+/** A 0.x entity kind as a 1.0 `kind`, which has the id pattern. */
+function kindFor(raw: string): string {
+  if (ID_RE.test(raw)) return raw;
+  const id = slug(raw).slice(0, 32).replace(/-+$/, "");
+  return ID_RE.test(id) ? id : `kind-${id || "unnamed"}`.slice(0, 32).replace(/-+$/, "");
 }
 
 /**
@@ -121,21 +130,39 @@ function dimensionIdFor(section: string, taken: Set<string>): string {
  *
  * A section no type uses is dropped — a dimension holds at least one type,
  * and an empty section never printed anything. The first of `entityKinds` is
- * the kind (`person` when there were none); 1.0 reads one kind per
- * vocabulary.
+ * the kind (`person` when there were none), slugged to the id pattern; 1.0
+ * reads one kind per vocabulary, so any other kind is dropped. `notes` names
+ * every change of that sort, in words a person can act on.
  */
-export function fromLegacyLens(input: unknown): { vocabulary: VocabularyDefinition; lens: LensDefinition } {
+export function fromLegacyLens(input: unknown): { vocabulary: VocabularyDefinition; lens: LensDefinition; notes: string[] } {
   const legacy = legacyLensDefinitionSchema.parse(input);
+  const notes: string[] = [];
   const used = new Set(Object.values(legacy.factTypes).map((type) => type.section));
   const taken = new Set<string>();
   const dimensionOf = new Map<string, string>();
   const dimensions: VocabularyDefinition["dimensions"] = {};
+  const seen = new Set<string>();
   for (const { section, heading } of legacy.briefSections) {
-    if (!used.has(section) || dimensionOf.has(section)) continue;
+    if (seen.has(section)) {
+      const id = dimensionOf.get(section);
+      if (id) notes.push(`section ${section} was listed twice; its facts now print once, under "${dimensions[id]!.label}"`);
+      continue;
+    }
+    seen.add(section);
+    if (!used.has(section)) {
+      notes.push(`section ${section} ("${heading}") holds no type, so it is not a dimension; the page no longer budgets for its heading`);
+      continue;
+    }
     const id = dimensionIdFor(section, taken);
+    if (id !== section) notes.push(`section ${section} is dimension ${id}: a dimension id matches ${KEY_RE}`);
     dimensionOf.set(section, id);
     dimensions[id] = { label: heading };
   }
+  const rawKind = legacy.entityKinds?.[0] ?? "person";
+  const kind = kindFor(rawKind);
+  if (kind !== rawKind) notes.push(`entity kind ${rawKind} is kind ${kind}: a kind matches ${ID_RE}`);
+  const dropped = (legacy.entityKinds ?? []).slice(1);
+  if (dropped.length > 0) notes.push(`entity kinds ${dropped.join(", ")} are dropped: a 1.0 vocabulary describes one kind, ${kind}`);
   const factTypes: VocabularyDefinition["factTypes"] = {};
   for (const [key, type] of Object.entries(legacy.factTypes)) {
     factTypes[key] = {
@@ -151,7 +178,7 @@ export function fromLegacyLens(input: unknown): { vocabulary: VocabularyDefiniti
   const vocabulary: VocabularyDefinition = {
     id: legacy.id,
     version: legacy.version,
-    kind: legacy.entityKinds?.[0] ?? "person",
+    kind,
     factTypes,
     dimensions,
     fallbackType: legacy.fallbackType,
@@ -179,5 +206,5 @@ export function fromLegacyLens(input: unknown): { vocabulary: VocabularyDefiniti
       ...(ask.when ? { when: ask.when } : {}),
     })),
   };
-  return { vocabulary, lens };
+  return { vocabulary, lens, notes };
 }

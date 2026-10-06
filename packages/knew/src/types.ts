@@ -363,8 +363,9 @@ export interface Intelligence {
   /** Null when nothing is known about it yet — the caller falls back to its
    *  own note. */
   brief(scope: IntelligenceScope, entityId: string, options?: BriefOptions): Promise<Brief | null>;
-  /** The lens's asks still worth asking, in order. Null when the entity is
-   *  not on the roster; every applicable ask, for one known only by name. */
+  /** The lens's asks still worth asking, in order: open or thin, and not
+   *  waiting on an ask that must be answered first. Null when the entity is
+   *  not on the roster. */
   gaps(scope: IntelligenceScope, entityId: string, options?: ReadOptions): Promise<Gap[] | null>;
   /** What is known, how strongly, and what to learn next for the lens's
    *  objective. Null when the entity is not on the roster. */

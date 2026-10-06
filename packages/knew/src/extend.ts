@@ -43,21 +43,43 @@ function merge<T extends object>(base: T | undefined, patch: Patch<T>): T {
   return merged as T;
 }
 
-/** Merge by key, recording which keys of the base came out different. */
+/** A spec as a comparison sees it: keys sorted, and a false flag the same as
+ *  no flag, since the engine reads them alike. */
+function normalised(value: unknown): string {
+  return JSON.stringify(value, (_key, inner: unknown) => {
+    if (inner === null || typeof inner !== "object" || Array.isArray(inner)) return inner;
+    return Object.fromEntries(
+      Object.entries(inner as Record<string, unknown>)
+        .filter(([, field]) => field !== false && field !== undefined)
+        .sort(([a], [b]) => a.localeCompare(b)),
+    );
+  });
+}
+
+/**
+ * Merge by key, keeping the lineage honest: a key the base had and this patch
+ * changes or drops is `changed`, unless an earlier extension `added` it — then
+ * it was never the preset's, and a change to it is the client's own business.
+ */
 function mergeRecord<T extends object>(
   base: Record<string, T>,
   patches: Record<string, Patch<T> | null> | undefined,
-  changed: Set<string>,
+  lineage: { changed: Set<string>; added: Set<string> },
 ): Record<string, T> {
   const merged: Record<string, T> = { ...base };
   for (const [key, patch] of Object.entries(patches ?? {})) {
+    const own = lineage.added.has(key);
     if (patch === null) {
-      if (key in merged) changed.add(key);
+      if (key in merged) {
+        if (own) lineage.added.delete(key);
+        else lineage.changed.add(key);
+      }
       delete merged[key];
       continue;
     }
     const next = merge(merged[key], patch);
-    if (key in base && JSON.stringify(next) !== JSON.stringify(base[key])) changed.add(key);
+    if (!(key in base)) lineage.added.add(key);
+    else if (!own && normalised(next) !== normalised(base[key])) lineage.changed.add(key);
     merged[key] = next;
   }
   return merged;
@@ -70,19 +92,20 @@ function replace<T>(target: Record<string, unknown>, key: string, value: T | nul
 
 /**
  * A vocabulary of the client's own, from a base. The result is stamped
- * `basedOn`: the preset it came from (carried through an extension of an
- * extension) and every base type or dimension it changed or dropped — so a
- * fact typed in a type left alone still means what the preset meant by it.
+ * `basedOn`: the first base it came from — a preset, or a client's own
+ * vocabulary — carried through an extension of an extension; every type or
+ * dimension of that base it `changed` or dropped; and every one it `added`.
+ * So a fact typed in a type left alone still means what the base meant by it.
  * Throws, naming every problem, when the result is not a vocabulary — a
  * dimension dropped that a type still informs, say.
  */
 export function extendVocabulary(base: VocabularyDefinition, overrides: VocabularyOverrides): VocabularyDefinition {
-  const changed = new Set<string>(base.basedOn?.changed ?? []);
+  const lineage = { changed: new Set<string>(base.basedOn?.changed ?? []), added: new Set<string>(base.basedOn?.added ?? []) };
   const result: Record<string, unknown> = { ...base };
   result.id = overrides.id;
   result.version = overrides.version;
-  result.factTypes = mergeRecord(base.factTypes, overrides.factTypes, changed);
-  result.dimensions = mergeRecord(base.dimensions, overrides.dimensions, changed);
+  result.factTypes = mergeRecord(base.factTypes, overrides.factTypes, lineage);
+  result.dimensions = mergeRecord(base.dimensions, overrides.dimensions, lineage);
   replace(result, "fallbackType", overrides.fallbackType);
   replace(result, "fields", overrides.fields);
   replace(result, "promptFields", overrides.promptFields);
@@ -93,7 +116,8 @@ export function extendVocabulary(base: VocabularyDefinition, overrides: Vocabula
   result.basedOn = {
     preset: base.basedOn?.preset ?? base.id,
     version: base.basedOn?.version ?? base.version,
-    changed: [...changed].sort(),
+    changed: [...lineage.changed].sort(),
+    added: [...lineage.added].sort(),
   };
   return parseVocabularyDefinition(result);
 }
@@ -118,12 +142,23 @@ export interface LensOverrides {
   asks?: Record<string, Patch<Omit<AskSpec, "id">> | null>;
 }
 
+/** The asks a lens that names none asks: one per dimension with a question. */
+function defaultAsks(vocabulary: VocabularyDefinition): AskSpec[] {
+  return Object.entries(vocabulary.dimensions)
+    .filter(([, dimension]) => dimension.question !== undefined)
+    .map(([id]) => ({ id, dimension: id }));
+}
+
 /**
  * A lens of the client's own, from a base: a preset's starter lens, or
  * another of the client's. Throws when the result is not a lens; references
  * into the vocabulary are checked when it is compiled against one.
+ *
+ * A base that names no asks asks its vocabulary's dimension questions. To
+ * patch those by id, pass the vocabulary it reads, and they are written out
+ * first; without it, `asks` overrides are refused rather than guessed at.
  */
-export function extendLens(base: LensDefinition, overrides: LensOverrides): LensDefinition {
+export function extendLens(base: LensDefinition, overrides: LensOverrides, vocabulary?: VocabularyDefinition): LensDefinition {
   const result: Record<string, unknown> = { ...base };
   result.id = overrides.id;
   result.version = overrides.version;
@@ -135,7 +170,19 @@ export function extendLens(base: LensDefinition, overrides: LensOverrides): Lens
   replace(result, "pinned", overrides.pinned);
   replace(result, "attributeTags", overrides.attributeTags);
   if (overrides.asks) {
-    const asks: AskSpec[] = (base.asks ?? []).map((ask) => ({ ...ask }));
+    let asks: AskSpec[];
+    if (base.asks) asks = base.asks.map((ask) => ({ ...ask }));
+    else {
+      const reads = (overrides.vocabulary ?? base.vocabulary) as string;
+      if (!vocabulary) {
+        throw new Error(
+          `lens ${base.id} asks its vocabulary's dimension questions rather than naming asks, so they can only be patched by id ` +
+            `with that vocabulary in hand: pass ${reads} as the third argument`,
+        );
+      }
+      if (vocabulary.id !== reads) throw new Error(`the extended lens reads vocabulary ${reads}, and was given ${vocabulary.id}`);
+      asks = defaultAsks(vocabulary);
+    }
     for (const [id, patch] of Object.entries(overrides.asks)) {
       const at = asks.findIndex((ask) => ask.id === id);
       if (patch === null) {

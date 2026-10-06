@@ -88,14 +88,35 @@ describe("Scenario: A client extends a preset, saying only what differs", () => 
     assert.equal(extended.factTypes.CIRCUMSTANCE!.revisitAfterDays, undefined, "null removes the preset's window");
     assert.equal(extended.factTypes.CIRCUMSTANCE!.description, person.vocabulary().factTypes.CIRCUMSTANCE!.description, "the rest of the type is the preset's");
     assert.equal(extended.charter, "# Our charter\n\nKeep what helps the next conversation.\n");
-    assert.deepEqual(extended.basedOn, { preset: "person", version: 1, changed: ["CIRCUMSTANCE", "HAS", "has"] }, "an addition is not a change");
+    assert.deepEqual(
+      extended.basedOn,
+      { preset: "person", version: 1, changed: ["CIRCUMSTANCE", "HAS", "has"], added: ["CONTEXT", "context"] },
+      "an addition is recorded as one, not as a change",
+    );
     assert.deepEqual(Object.keys(extended.dimensions).slice(-1), ["context"], "a new dimension goes last");
   });
 
   it("carries the preset through an extension of an extension, and keeps counting what changed", () => {
     const first = extendVocabulary(person.vocabulary(), { id: "mine", version: 1, factTypes: { WORK: { revisitAfterDays: 90 } } });
     const second = extendVocabulary(first, { id: "mine", version: 2, factTypes: { TASTE: { description: "What they like, in their words." } } });
-    assert.deepEqual(second.basedOn, { preset: "person", version: 1, changed: ["TASTE", "WORK"] });
+    assert.deepEqual(second.basedOn, { preset: "person", version: 1, changed: ["TASTE", "WORK"], added: [] });
+  });
+
+  it("never reports the client's own additions as changes to the preset, and treats a false flag as no flag", () => {
+    const first = extendVocabulary(person.vocabulary(), {
+      id: "mine",
+      version: 1,
+      factTypes: { CONTEXT: { description: "How the two of you know each other.", dimension: "context" } },
+      dimensions: { context: { label: "How you know each other" } },
+    });
+    const second = extendVocabulary(first, {
+      id: "mine",
+      version: 2,
+      factTypes: { CONTEXT: { enduring: true }, WORK: { pinned: false } },
+    });
+    assert.deepEqual(second.basedOn, { preset: "person", version: 1, changed: [], added: ["CONTEXT", "context"] });
+    const third = extendVocabulary(second, { id: "mine", version: 3, factTypes: { CONTEXT: null }, dimensions: { context: null } });
+    assert.deepEqual(third.basedOn, { preset: "person", version: 1, changed: [], added: [] }, "dropping an addition just un-adds it");
   });
 
   it("refuses a result that is not a vocabulary, naming why", () => {
@@ -133,6 +154,21 @@ describe("Scenario: A client extends a preset, saying only what differs", () => 
     const pursuits = readiness.asks.find((a) => a.id === "pursuits")!;
     assert.deepEqual([pursuits.state, pursuits.waitingOn, pursuits.strength], ["waiting", ["work"], 0.5]);
     assert.equal(readiness.dimensions.find((d) => d.id === "pursuits")!.facts, 1);
+  });
+
+  it("patches a lens that leaves its asks to the dimension questions, once it is handed the vocabulary", () => {
+    const implicit = { id: "plain", version: 1, vocabulary: "person", header: "About {who}:", overHeading: "Over" };
+    assert.throws(() => extendLens(implicit, { id: "mine", version: 1, asks: { work: { weight: 3 } } }), /pass person as the third argument/);
+    const vocabulary = person.vocabulary();
+    const weighted = extendLens(implicit, { id: "mine", version: 1, asks: { work: { weight: 3 }, other: { question: "Anything else?", dimension: "other" } } }, vocabulary);
+    assert.deepEqual(
+      weighted.asks!.map((a) => [a.id, a.weight ?? 1]),
+      [["avoid", 1], ["ahead", 1], ["life", 1], ["work", 3], ["people", 1], ["pursuits", 1], ["has", 1], ["background", 1], ["other", 1]],
+      "the defaults are written out, patched by id, and a new ask goes last",
+    );
+    const fewer = extendLens(implicit, { id: "mine", version: 1, asks: { avoid: null } }, vocabulary);
+    assert.equal(fewer.asks!.length, 7, "dropping one default keeps the other seven");
+    assert.throws(() => extendLens(implicit, { id: "mine", version: 1, vocabulary: "elsewhere", asks: { work: { weight: 3 } } }, vocabulary), /reads vocabulary elsewhere/);
   });
 
   it("refuses a lens extension that leaves an ask waiting on one it dropped, and clears what it sets to null", () => {

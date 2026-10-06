@@ -1,8 +1,10 @@
 # Changelog
 
-The package follows semver from 1.0.0: a change to the lens schema that keeps every registered
-lens valid is a minor; a change to `PeopleIntelligence`, to the wire types or to what a driver
-must do under the contract suite is a major. Before 1.0.0 a minor may break; the entries say so.
+The package follows semver from 1.0.0: a change to a definition schema that keeps every
+registered vocabulary and lens valid is a minor; a change to `Intelligence`, to the wire types or to
+what a driver must do under the contract suite is a major. A preset is reviewed like API: an
+addition to it is a minor, and a change to what an existing preset type means is a major. Before
+1.0.0 a minor may break; the entries say so.
 
 ## Unreleased — 1.0.0
 
@@ -13,8 +15,8 @@ it.
 
 **The vocabulary and the lens, apart.**
 
-- `VocabularyDefinition` is what extraction writes in: fact types, the **dimensions** of the
-  subject they inform (each type informs one; each dimension may carry the question that probes
+- `VocabularyDefinition` is what extraction writes in: fact types, the **dimensions** of an
+  entity they inform (each type informs one; each dimension may carry the question that probes
   it), the entity's `fields` (formerly `routingFields`), `promptFields`, the charter, source labels,
   prompt overrides, and the `kind` it describes (formerly `entityKinds`).
 - `LensDefinition` is a direction over a vocabulary for one objective: `objective`, `asks`,
@@ -24,8 +26,10 @@ it.
 - Several lenses read one vocabulary's facts, and writing never names a lens, so a lens change
   touches no episode. Episodes are stamped `vocabulary@version:promptRef`.
 - `compileLens(definition, vocabulary)` checks every reference; `lensProblems` lists them.
-- `fromLegacyLens` splits a 0.x lens into a vocabulary and a lens that render the same page and
-  report the same gaps — proved against strings captured from 0.2.1.
+- `fromLegacyLens` splits a 0.x lens into a vocabulary and a lens that report the same gaps and
+  render the same page — proved against strings captured from 0.2.1 — unless the 0.x lens had a
+  heading no type used or listed a section twice. Its `notes` name every such difference, along
+  with any section id or kind slugged to the 1.0 patterns and any extra kind dropped.
 
 **Defaults, then overrides.**
 
@@ -33,7 +37,9 @@ it.
 - `@popjoker/knew/presets`, opt-in: a generic `person` vocabulary and starter lens. The core still
   names no domain; a preset is reviewed like API.
 - `extendVocabulary` and `extendLens` start a client's own definition from a base and say only
-  what differs (`null` removes). An extended vocabulary is stamped `basedOn`.
+  what differs (`null` removes). An extended vocabulary is stamped `basedOn`: the first base, what
+  of it changed and what was added. A lens that asks its vocabulary's dimension questions is
+  extended with that vocabulary in hand, so its asks can be patched by id.
 
 **Readiness.**
 
@@ -42,8 +48,9 @@ it.
   said), each ask's standing (`met`, `waiting`, `due`, `thin`, `open`, with a strength from 0 to
   1), the overall readiness, and the next steps in order — `ask`, anchored on what is known, or
   `revisit`.
-- New on an ask: `weight`, `enough`, `after` (coarse before fine), and the `dimension` form. New on
-  a fact type: `revisitAfterDays`, refused on an enduring type. New on a lens: `objective`.
+- New on an ask: `weight` (at most 1,000), `enough`, `after` (coarse before fine), and the
+  `dimension` form. New on a fact type: `revisitAfterDays`, refused on an enduring type. New on a
+  lens: `objective`.
 - `gapsFor` is the "ask" steps of readiness, in order; a `Gap` names its `dimension`. With none of
   the new fields declared, the gaps are exactly 0.x's.
 - Weights order what to learn; they never weigh what is believed. The page is unchanged.
@@ -73,8 +80,10 @@ v1 stays embedded for provenance.
 
 **What a driver must now do.**
 
-- Implement `readiness` and honor `lens` on every read that renders.
-- Stamp `lastSaidAt` on insert, and on merge as `max(lastSaidAt, knownAt)`.
+- Implement `readiness` and honor `lens` on every read that renders, refusing a lens the client
+  never registered; refuse an entity of a kind the vocabulary does not describe.
+- Stamp `lastSaidAt` on insert, and on merge as `max(lastSaidAt, knownAt)`; an as-of read
+  withholds a retelling that came after the moment (`lastSaidAt: null`, as `asKnownAt` does).
 - Keep `inReplyTo` on the episode and in the export.
 - Pass the new contract cases: replies that keep their question, readiness by name and over
   time, a retelling that merges, and two lenses over one ledger.

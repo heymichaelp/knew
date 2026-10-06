@@ -36,8 +36,8 @@ export interface AskSpec {
   /** Applies only when every clause matches one of the entity's fields
    *  (case-insensitive). Absent: applies to everyone. */
   when?: Array<{ field: string; equals: string[] }>;
-  /** How much it matters to the objective, relative to the other asks.
-   *  Default 1. */
+  /** How much it matters to the objective, relative to the other asks: more
+   *  than 0, at most 1,000. Default 1. */
   weight?: number;
   /** How many current facts, each said within its type's revisit window, meet
    *  it — facts, not tellings. Default 1. */
@@ -58,7 +58,7 @@ export interface LensDefinition {
   id: string;
   /** Bumped by the client when anything below changes. */
   version: number;
-  /** What the knower wants to be able to do relative to the subject, in one
+  /** What the knower wants to be able to do relative to the entity, in one
    *  sentence. A reader writes toward it; the asks are what it needs known. */
   objective?: string;
   /** The vocabulary it reads, by id. */
@@ -87,7 +87,7 @@ const askSpecSchema = z.object({
   dimension: z.string().regex(KEY_RE).optional(),
   answeredBy: z.array(z.string()).min(1).optional(),
   when: z.array(z.object({ field: z.string().regex(FIELD_RE), equals: z.array(z.string().min(1)).min(1) })).optional(),
-  weight: z.number().positive().optional(),
+  weight: z.number().positive().max(1000).optional(),
   enough: z.number().int().min(1).optional(),
   after: z.array(z.string().regex(KEY_RE)).min(1).optional(),
 });
