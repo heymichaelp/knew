@@ -91,7 +91,9 @@ a version that was never shipped.
   timeouts, deletion, usage, running the service, testing against the fake, and proving a driver.
   Also `ADOPTING.md` in this tarball.
 - [Vocabularies and lenses](https://knew.dev/lenses) — every field of both, generated from the
-  schemas, with the defaults and the person preset.
+  schemas, with the defaults.
+- [Presets](https://knew.dev/presets) — where a client starts: each preset's dimensions, types and
+  starter lens.
 - [The API](https://knew.dev/api) — the routes, the envelope, the two headers, the timeouts.
 - [The contract](https://knew.dev/contract) — the cases a driver must pass, listed by the suite.
 - [Privacy](https://knew.dev/privacy) — what the engine will not do, and why that is structural.

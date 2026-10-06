@@ -2,13 +2,12 @@ import type { Metadata } from "next";
 
 import { FieldTable } from "@/components/site/field-table";
 import { Inline } from "@/components/site/inline";
-import { DocBody, DocHeader, Section } from "@/components/site/page-shell";
+import { DocBody, DocHeader, Section, TextLink } from "@/components/site/page-shell";
 import { DEFAULT_NOTES } from "@/lib/default-notes";
 import {
   engineDefaults,
   lensFields,
   lensNestedFields,
-  personLens,
   personVocabulary,
   vocabularyFields,
   vocabularyNestedFields,
@@ -19,23 +18,19 @@ import { VOCABULARY_FIELD_NOTES, VOCABULARY_NESTED_NOTES } from "@/lib/vocabular
 export const metadata: Metadata = {
   title: "Vocabularies and lenses",
   description:
-    "A vocabulary is what extraction writes in; a lens is a direction over it for one objective. Both definitions, field by field, generated from the schemas — and the defaults and the person preset a client starts from.",
+    "A vocabulary is what extraction writes in; a lens is a direction over it for one objective. Both definitions, field by field, generated from the schemas, and the defaults beneath them.",
 };
 
 const HEADINGS = [
   { id: "the-vocabulary", text: "The vocabulary", level: 2 },
   { id: "the-lens", text: "The lens", level: 2 },
   { id: "defaults", text: "Defaults", level: 2 },
-  { id: "the-person-preset", text: "The person preset", level: 2 },
   { id: "the-charter", text: "The charter", level: 2 },
 ];
 
 export default function LensesPage() {
   const vocabulary = vocabularyFields();
   const lens = lensFields();
-  const dimensions = Object.entries(personVocabulary.dimensions);
-  const types = Object.entries(personVocabulary.factTypes);
-  const typesIn = (dimension: string) => types.filter(([, type]) => type.dimension === dimension).length;
 
   return (
     <>
@@ -88,8 +83,11 @@ export default function LensesPage() {
 
           <Section clause="03" title="Defaults">
             <p className="measure text-ink-soft">
-              The layers, each overriding the one below: the engine&apos;s defaults, then a preset, then the client&apos;s
-              vocabulary, then a lens, then the call. The engine&apos;s own are mechanics only, read out of{" "}
+              The layers, each overriding the one below: the engine&apos;s defaults, then a{" "}
+              <TextLink href="/presets">
+                preset
+              </TextLink>
+              , then the client&apos;s vocabulary, then a lens, then the call. The engine&apos;s own are mechanics only, read out of{" "}
               <code className="code">ENGINE_DEFAULTS</code>; a lens that says nothing about its sections reads each
               dimension as one, its pinned types are the vocabulary&apos;s, and its asks are each dimension&apos;s question.
             </p>
@@ -106,77 +104,7 @@ export default function LensesPage() {
             </div>
           </Section>
 
-          <Section clause="04" title="The person preset">
-            <p className="measure text-ink-soft">
-              Opt-in, from <code className="code">@popjoker/knew/presets</code>: a vocabulary and a starter lens for
-              a person, generic on purpose. A client extends it with{" "}
-              <code className="code">extendVocabulary</code> and{" "}
-              <code className="code">extendLens</code>, saying only what differs. Read straight out of the package.
-            </p>
-
-            <h3 className="display mt-10 text-xl">Dimensions</h3>
-            <div className="mt-4">
-              {dimensions.map(([id, dimension]) => (
-                <div key={id} className="ledger-row">
-                  <span className="code text-[0.6875rem] tracking-[0.12em] text-derived">{id}</span>
-                  <span className="text-[0.9375rem] leading-snug">
-                    {dimension.label}
-                    {dimension.question ? <span className="text-ink-faint"> — {dimension.question}</span> : null}
-                  </span>
-                  <span className="text-[0.6875rem] italic text-ink-faint">
-                    {typesIn(id)} type{typesIn(id) === 1 ? "" : "s"}
-                  </span>
-                </div>
-              ))}
-            </div>
-
-            <h3 className="display mt-10 text-xl">Fact types</h3>
-            <div className="mt-4">
-              {types.map(([key, type]) => (
-                <div key={key} className="ledger-row">
-                  <span className="code text-[0.6875rem] tracking-[0.12em] text-stamp">{key}</span>
-                  <span className="text-[0.9375rem] leading-snug">
-                    {type.description}
-                    {type.attributes?.length ? (
-                      <span className="text-ink-faint">
-                        {" "}
-                        {type.attributes.map((a) => `${a.name}: ${a.kind === "enum" ? (a.values ?? []).join(" | ") : a.kind}`).join(", ")}
-                      </span>
-                    ) : null}
-                  </span>
-                  <span className="text-[0.6875rem] italic text-ink-faint">
-                    {[
-                      type.pinned ? "pinned" : null,
-                      type.enduring ? "enduring" : null,
-                      type.revisitAfterDays ? `revisit after ${type.revisitAfterDays} days` : null,
-                    ]
-                      .filter(Boolean)
-                      .join(" · ") || type.dimension}
-                  </span>
-                </div>
-              ))}
-            </div>
-
-            <h3 className="display mt-10 text-xl">The starter lens</h3>
-            <p className="mt-3 text-[0.9375rem] text-ink-soft">{personLens.objective}</p>
-            <ol className="mt-4">
-              {(personLens.asks ?? []).map((ask, index) => (
-                <li key={ask.id} className="rule-t grid gap-x-4 py-3 lg:grid-cols-[2rem_minmax(0,1fr)]">
-                  <span className="text-[0.8125rem] italic text-ink-faint">{index + 1}</span>
-                  <span className="text-[0.9375rem]">
-                    {ask.question ?? (ask.dimension ? personVocabulary.dimensions[ask.dimension]?.question : null)}
-                  </span>
-                </li>
-              ))}
-            </ol>
-            <p className="rule-t mt-0 pt-4 text-sm text-ink-faint">
-              Every ask weighs the same, so this is the order of the gaps: the coarse things first. A product&apos;s own
-              lens — knewpeople&apos;s, say — extends this one or is written from nothing; either way it is the
-              product&apos;s content, not the engine&apos;s.
-            </p>
-          </Section>
-
-          <Section clause="05" title="The charter">
+          <Section clause="04" title="The charter">
             <p className="measure text-ink-soft">
               The one field that is prose rather than structure. It travels with every extraction, and it is where a
               product says what it cares about and — more usefully — what it must never record. The engine has no
@@ -186,8 +114,12 @@ export default function LensesPage() {
               {personVocabulary.charter}
             </pre>
             <p className="mt-4 text-sm text-ink-faint">
-              The person preset&apos;s charter, above, read straight out of{" "}
-              <code className="code">@popjoker/knew/presets</code>. A client replaces it with its own.
+              The{" "}
+              <TextLink href="/presets#the-person-preset">
+                person preset
+              </TextLink>
+              &apos;s charter, above, read straight out of <code className="code">@popjoker/knew/presets</code>. A client
+              replaces it with its own.
             </p>
           </Section>
         </div>

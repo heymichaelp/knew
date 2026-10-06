@@ -3,13 +3,28 @@
  *
  * The vocabulary and lens field lists come from their zod schemas, the
  * defaults from `ENGINE_DEFAULTS`, the contract case list from
- * contractCases(), the API surface from the client's own methods, and the
- * worked example is the package's own person preset. None of it is
- * transcribed, so none of it can drift. The tests in test/ fail the build if
- * the prose beside any of it falls behind.
+ * contractCases(), the API surface from the client's own methods, the presets
+ * page from every preset the package exports, and the worked example is the
+ * package's own person preset. None of it is transcribed, so none of it can
+ * drift. The tests in test/ fail the build if the prose beside any of it falls
+ * behind.
  */
-import { ENGINE_DEFAULTS, intelligenceClient, lensDefinitionSchema, SUBJECT_HEADER, vocabularyDefinitionSchema } from "@popjoker/knew";
-import { person } from "@popjoker/knew/presets";
+import {
+  compileLens,
+  compileVocabulary,
+  ENGINE_DEFAULTS,
+  intelligenceClient,
+  lensDefinitionSchema,
+  parseLensDefinition,
+  parseVocabularyDefinition,
+  readinessFor,
+  SUBJECT_HEADER,
+  vocabularyDefinitionSchema,
+  type CompiledAsk,
+  type Lens,
+  type Vocabulary,
+} from "@popjoker/knew";
+import * as presets from "@popjoker/knew/presets";
 import { contractCases } from "@popjoker/knew/testing";
 import * as z from "zod";
 
@@ -145,11 +160,95 @@ export function engineDefaults(): EngineDefault[] {
   }));
 }
 
+/* -------------------------------------------------------------- the presets */
+
+export interface PresetType {
+  readonly key: string;
+  readonly description: string;
+  /** Each attribute as a reader would write it: `level: beginner | serious | expert`. */
+  readonly attributes: readonly string[];
+  /** What sets it apart, if anything: pinned, enduring, a revisit window, the fallback. */
+  readonly marks: readonly string[];
+}
+
+export interface PresetDimension {
+  readonly id: string;
+  readonly label: string;
+  readonly question: string | null;
+  /** The types that inform it, in the vocabulary's order. */
+  readonly types: readonly PresetType[];
+}
+
+export interface PresetOutline {
+  /** What it is imported as from `@popjoker/knew/presets`. */
+  readonly name: string;
+  readonly vocabulary: Vocabulary;
+  /** The taxonomy: each dimension in reading order, with the types that inform it. */
+  readonly dimensions: readonly PresetDimension[];
+  /** The starter lens, compiled, so every default it leaves to the engine is filled in. */
+  readonly lens: Lens;
+  /** What the starter lens asks first about an entity nothing is known about. */
+  readonly firstQuestion: string | null;
+}
+
+function outlineOf(name: string, preset: (typeof presets)[keyof typeof presets]): PresetOutline {
+  const vocabulary = compileVocabulary(parseVocabularyDefinition(preset.vocabulary()));
+  const lens = compileLens(parseLensDefinition(preset.lens()), vocabulary);
+  const typeOf = (key: string): PresetType => {
+    const type = vocabulary.factTypes[key]!;
+    return {
+      key,
+      description: type.description,
+      attributes: (vocabulary.definition.factTypes[key]!.attributes ?? []).map(
+        (attribute) => `${attribute.name}: ${attribute.kind === "enum" ? (attribute.values ?? []).join(" | ") : attribute.kind}`,
+      ),
+      marks: [
+        type.pinned ? "pinned" : null,
+        type.enduring ? "enduring" : null,
+        type.revisitAfterDays === null ? null : `revisit after ${type.revisitAfterDays} days`,
+        key === vocabulary.fallbackType ? "fallback" : null,
+      ].filter((mark) => mark !== null),
+    };
+  };
+  return {
+    name,
+    vocabulary,
+    dimensions: vocabulary.dimensions.map((dimension) => ({
+      id: dimension.id,
+      label: dimension.label,
+      question: dimension.question,
+      types: vocabulary.factTypeKeys.filter((key) => vocabulary.factTypes[key]!.dimension === dimension.id).map(typeOf),
+    })),
+    lens,
+    // Nothing is known, so the moment asked at does not matter.
+    firstQuestion: readinessFor(lens, { fields: {} }, [], new Date(0)).next[0]?.question ?? null,
+  };
+}
+
+/** Every preset the package exports, in export order. A new one is on the page the day it ships. */
+export function presetOutlines(): PresetOutline[] {
+  return Object.entries(presets).map(([name, preset]) => outlineOf(name, preset));
+}
+
+/**
+ * What sets an ask apart from the rest, as `Inline` text: a weight when the
+ * asks differ in weight, a count of facts other than the engine's default,
+ * the asks it waits for, and whom it applies to. Empty for an ask that leaves
+ * all of it to the defaults.
+ */
+export function askMarks(ask: CompiledAsk, sameWeight: boolean): string[] {
+  return [
+    sameWeight ? null : `weighs ${ask.weight}`,
+    ask.enough === ENGINE_DEFAULTS.enough ? null : `met by ${ask.enough} facts`,
+    ask.after.length === 0 ? null : `after ${ask.after.map((id) => `\`${id}\``).join(" and ")}`,
+    ...ask.when.map((clause) => `only when \`${clause.field}\` is ${clause.equals.map((value) => `“${value}”`).join(" or ")}`),
+  ].filter((mark) => mark !== null);
+}
+
 /* ------------------------------------------------------- the worked examples */
 
 /** The person preset, as a client imports it. */
-export const personVocabulary = person.vocabulary();
-export const personLens = person.lens();
+export const personVocabulary = presets.person.vocabulary();
 
 /* ----------------------------------------------------------- the contract  */
 

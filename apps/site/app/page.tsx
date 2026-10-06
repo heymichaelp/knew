@@ -1,6 +1,7 @@
 import Link from "next/link";
 
-import { contractCaseSummaries } from "@/lib/engine";
+import { TextLink } from "@/components/site/page-shell";
+import { contractCaseSummaries, presetOutlines } from "@/lib/engine";
 import {
   AT,
   exampleEpisode,
@@ -21,18 +22,30 @@ const dimensionLabel = new Map(exampleReadiness.dimensions.map((d) => [d.id, d.l
 const asks = new Map(exampleReadiness.asks.map((a) => [a.id, a]));
 const leanIn = exampleReadiness.next.slice(0, 3);
 
+/** "person", "person and place", "person, place and team". */
+const listed = (items: string[]) => (items.length <= 1 ? items.join("") : `${items.slice(0, -1).join(", ")} and ${items.at(-1)}`);
+const presetNames = presetOutlines().map((outline) => outline.name);
+
 const quickstart = codeBlocks(readShipped("README.md"));
 const install = quickstart.find((b) => b.lang === "sh")?.code ?? "npm install @popjoker/knew";
 const usage = quickstart.find((b) => b.lang === "ts")?.code ?? "";
 
 const DOCS = [
-  { href: "/lenses", label: "Lenses", blurb: "The vocabulary and the lens, field by field, generated from the schemas — and the defaults and the preset to start from." },
+  { href: "/lenses", label: "Lenses", blurb: "The vocabulary and the lens, field by field, generated from the schemas, and the defaults beneath them." },
+  {
+    href: "/presets",
+    label: "Presets",
+    blurb: `Where a client starts: the ${listed(presetNames)} preset${presetNames.length === 1 ? "" : "s"}, every dimension, type and starter ask, read out of the package.`,
+  },
   { href: "/adopting", label: "Adopting", blurb: "The guide, rendered from the package's own ADOPTING.md." },
   { href: "/api", label: "The API", blurb: "Every route, the envelope, and the two headers." },
   { href: "/contract", label: "The contract", blurb: `The ${contractCaseSummaries().length} cases a driver must pass, listed by the suite.` },
   { href: "/privacy", label: "Privacy", blurb: "What it will not do, and why that is structural." },
   { href: "/changelog", label: "Changelog", blurb: "The version rule, and what each release changed." },
 ] as const;
+
+/** The last card stretches to the end of its row, so the grid never shows an empty cell. */
+const LAST_CARD = [DOCS.length % 2 === 1 ? "sm:col-span-2" : "", ["lg:col-span-1", "lg:col-span-3", "lg:col-span-2"][DOCS.length % 3]].join(" ");
 
 export default function Home() {
   return (
@@ -149,8 +162,9 @@ export default function Home() {
             })}
             <p className="mt-6 text-sm text-ink-faint">
               Everything in this panel comes from <code className="code">renderBrief</code> and{" "}
-              <code className="code">readinessFor</code>, run at build time through the
-              person preset, as of {day(AT)}. The objective it reads for: “{exampleReadiness.objective}”
+              <code className="code">readinessFor</code>, run at build time through the{" "}
+              <TextLink href="/presets#the-person-preset">person preset</TextLink>, as of {day(AT)}. The objective it
+              reads for: “{exampleReadiness.objective}”
             </p>
           </article>
         </div>
@@ -219,11 +233,11 @@ export default function Home() {
       <section className="mx-auto max-w-6xl px-6 pb-4">
         <p className="clause">The rest of it</p>
         <div className="mt-6 grid gap-px bg-rule sm:grid-cols-2 lg:grid-cols-3">
-          {DOCS.map((doc) => (
+          {DOCS.map((doc, index) => (
             <Link
               key={doc.href}
               href={doc.href}
-              className="group bg-paper-raised p-6 no-underline transition-colors hover:bg-paper-sunken"
+              className={`group bg-paper-raised p-6 no-underline transition-colors hover:bg-paper-sunken ${index === DOCS.length - 1 ? LAST_CARD : ""}`}
             >
               <p className="display text-xl text-ink group-hover:text-stamp">{doc.label}</p>
               <p className="mt-2 text-sm text-ink-soft">{doc.blurb}</p>

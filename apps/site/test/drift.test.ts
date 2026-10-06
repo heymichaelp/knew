@@ -6,6 +6,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import { ENGINE_DEFAULTS } from "@popjoker/knew";
+import * as presets from "@popjoker/knew/presets";
 
 import {
   clientMethods,
@@ -13,6 +14,7 @@ import {
   engineDefaults,
   lensFields,
   lensNestedFields,
+  presetOutlines,
   vocabularyFields,
   vocabularyNestedFields,
   type DefinitionField,
@@ -21,7 +23,7 @@ import { DOCUMENTED_METHODS } from "../lib/api-routes";
 import { DEFAULT_NOTES } from "../lib/default-notes";
 import { LENS_FIELD_NOTES, LENS_NESTED_NOTES } from "../lib/lens-notes";
 import { VOCABULARY_FIELD_NOTES, VOCABULARY_NESTED_NOTES } from "../lib/vocabulary-notes";
-import { headingsOf, packageManifest, readShipped } from "../lib/package-docs";
+import { headingsOf, packageManifest, presetExtensionExample, readShipped } from "../lib/package-docs";
 
 function explainsExactly(fields: DefinitionField[], notes: Record<string, string>, what: string) {
   assert.deepEqual(Object.keys(notes).sort(), fields.map((f) => f.name).sort(), `${what} must have exactly one note per schema field`);
@@ -55,6 +57,27 @@ describe("the defaults table cannot fall behind the engine", () => {
     assert.deepEqual(Object.keys(DEFAULT_NOTES).sort(), Object.keys(ENGINE_DEFAULTS).sort());
     assert.deepEqual(engineDefaults().map((d) => d.name).sort(), Object.keys(ENGINE_DEFAULTS).sort());
     for (const item of engineDefaults()) assert.ok(DEFAULT_NOTES[item.name].trim(), `${item.name} has no note`);
+  });
+});
+
+describe("the presets page is the presets", () => {
+  it("outlines every preset the package exports", () => {
+    assert.deepEqual(presetOutlines().map((outline) => outline.name), Object.keys(presets));
+  });
+
+  it("files every type of each under the dimension it informs, and loses none", () => {
+    for (const { name, vocabulary, dimensions } of presetOutlines()) {
+      assert.deepEqual(dimensions.map((dimension) => dimension.id), vocabulary.dimensions.map((dimension) => dimension.id), `${name}: the dimensions, in order`);
+      const filed = dimensions.flatMap((dimension) => dimension.types.map((type) => ({ key: type.key, under: dimension.id })));
+      assert.deepEqual(filed.map((type) => type.key).sort(), [...vocabulary.factTypeKeys].sort(), `${name}: every type, once`);
+      for (const type of filed) assert.equal(type.under, vocabulary.factTypes[type.key]!.dimension, `${name}: ${type.key}`);
+    }
+  });
+
+  it("quotes the guide's own example of extending one, and links to where it sits", () => {
+    const { code, section } = presetExtensionExample();
+    assert.match(code, /extendVocabulary\(/);
+    assert.ok(headingsOf(readShipped("ADOPTING.md")).some((heading) => heading.id === section.id && heading.level === 2));
   });
 });
 

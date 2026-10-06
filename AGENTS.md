@@ -29,10 +29,11 @@ knew.dev site. The Postgres service is `heymichaelp/knew-service`.
 - **The site imports the engine; it never transcribes it.** Long-form pages render the package's
   own `ADOPTING.md`/`CHANGELOG.md`, read from the installed tarball at build time. The vocabulary
   and lens tables come from `vocabularyDefinitionSchema` and `lensDefinitionSchema` via
-  `z.toJSONSchema`, the defaults table from `ENGINE_DEFAULTS`, the preset from
-  `@popjoker/knew/presets`, the contract list from `contractCases()`, the API surface check from
-  the client's runtime keys, and the front page's example from `renderBrief` and `readinessFor`.
-  If you find yourself typing a fact the package already knows, stop and import it instead.
+  `z.toJSONSchema`, the defaults table from `ENGINE_DEFAULTS`, the presets page from every export
+  of `@popjoker/knew/presets` (its example of extending one from `ADOPTING.md`), the contract list
+  from `contractCases()`, the API surface check from the client's runtime keys, and the front
+  page's example from `renderBrief` and `readinessFor`. If you find yourself typing a fact the
+  package already knows, stop and import it instead.
 - **The drift guards live in `apps/site/test/drift.test.ts`** and are the reason the above holds.
   Adding a vocabulary or lens field — top-level, or inside a fact type, a dimension, an ask or a
   section — without a note in `apps/site/lib/vocabulary-notes.ts` or `lens-notes.ts`, an engine
