@@ -3,19 +3,19 @@ import { describe, it } from "node:test";
 import {
   attributeFacts,
   cleanProposals,
-  orderSubjects,
+  orderEntities,
   parseLooseDate,
   planReconciliation,
   type Fact,
 } from "../src/index.ts";
-import { fixtureLens } from "../src/testing.ts";
+import { fixtureVocabulary } from "../src/testing.ts";
 
 const at = (iso: string) => new Date(iso);
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 
 const current = (n: number, type: string, text: string): Fact => ({
   id: id(n),
-  subjectId: "s",
+  entityId: "s",
   objectId: null,
   type,
   fact: text,
@@ -23,6 +23,7 @@ const current = (n: number, type: string, text: string): Fact => ({
   validAt: null,
   invalidAt: null,
   createdAt: at("2025-01-01T00:00:00Z"),
+  lastSaidAt: null,
   expiredAt: null,
   supersededById: null,
   episodeIds: ["e"],
@@ -34,8 +35,8 @@ const plan = (
   facts: Fact[],
 ) =>
   planReconciliation({
-    lens: fixtureLens(),
-    personId: "p",
+    vocabulary: fixtureVocabulary(),
+    entityId: "p",
     current: facts,
     incoming,
     reconciliation: { decisions: decisions.map((d) => ({ invalidAt: null, ...d })), summary: " About them. " },
@@ -112,8 +113,8 @@ describe("Scenario: A correction retires the old fact; a detail is added beside 
 
   it("leaves the summary alone when the model wrote nothing", () => {
     const p = planReconciliation({
-      lens: fixtureLens(),
-      personId: "p",
+      vocabulary: fixtureVocabulary(),
+      entityId: "p",
       current: [],
       incoming: [],
       reconciliation: { decisions: [], summary: "   " },
@@ -125,43 +126,43 @@ describe("Scenario: A correction retires the old fact; a detail is added beside 
 });
 
 describe("Scenario: Attribution is checked, never trusted", () => {
-  it("drops a fact pinned on an id that is not on the roster, and keeps the rest by person", () => {
-    const { byPerson, offRoster } = attributeFacts(
+  it("drops a fact pinned on an id that is not on the roster, and keeps the rest by entity", () => {
+    const { byEntity, offRoster } = attributeFacts(
       [
-        { personId: "linda", type: "LIKES", fact: "  Gardens  ", attributes: { level: null, kind: null }, validAt: "2025-03", invalidAt: "bogus" },
-        { personId: "stranger", type: "LIKES", fact: "x", attributes: null, validAt: null, invalidAt: null },
+        { entityId: "linda", type: "LIKES", fact: "  Gardens  ", attributes: { level: null, kind: null }, validAt: "2025-03", invalidAt: "bogus" },
+        { entityId: "stranger", type: "LIKES", fact: "x", attributes: null, validAt: null, invalidAt: null },
       ],
       new Set(["linda", "sam"]),
     );
     assert.equal(offRoster, 1);
-    const linda = byPerson.get("linda")!;
+    const linda = byEntity.get("linda")!;
     assert.equal(linda[0]!.fact, "Gardens");
     assert.deepEqual(linda[0]!.attributes, {});
     assert.deepEqual(linda[0]!.validAt, at("2025-03-01T00:00:00Z"));
     assert.equal(linda[0]!.invalidAt, null);
   });
 
-  it("orders hinted people first, then by volume, and counts what the cap dropped", () => {
-    const byPerson = new Map([
+  it("orders hinted entities first, then by volume, and counts what the cap dropped", () => {
+    const byEntity = new Map([
       ["a", [{ type: "LIKES", fact: "1" }]],
       ["b", [{ type: "LIKES", fact: "1" }, { type: "LIKES", fact: "2" }]],
       ["c", [{ type: "LIKES", fact: "1" }, { type: "LIKES", fact: "2" }, { type: "LIKES", fact: "3" }]],
     ]);
-    const { kept, droppedForCap } = orderSubjects(byPerson, ["a"], 2);
+    const { kept, droppedForCap } = orderEntities(byEntity, ["a"], 2);
     assert.deepEqual(kept, ["a", "c"]);
     assert.equal(droppedForCap, 2);
   });
 
-  it("keeps a field update only for a field the lens routes, so a lens with no routing fields proposes none", () => {
+  it("keeps a field update only for one of the vocabulary's fields, so a vocabulary with none proposes none", () => {
     const extraction = {
       unresolvedNames: [],
       aliases: [],
       fieldUpdates: [
-        { personId: "linda", field: "city", value: "Denver" },
-        { personId: "linda", field: "shoe_size", value: "8" },
+        { entityId: "linda", field: "city", value: "Denver" },
+        { entityId: "linda", field: "shoe_size", value: "8" },
       ],
     };
-    assert.deepEqual(cleanProposals(extraction, new Set(["linda"]), ["city", "relationship"]).fieldUpdates, [{ personId: "linda", field: "city", value: "Denver" }]);
+    assert.deepEqual(cleanProposals(extraction, new Set(["linda"]), ["city", "relationship"]).fieldUpdates, [{ entityId: "linda", field: "city", value: "Denver" }]);
     assert.deepEqual(cleanProposals(extraction, new Set(["linda"]), []).fieldUpdates, []);
     assert.deepEqual(cleanProposals(extraction, new Set(["linda"])).fieldUpdates, []);
   });
@@ -171,21 +172,21 @@ describe("Scenario: Attribution is checked, never trusted", () => {
       {
         unresolvedNames: [" Aunt Carol ", "Aunt Carol", ""],
         fieldUpdates: [
-          { personId: "linda", field: "city", value: " Portland " },
-          { personId: "nobody", field: "city", value: "x" },
+          { entityId: "linda", field: "city", value: " Portland " },
+          { entityId: "nobody", field: "city", value: "x" },
         ],
         aliases: [
-          { personId: "linda", alias: " Mom " },
-          { personId: "nobody", alias: "x" },
-          { personId: "linda", alias: "  " },
+          { entityId: "linda", alias: " Mom " },
+          { entityId: "nobody", alias: "x" },
+          { entityId: "linda", alias: "  " },
         ],
       },
       new Set(["linda"]),
       ["relationship", "city"],
     );
     assert.deepEqual(cleaned.unresolvedNames, ["Aunt Carol"]);
-    assert.deepEqual(cleaned.fieldUpdates, [{ personId: "linda", field: "city", value: "Portland" }]);
-    assert.deepEqual(cleaned.aliases, [{ personId: "linda", alias: "Mom" }]);
+    assert.deepEqual(cleaned.fieldUpdates, [{ entityId: "linda", field: "city", value: "Portland" }]);
+    assert.deepEqual(cleaned.aliases, [{ entityId: "linda", alias: "Mom" }]);
   });
 });
 

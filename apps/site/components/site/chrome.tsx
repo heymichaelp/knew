@@ -52,7 +52,7 @@ export function SiteFooter() {
           </p>
           <p className="mt-3 text-sm text-ink-soft">
             The attention engine. {packageManifest.license}-licensed, {packageManifest.version}, by invitation.
-            It ships no lens of its own.
+            Its core ships no vocabulary or lens of its own.
           </p>
         </div>
         <div className="flex flex-col gap-2 text-sm sm:text-right">

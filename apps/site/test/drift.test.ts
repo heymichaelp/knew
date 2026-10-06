@@ -1,31 +1,60 @@
 /**
- * The three guards that keep knew.dev from describing an engine that does not
- * exist. Each one fails the build rather than relying on anyone remembering.
+ * The guards that keep knew.dev from describing an engine that does not exist.
+ * Each one fails the build rather than relying on anyone remembering.
  */
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { clientMethods, contractCaseSummaries, lensFields } from "../lib/engine";
+import { ENGINE_DEFAULTS } from "@popjoker/knew";
+
+import {
+  clientMethods,
+  contractCaseSummaries,
+  engineDefaults,
+  lensFields,
+  lensNestedFields,
+  vocabularyFields,
+  vocabularyNestedFields,
+  type DefinitionField,
+} from "../lib/engine";
 import { DOCUMENTED_METHODS } from "../lib/api-routes";
-import { LENS_FIELD_NOTES } from "../lib/lens-notes";
+import { DEFAULT_NOTES } from "../lib/default-notes";
+import { LENS_FIELD_NOTES, LENS_NESTED_NOTES } from "../lib/lens-notes";
+import { VOCABULARY_FIELD_NOTES, VOCABULARY_NESTED_NOTES } from "../lib/vocabulary-notes";
 import { headingsOf, packageManifest, readShipped } from "../lib/package-docs";
 
-describe("the lens page cannot fall behind the schema", () => {
-  it("explains every field the schema defines, and invents none", () => {
-    const fromSchema = lensFields().map((f) => f.name).sort();
-    const explained = Object.keys(LENS_FIELD_NOTES).sort();
-    assert.deepEqual(
-      explained,
-      fromSchema,
-      "LENS_FIELD_NOTES must have exactly one entry per lensDefinitionSchema field",
-    );
+function explainsExactly(fields: DefinitionField[], notes: Record<string, string>, what: string) {
+  assert.deepEqual(Object.keys(notes).sort(), fields.map((f) => f.name).sort(), `${what} must have exactly one note per schema field`);
+  for (const field of fields) {
+    assert.ok(field.type && field.type !== "unknown", `${what}: ${field.name} has no readable type`);
+    assert.ok(notes[field.name]?.trim(), `${what}: ${field.name} has no note`);
+  }
+}
+
+describe("the definitions pages cannot fall behind the schemas", () => {
+  it("explains every vocabulary field the schema defines, and invents none", () => {
+    explainsExactly(vocabularyFields(), VOCABULARY_FIELD_NOTES, "VOCABULARY_FIELD_NOTES");
   });
 
-  it("gives every field a type and a non-empty note", () => {
-    for (const field of lensFields()) {
-      assert.ok(field.type && field.type !== "unknown", `${field.name} has no readable type`);
-      assert.ok(LENS_FIELD_NOTES[field.name]?.trim(), `${field.name} has no note`);
-    }
+  it("explains every lens field the schema defines, and invents none", () => {
+    explainsExactly(lensFields(), LENS_FIELD_NOTES, "LENS_FIELD_NOTES");
+  });
+
+  it("explains every field inside a fact type, a dimension, an ask and a section", () => {
+    const vocabulary = vocabularyNestedFields();
+    const lens = lensNestedFields();
+    assert.deepEqual(Object.keys(VOCABULARY_NESTED_NOTES).sort(), Object.keys(vocabulary).sort(), "VOCABULARY_NESTED_NOTES must have a block per nested field");
+    assert.deepEqual(Object.keys(LENS_NESTED_NOTES).sort(), Object.keys(lens).sort(), "LENS_NESTED_NOTES must have a block per nested field");
+    for (const [path, fields] of Object.entries(vocabulary)) explainsExactly(fields, VOCABULARY_NESTED_NOTES[path]!, `VOCABULARY_NESTED_NOTES["${path}"]`);
+    for (const [path, fields] of Object.entries(lens)) explainsExactly(fields, LENS_NESTED_NOTES[path]!, `LENS_NESTED_NOTES["${path}"]`);
+  });
+});
+
+describe("the defaults table cannot fall behind the engine", () => {
+  it("explains every default the engine ships, and invents none", () => {
+    assert.deepEqual(Object.keys(DEFAULT_NOTES).sort(), Object.keys(ENGINE_DEFAULTS).sort());
+    assert.deepEqual(engineDefaults().map((d) => d.name).sort(), Object.keys(ENGINE_DEFAULTS).sort());
+    for (const item of engineDefaults()) assert.ok(DEFAULT_NOTES[item.name].trim(), `${item.name} has no note`);
   });
 });
 

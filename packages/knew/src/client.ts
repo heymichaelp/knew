@@ -6,9 +6,10 @@ import type {
   ExtractNowOutcome,
   Fact,
   Gap,
+  Intelligence,
   IntelligenceScope,
-  PeopleIntelligence,
   Proposal,
+  Readiness,
   ReconciliationPlan,
   StatelessExtraction,
   StatelessExtractRequest,
@@ -19,8 +20,8 @@ import type {
 /**
  * The HTTP driver: the contract, one route per method, against the
  * intelligence service. A client binds it once with its service key; every
- * hosted call names the subject in a header, so the key alone never reaches
- * anybody's memory.
+ * hosted call names the knower in a header, so the key alone never reaches
+ * anybody's notebook.
  *
  * Timeouts are per method and deliberately short for reads a caller makes
  * inside its own transaction; a failure is thrown as
@@ -67,7 +68,7 @@ const dateRequired = (value: unknown): Date => new Date(String(value));
 function reviveFact(raw: Json): Fact {
   return {
     id: String(raw.id),
-    subjectId: String(raw.subjectId),
+    entityId: String(raw.entityId),
     objectId: (raw.objectId as string | null) ?? null,
     type: String(raw.type),
     fact: String(raw.fact),
@@ -75,6 +76,7 @@ function reviveFact(raw: Json): Fact {
     validAt: date(raw.validAt),
     invalidAt: date(raw.invalidAt),
     createdAt: dateRequired(raw.createdAt),
+    lastSaidAt: date(raw.lastSaidAt),
     expiredAt: date(raw.expiredAt),
     supersededById: (raw.supersededById as string | null) ?? null,
     episodeIds: (raw.episodeIds as string[]) ?? [],
@@ -87,7 +89,8 @@ function reviveEpisode(raw: Json): Episode {
     source: String(raw.source),
     sourceRef: (raw.sourceRef as string | null) ?? null,
     content: String(raw.content),
-    personHints: (raw.personHints as string[]) ?? [],
+    inReplyTo: (raw.inReplyTo as string | null) ?? null,
+    entityHints: (raw.entityHints as string[]) ?? [],
     referenceAt: dateRequired(raw.referenceAt),
     ingestedAt: date(raw.ingestedAt),
   };
@@ -99,7 +102,7 @@ function reviveProposal(raw: Json): Proposal {
     episodeId: String(raw.episodeId),
     kind: raw.kind as Proposal["kind"],
     name: (raw.name as string | null) ?? null,
-    personId: (raw.personId as string | null) ?? null,
+    entityId: (raw.entityId as string | null) ?? null,
     field: (raw.field as string | null) ?? null,
     value: (raw.value as string | null) ?? null,
     status: raw.status as Proposal["status"],
@@ -121,7 +124,6 @@ function reviveEntity(raw: Json): EntityView {
   const brief = raw.brief as Json | null | undefined;
   return {
     id: String(raw.id),
-    personId: (raw.personId as string | null) ?? null,
     kind: String(raw.kind),
     name: String(raw.name),
     aliases: (raw.aliases as string[]) ?? [],
@@ -129,6 +131,26 @@ function reviveEntity(raw: Json): EntityView {
     summaryUpdatedAt: date(raw.summaryUpdatedAt),
     facts: ((raw.facts as Json[]) ?? []).map(reviveFact),
     ...(brief === undefined ? {} : { brief: reviveBrief(brief) }),
+  };
+}
+
+/** A readiness as the service wrote it to JSON, with its dates back. */
+export function reviveReadiness(raw: Json): Readiness {
+  return {
+    lens: String(raw.lens),
+    objective: (raw.objective as string | null) ?? null,
+    at: dateRequired(raw.at),
+    overall: (raw.overall as number | null) ?? null,
+    dimensions: ((raw.dimensions as Json[]) ?? []).map((d) => ({
+      id: String(d.id),
+      label: String(d.label),
+      facts: Number(d.facts),
+      due: Number(d.due),
+      lastSaidAt: date(d.lastSaidAt),
+      factIds: (d.factIds as string[]) ?? [],
+    })),
+    asks: (raw.asks as Readiness["asks"]) ?? [],
+    next: (raw.next as Readiness["next"]) ?? [],
   };
 }
 
@@ -143,7 +165,7 @@ export function revivePlan(raw: Json): ReconciliationPlan {
     invalidAt: date(f.invalidAt),
   });
   return {
-    personId: String(raw.personId),
+    entityId: String(raw.entityId),
     adds: ((raw.adds as Json[]) ?? []).map(newFact),
     merges: (raw.merges as Array<{ factId: string }>) ?? [],
     supersessions: ((raw.supersessions as Json[]) ?? []).map((s) => ({
@@ -161,7 +183,7 @@ export function revivePlan(raw: Json): ReconciliationPlan {
   };
 }
 
-export function intelligenceClient(options: IntelligenceClientOptions): PeopleIntelligence & StatelessIntelligence {
+export function intelligenceClient(options: IntelligenceClientOptions): Intelligence & StatelessIntelligence {
   const doFetch = options.fetch ?? fetch;
   const timeouts = { ...DEFAULT_TIMEOUTS, ...(options.timeouts ?? {}) };
   const base = options.baseUrl.replace(/\/+$/, "");
@@ -205,17 +227,18 @@ export function intelligenceClient(options: IntelligenceClientOptions): PeopleIn
   }
 
   const q = (scope: IntelligenceScope, extra: Record<string, string | undefined> = {}) => ({ scope, query: extra });
+  const entity = (id: string) => `/entities/${encodeURIComponent(id)}`;
 
   return {
-    async upsertPerson(scope, person) {
-      await call("PUT", `/people/${encodeURIComponent(person.id)}`, {
+    async upsertEntity(scope, input) {
+      await call("PUT", entity(input.id), {
         scope,
-        body: { name: person.name, fields: person.fields, active: person.active },
+        body: { name: input.name, kind: input.kind, fields: input.fields, active: input.active },
         timeoutMs: timeouts.write,
       });
     },
-    async deletePerson(scope, personId) {
-      return call("DELETE", `/people/${encodeURIComponent(personId)}`, { scope, timeoutMs: timeouts.write });
+    async deleteEntity(scope, entityId) {
+      return call("DELETE", entity(entityId), { scope, timeoutMs: timeouts.write });
     },
     async addEpisode(scope, input) {
       return call<AddEpisodeResult>("POST", "/episodes", {
@@ -237,32 +260,43 @@ export function intelligenceClient(options: IntelligenceClientOptions): PeopleIn
         timeoutMs: timeouts.extractNow + (extractOptions.deadlineMs ?? 0),
       });
     },
-    async getEntity(scope, personId, readOptions = {}) {
-      const raw = await call<Json | null>("GET", `/people/${encodeURIComponent(personId)}`, {
+    async getEntity(scope, entityId, readOptions = {}) {
+      const raw = await call<Json | null>("GET", entity(entityId), {
         ...q(scope, {
           asOf: readOptions.asOf?.toISOString(),
           include: readOptions.includeBrief ? "brief" : undefined,
+          lens: readOptions.lens,
           maxChars: readOptions.maxChars?.toString(),
         }),
         timeoutMs: timeouts.read,
       });
       return raw ? reviveEntity(raw) : null;
     },
-    async brief(scope, personId, briefOptions = {}) {
-      const raw = await call<Json | null>("GET", `/people/${encodeURIComponent(personId)}/brief`, {
-        ...q(scope, { asOf: briefOptions.asOf?.toISOString(), maxChars: briefOptions.maxChars?.toString() }),
+    async brief(scope, entityId, briefOptions = {}) {
+      const raw = await call<Json | null>("GET", `${entity(entityId)}/brief`, {
+        ...q(scope, { lens: briefOptions.lens, asOf: briefOptions.asOf?.toISOString(), maxChars: briefOptions.maxChars?.toString() }),
         timeoutMs: timeouts.read,
       });
       return reviveBrief(raw);
     },
-    async gaps(scope, personId) {
-      return call<Gap[] | null>("GET", `/people/${encodeURIComponent(personId)}/gaps`, { scope, timeoutMs: timeouts.read });
+    async gaps(scope, entityId, readOptions = {}) {
+      return call<Gap[] | null>("GET", `${entity(entityId)}/gaps`, {
+        ...q(scope, { lens: readOptions.lens, asOf: readOptions.asOf?.toISOString() }),
+        timeoutMs: timeouts.read,
+      });
+    },
+    async readiness(scope, entityId, readOptions = {}) {
+      const raw = await call<Json | null>("GET", `${entity(entityId)}/readiness`, {
+        ...q(scope, { lens: readOptions.lens, asOf: readOptions.asOf?.toISOString() }),
+        timeoutMs: timeouts.read,
+      });
+      return raw ? reviveReadiness(raw) : null;
     },
     async searchFacts(scope, query, searchOptions = {}) {
       const raw = await call<Json[]>("GET", "/facts/search", {
         ...q(scope, {
           q: query,
-          personId: searchOptions.personId,
+          entityId: searchOptions.entityId,
           types: searchOptions.types?.join(","),
           asOf: searchOptions.asOf?.toISOString(),
           limit: searchOptions.limit?.toString(),
@@ -285,7 +319,7 @@ export function intelligenceClient(options: IntelligenceClientOptions): PeopleIn
     async episodes(scope, listOptions = {}) {
       const raw = await call<Json[]>("GET", "/episodes", {
         ...q(scope, {
-          personId: listOptions.personId,
+          entityId: listOptions.entityId,
           sourceRefs: listOptions.sourceRefs?.join(","),
           before: listOptions.before?.toISOString(),
           limit: listOptions.limit?.toString(),
@@ -296,7 +330,7 @@ export function intelligenceClient(options: IntelligenceClientOptions): PeopleIn
     },
     async listProposals(scope, listOptions = {}) {
       const raw = await call<Json[]>("GET", "/proposals", {
-        ...q(scope, { personId: listOptions.personId, status: listOptions.status }),
+        ...q(scope, { entityId: listOptions.entityId, status: listOptions.status }),
         timeoutMs: timeouts.read,
       });
       return raw.map(reviveProposal);
@@ -307,7 +341,12 @@ export function intelligenceClient(options: IntelligenceClientOptions): PeopleIn
     async exportSubject(scope) {
       const raw = await call<{ episodes: Json[] }>("GET", "/subject/export", { scope, timeoutMs: timeouts.export });
       return {
-        episodes: raw.episodes.map((e) => ({ source: String(e.source), said: String(e.said), saidAt: dateRequired(e.saidAt) })),
+        episodes: raw.episodes.map((e) => ({
+          source: String(e.source),
+          said: String(e.said),
+          saidAt: dateRequired(e.saidAt),
+          inReplyTo: (e.inReplyTo as string | null) ?? null,
+        })),
       } satisfies SubjectExport;
     },
     async deleteSubject(scope) {

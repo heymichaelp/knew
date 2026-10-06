@@ -4,6 +4,81 @@ The package follows semver from 1.0.0: a change to the lens schema that keeps ev
 lens valid is a minor; a change to `PeopleIntelligence`, to the wire types or to what a driver
 must do under the contract suite is a major. Before 1.0.0 a minor may break; the entries say so.
 
+## Unreleased — 1.0.0
+
+The two changes "Toward 1.0" promised, and the forward half grown up: the vocabulary and the lens
+are separate definitions, the names are noun-neutral, and the engine says what is known, how
+strongly, and what to learn next. Breaking, as a major is; nothing ships until knew-service runs
+it.
+
+**The vocabulary and the lens, apart.**
+
+- `VocabularyDefinition` is what extraction writes in: fact types, the **dimensions** of the
+  subject they inform (each type informs one; each dimension may carry the question that probes
+  it), the entity's `fields` (formerly `routingFields`), `promptFields`, the charter, source labels,
+  prompt overrides, and the `kind` it describes (formerly `entityKinds`).
+- `LensDefinition` is a direction over a vocabulary for one objective: `objective`, `asks`,
+  `pinned`, `sections` (of dimensions), `header` (formerly `briefHeader`), `overHeading`,
+  `attributeTags` (formerly `briefAttributeTags`). It says only what differs: sections default to
+  one per dimension, pinned types to the vocabulary's, asks to each dimension's question.
+- Several lenses read one vocabulary's facts, and writing never names a lens, so a lens change
+  touches no episode. Episodes are stamped `vocabulary@version:promptRef`.
+- `compileLens(definition, vocabulary)` checks every reference; `lensProblems` lists them.
+- `fromLegacyLens` splits a 0.x lens into a vocabulary and a lens that render the same page and
+  report the same gaps — proved against strings captured from 0.2.1.
+
+**Defaults, then overrides.**
+
+- `ENGINE_DEFAULTS`: what the engine assumes when a definition says nothing — mechanics only.
+- `@popjoker/knew/presets`, opt-in: a generic `person` vocabulary and starter lens. The core still
+  names no domain; a preset is reviewed like API.
+- `extendVocabulary` and `extendLens` start a client's own definition from a base and say only
+  what differs (`null` removes). An extended vocabulary is stamped `basedOn`.
+
+**Readiness.**
+
+- `readinessFor(lens, entity, facts, at)` and `Intelligence.readiness(scope, entityId, { lens,
+  asOf })`: evidence per dimension (current facts, how many are due for a revisit, when last
+  said), each ask's standing (`met`, `waiting`, `due`, `thin`, `open`, with a strength from 0 to
+  1), the overall readiness, and the next steps in order — `ask`, anchored on what is known, or
+  `revisit`.
+- New on an ask: `weight`, `enough`, `after` (coarse before fine), and the `dimension` form. New on
+  a fact type: `revisitAfterDays`, refused on an enduring type. New on a lens: `objective`.
+- `gapsFor` is the "ask" steps of readiness, in order; a `Gap` names its `dimension`. With none of
+  the new fields declared, the gaps are exactly 0.x's.
+- Weights order what to learn; they never weigh what is believed. The page is unchanged.
+
+**Facts know when they were last said.** `Fact.lastSaidAt` is the newest episode that said it: a
+merge moves it, forward only. An as-of read withholds a retelling that came after the moment.
+
+**A reply keeps its question.** `EpisodeInput.inReplyTo` is the question the knower was
+answering. Extraction reads the answer as an answer; the content stays their words, and the
+export keeps the question apart.
+
+**Noun-neutral names.**
+
+- `PeopleIntelligence` → `Intelligence`.
+- `upsertPerson`/`deletePerson` → `upsertEntity`/`deleteEntity`, with an optional `kind`.
+- `personHints`/`personId` → `entityHints`/`entityId` everywhere.
+- `Fact.subjectId` → `Fact.entityId`, the client's id; `Entity.id` is the client's id and
+  `Entity.personId` is gone.
+- `orderSubjects` → `orderEntities`.
+- Routes `/v1/people/*` → `/v1/entities/*`, plus `/readiness`. Registration is
+  `PUT /v1/vocabulary` and `PUT /v1/lens`.
+- "Subject" keeps its data-protection sense: the scope's `subjectId` is the knower.
+
+**Prompts v2.** `extract.v2` and `reconcile.v2` are the defaults: noun-neutral, no "memory",
+`entityId` in the output, a reply read as a reply, and a date written only when one was said.
+v1 stays embedded for provenance.
+
+**What a driver must now do.**
+
+- Implement `readiness` and honor `lens` on every read that renders.
+- Stamp `lastSaidAt` on insert, and on merge as `max(lastSaidAt, knownAt)`.
+- Keep `inReplyTo` on the episode and in the export.
+- Pass the new contract cases: replies that keep their question, readiness by name and over
+  time, a retelling that merges, and two lenses over one ledger.
+
 ## 0.2.1 — 2026-10-05
 
 The listing, since npm is where most people meet this.

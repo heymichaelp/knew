@@ -1,414 +1,317 @@
-import { z, type ZodTypeAny } from "zod";
-import { EXTRACT_V1, RECONCILE_V1 } from "./prompts/index.ts";
+import { z } from "zod";
+import { ENGINE_DEFAULTS } from "./defaults.ts";
+import { FIELD_RE, ID_RE, KEY_RE } from "./patterns.ts";
+import { asFactType, factType, whoLabel, type Vocabulary } from "./vocabulary.ts";
 
 /**
- * A LENS is the pack of data the engine reads on a client's behalf: the fact
- * types with their pinned and enduring flags, the brief's section order and
- * header, the charter that decides what is worth remembering, the fields a
- * person owns, the questions worth answering about a person, and optionally
- * the client's own wording of the two task prompts. The engine's code is the
- * same for every lens; adding a type or a question is adding an entry, never
- * a branch.
+ * A LENS is a direction over what is known, for an objective: the sentence
+ * that says what the knower wants to be able to do, the asks that are its
+ * knowledge requirements — weighted, so the gaps have an order and the top
+ * one is the next question — the types a reader must hold in view while
+ * acting, and how the page reads. Several lenses read one vocabulary's facts.
+ * Writing never names a lens, so changing one never touches an episode or a
+ * fact: a lens is the cheap half to change, a vocabulary the expensive one.
  *
- * A lens is DATA A CLIENT REGISTERS, not content this package ships. It is
- * plain JSON (`LensDefinition`), validated by `lensDefinitionSchema`, stored
- * by the service per client and version, and compiled here into what the
- * engine reads (`Lens`). Nothing in this package knows any particular domain.
+ * Everything a lens leaves out has a default. The sections are the
+ * vocabulary's dimensions, in order; the asks are each dimension's question;
+ * the pinned types are the ones the vocabulary pins; and every ask weighs 1
+ * and is met by one fresh fact (`ENGINE_DEFAULTS`).
+ *
+ * Like a vocabulary, a lens is DATA A CLIENT REGISTERS, validated by
+ * `lensDefinitionSchema` and compiled against its vocabulary by
+ * `compileLens`, which names every reference that does not resolve.
  */
 
-export interface AttributeSpec {
-  name: string;
-  kind: "string" | "boolean" | "number" | "enum";
-  /** For `enum`: the closed values. */
-  values?: string[];
-  optional?: boolean;
-}
-
-export interface FactTypeSpec {
-  /** What the type means. This IS the extraction vocabulary — the prompt
-   *  renders these and never restates them. */
-  description: string;
-  /** A `briefSections[].section`. */
-  section: string;
-  /** The type's structured payload. Most types have none. */
-  attributes?: AttributeSpec[];
-  /** Always rendered, ahead of everything else, however long the ledger:
-   *  what a reader must honor rather than merely consider. */
-  pinned?: boolean;
-  /**
-   * A fact about WHO someone is. News about where or when never makes one
-   * false, so only a fact of the SAME type may replace it; a different kind
-   * of fact is added beside it. Enforced by the planner, not trusted to the
-   * prompt.
-   */
-  enduring?: boolean;
-}
-
-/**
- * A question worth answering about a person — the forward-looking half of a
- * lens. The engine reports, per person, which asks the ledger does not yet
- * answer (`gapsFor`), so a client knows what to learn next and a reader
- * knows what the page is missing.
- */
 export interface AskSpec {
   /** `^[a-z][a-z0-9-]{1,63}$`, unique within the lens. */
   id: string;
-  /** The question, as the person would be asked it. */
-  question: string;
-  /** Applies only when every clause matches one of the person's routing
-   *  fields (case-insensitive). Absent: applies to everyone. */
-  when?: Array<{ field: string; equals: string[] }>;
+  /** The question, as the knower would be asked it. Default: its
+   *  dimension's question. */
+  question?: string;
+  /** The dimension whose facts answer it. An ask names a dimension or the
+   *  types that answer it, never both. */
+  dimension?: string;
   /** Fact types a current fact of which answers it. */
-  answeredBy: string[];
+  answeredBy?: string[];
+  /** Applies only when every clause matches one of the entity's fields
+   *  (case-insensitive). Absent: applies to everyone. */
+  when?: Array<{ field: string; equals: string[] }>;
+  /** How much it matters to the objective, relative to the other asks.
+   *  Default 1. */
+  weight?: number;
+  /** How many current facts, each said within its type's revisit window, meet
+   *  it — facts, not tellings. Default 1. */
+  enough?: number;
+  /** Asks that must be answered first: this one is not offered until they
+   *  are. Coarse before fine. */
+  after?: string[];
+}
+
+export interface SectionSpec {
+  heading: string;
+  /** The dimensions whose facts it holds. */
+  dimensions: string[];
 }
 
 export interface LensDefinition {
   /** The client's name for it: `^[a-z][a-z0-9-]{1,31}$`. */
   id: string;
-  /** Bumped by the client when anything below changes. Stamped on every
-   *  episode extracted under it. */
+  /** Bumped by the client when anything below changes. */
   version: number;
-  factTypes: Record<string, FactTypeSpec>;
-  /** In the order the engine reads them: what must never be crossed first. */
-  briefSections: Array<{ section: string; heading: string }>;
-  /** The page's first line. `{who}` becomes the name, with the prompt fields
-   *  in parentheses when there are any. */
-  briefHeader: string;
+  /** What the knower wants to be able to do relative to the subject, in one
+   *  sentence. A reader writes toward it; the asks are what it needs known. */
+  objective?: string;
+  /** The vocabulary it reads, by id. */
+  vocabulary: string;
+  /** The page's first line. `{who}` becomes the name, with the vocabulary's
+   *  prompt fields in parentheses when there are any. */
+  header: string;
   /** The heading for facts past their own end date. */
   overHeading: string;
-  /** The type a retired or unknown type string reads as. */
-  fallbackType: string;
-  /** How the extraction prompt names where an episode came from. A source
-   *  absent here is named by its own string. */
-  sourceLabels?: Record<string, string>;
-  /** Fields the person owns on the roster, which extraction may only propose
-   *  changes to. May be empty. */
-  routingFields: string[];
-  /** Which routing fields are shown beside a name in prompts and the brief
-   *  header. Default none. */
-  promptFields?: string[];
+  /** The page's sections, in reading order. Default: one per dimension,
+   *  headed by its label. Given, they hold every dimension exactly once. */
+  sections?: SectionSpec[];
+  /** The fact types a reader must honor rather than weigh. Default: the ones
+   *  the vocabulary pins. */
+  pinned?: string[];
   /** Attribute names whose value is shown in brackets after a fact line. */
-  briefAttributeTags?: string[];
-  /** What an entity may be. Default `["person"]`. */
-  entityKinds?: string[];
-  /** The charter: how "worth remembering" is judged here. Markdown. */
-  charter: string;
-  /** The questions worth answering about a person. Default none. */
+  attributeTags?: string[];
+  /** The knowledge the objective needs. Default: one ask per dimension that
+   *  has a question. */
   asks?: AskSpec[];
-  /** The client's own wording of the task prompts. Absent, the engine's
-   *  defaults apply. */
-  prompts?: { extract?: string; reconcile?: string };
-  /** The order of attribute keys in the extraction schema. Default: the
-   *  order they are first met walking `factTypes`. */
-  extractAttributeKeys?: string[];
 }
 
-const ID_RE = /^[a-z][a-z0-9-]{1,31}$/;
-const ASK_ID_RE = /^[a-z][a-z0-9-]{1,63}$/;
-const TYPE_KEY_RE = /^[A-Z][A-Z0-9_]{1,31}$/;
-const FIELD_RE = /^[a-z][a-z0-9_]{0,31}$/;
-
-const attributeSpecSchema = z
-  .object({
-    name: z.string().regex(FIELD_RE),
-    kind: z.enum(["string", "boolean", "number", "enum"]),
-    values: z.array(z.string().min(1)).min(1).optional(),
-    optional: z.boolean().optional(),
-  })
-  .refine((spec) => (spec.kind === "enum") === (spec.values !== undefined), {
-    message: "an enum attribute names its values, and only an enum does",
-  });
-
 const askSpecSchema = z.object({
-  id: z.string().regex(ASK_ID_RE),
-  question: z.string().min(1),
+  id: z.string().regex(KEY_RE),
+  question: z.string().min(1).optional(),
+  dimension: z.string().regex(KEY_RE).optional(),
+  answeredBy: z.array(z.string()).min(1).optional(),
   when: z.array(z.object({ field: z.string().regex(FIELD_RE), equals: z.array(z.string().min(1)).min(1) })).optional(),
-  answeredBy: z.array(z.string()).min(1),
+  weight: z.number().positive().optional(),
+  enough: z.number().int().min(1).optional(),
+  after: z.array(z.string().regex(KEY_RE)).min(1).optional(),
 });
+
+/** The first circle in the asks' `after` graph, as ids, or null. */
+function circleIn(asks: ReadonlyArray<{ id: string; after?: string[] | undefined }>): string[] | null {
+  const after = new Map(asks.map((ask) => [ask.id, ask.after ?? []]));
+  const state = new Map<string, "visiting" | "done">();
+  const path: string[] = [];
+  const visit = (id: string): string[] | null => {
+    if (state.get(id) === "done") return null;
+    if (state.get(id) === "visiting") return [...path.slice(path.indexOf(id)), id];
+    state.set(id, "visiting");
+    path.push(id);
+    for (const next of after.get(id) ?? []) {
+      if (!after.has(next)) continue;
+      const circle = visit(next);
+      if (circle) return circle;
+    }
+    path.pop();
+    state.set(id, "done");
+    return null;
+  };
+  for (const ask of asks) {
+    const circle = visit(ask.id);
+    if (circle) return circle;
+  }
+  return null;
+}
 
 export const lensDefinitionSchema: z.ZodType<LensDefinition> = z
   .object({
     id: z.string().regex(ID_RE),
     version: z.number().int().min(1),
-    factTypes: z.record(
-      z.string().regex(TYPE_KEY_RE),
-      z.object({
-        description: z.string().min(1),
-        section: z.string().min(1),
-        attributes: z.array(attributeSpecSchema).optional(),
-        pinned: z.boolean().optional(),
-        enduring: z.boolean().optional(),
-      }),
-    ),
-    briefSections: z.array(z.object({ section: z.string().min(1), heading: z.string().min(1) })).min(1),
-    briefHeader: z.string().includes("{who}"),
+    objective: z.string().min(1).optional(),
+    vocabulary: z.string().regex(ID_RE),
+    header: z.string().includes("{who}"),
     overHeading: z.string().min(1),
-    fallbackType: z.string(),
-    sourceLabels: z.record(z.string(), z.string()).optional(),
-    routingFields: z.array(z.string().regex(FIELD_RE)),
-    promptFields: z.array(z.string()).optional(),
-    briefAttributeTags: z.array(z.string()).optional(),
-    entityKinds: z.array(z.string().min(1)).min(1).optional(),
-    charter: z.string().min(1),
+    sections: z
+      .array(z.object({ heading: z.string().min(1), dimensions: z.array(z.string().regex(KEY_RE)).min(1) }))
+      .min(1)
+      .optional(),
+    pinned: z.array(z.string()).optional(),
+    attributeTags: z.array(z.string()).optional(),
     asks: z.array(askSpecSchema).optional(),
-    prompts: z.object({ extract: z.string().min(1).optional(), reconcile: z.string().min(1).optional() }).optional(),
-    extractAttributeKeys: z.array(z.string()).optional(),
   })
   .superRefine((lens, ctx) => {
-    const types = Object.keys(lens.factTypes);
-    if (types.length === 0) ctx.addIssue({ code: "custom", message: "a lens needs at least one fact type" });
-    if (!(lens.fallbackType in lens.factTypes)) {
-      ctx.addIssue({ code: "custom", message: `fallbackType ${lens.fallbackType} is not one of the fact types` });
-    }
-    const sections = new Set(lens.briefSections.map((s) => s.section));
-    const attributeNames = new Set<string>();
-    for (const [key, type] of Object.entries(lens.factTypes)) {
-      if (!sections.has(type.section)) {
-        ctx.addIssue({ code: "custom", message: `${key} sits in section ${type.section}, which the brief has no heading for` });
+    const issue = (message: string) => ctx.addIssue({ code: "custom", message });
+    const asks = lens.asks ?? [];
+    const ids = new Set<string>();
+    for (const ask of asks) {
+      if (ids.has(ask.id)) issue(`ask ${ask.id} is listed twice`);
+      ids.add(ask.id);
+      if ((ask.dimension === undefined) === (ask.answeredBy === undefined)) {
+        issue(`ask ${ask.id} names a dimension or the types that answer it — one, not both and not neither`);
       }
+      if (ask.answeredBy !== undefined && ask.question === undefined) {
+        issue(`ask ${ask.id} is answered by types, so it must say what it asks`);
+      }
+    }
+    for (const ask of asks) {
       const seen = new Set<string>();
-      for (const attribute of type.attributes ?? []) {
-        if (seen.has(attribute.name)) ctx.addIssue({ code: "custom", message: `${key} names attribute ${attribute.name} twice` });
-        seen.add(attribute.name);
-        attributeNames.add(attribute.name);
+      for (const target of ask.after ?? []) {
+        if (seen.has(target)) issue(`ask ${ask.id} waits on ${target} twice`);
+        seen.add(target);
+        if (target === ask.id) issue(`ask ${ask.id} waits on itself`);
+        else if (!ids.has(target)) issue(`ask ${ask.id} waits on ${target}, which is not an ask`);
       }
     }
-    for (const field of lens.promptFields ?? []) {
-      if (!lens.routingFields.includes(field)) {
-        ctx.addIssue({ code: "custom", message: `promptFields names ${field}, which is not a routing field` });
-      }
-    }
-    for (const tag of lens.briefAttributeTags ?? []) {
-      if (!attributeNames.has(tag)) ctx.addIssue({ code: "custom", message: `briefAttributeTags names ${tag}, which no type carries` });
-    }
-    for (const name of lens.extractAttributeKeys ?? []) {
-      if (!attributeNames.has(name)) ctx.addIssue({ code: "custom", message: `extractAttributeKeys names ${name}, which no type carries` });
-    }
-    const askIds = new Set<string>();
-    for (const ask of lens.asks ?? []) {
-      if (askIds.has(ask.id)) ctx.addIssue({ code: "custom", message: `ask ${ask.id} is listed twice` });
-      askIds.add(ask.id);
-      for (const type of ask.answeredBy) {
-        if (!(type in lens.factTypes)) ctx.addIssue({ code: "custom", message: `ask ${ask.id} is answered by ${type}, which is not a fact type` });
-      }
-      for (const clause of ask.when ?? []) {
-        if (!lens.routingFields.includes(clause.field)) {
-          ctx.addIssue({ code: "custom", message: `ask ${ask.id} applies when ${clause.field} matches, which is not a routing field` });
-        }
+    const circle = circleIn(asks.map((ask) => ({ id: ask.id, after: (ask.after ?? []).filter((target) => target !== ask.id) })));
+    if (circle) issue(`asks ${circle.join(" → ")} wait on each other in a circle`);
+    const placed = new Set<string>();
+    for (const section of lens.sections ?? []) {
+      for (const dimension of section.dimensions) {
+        if (placed.has(dimension)) issue(`dimension ${dimension} is in two sections`);
+        placed.add(dimension);
       }
     }
   }) as z.ZodType<LensDefinition>;
 
-/** Validate a definition as a client sends it. Throws with every problem named. */
+/** Validate a definition's own shape, as a client sends it. Throws with every
+ *  problem named. References into the vocabulary are checked by `compileLens`. */
 export function parseLensDefinition(input: unknown): LensDefinition {
   return lensDefinitionSchema.parse(input);
 }
 
-export interface AttributeField {
-  name: string;
-  values: readonly string[] | null;
-  /** The field's own schema, optionality stripped — what the extraction
-   *  schema makes nullable. */
-  schema: ZodTypeAny;
+/** Every reference in a lens its vocabulary does not resolve, named. Empty
+ *  when the lens reads its vocabulary cleanly. */
+export function lensProblems(definition: LensDefinition, vocabulary: Vocabulary): string[] {
+  const problems: string[] = [];
+  if (definition.vocabulary !== vocabulary.id) {
+    problems.push(`it reads vocabulary ${definition.vocabulary}, and was given ${vocabulary.id}`);
+  }
+  const dimensions = new Map(vocabulary.dimensions.map((d) => [d.id, d]));
+  if (definition.sections) {
+    const placed = new Set(definition.sections.flatMap((section) => section.dimensions));
+    for (const dimension of placed) {
+      if (!dimensions.has(dimension)) problems.push(`a section holds dimension ${dimension}, which the vocabulary does not have`);
+    }
+    for (const dimension of dimensions.keys()) {
+      if (!placed.has(dimension)) problems.push(`dimension ${dimension} is in no section, so its facts would never be on the page`);
+    }
+  }
+  for (const type of definition.pinned ?? []) {
+    if (!(type in vocabulary.factTypes)) problems.push(`pinned names ${type}, which is not a fact type`);
+  }
+  const attributes = new Set(vocabulary.extractAttributes.map((field) => field.name));
+  for (const tag of definition.attributeTags ?? []) {
+    if (!attributes.has(tag)) problems.push(`attributeTags names ${tag}, which no type carries`);
+  }
+  for (const ask of definition.asks ?? []) {
+    if (ask.dimension !== undefined) {
+      const dimension = dimensions.get(ask.dimension);
+      if (!dimension) problems.push(`ask ${ask.id} asks about dimension ${ask.dimension}, which the vocabulary does not have`);
+      else if (ask.question === undefined && dimension.question === null) {
+        problems.push(`ask ${ask.id} has no question, and dimension ${ask.dimension} has none to lend it`);
+      }
+    }
+    for (const type of ask.answeredBy ?? []) {
+      if (!(type in vocabulary.factTypes)) problems.push(`ask ${ask.id} is answered by ${type}, which is not a fact type`);
+    }
+    for (const clause of ask.when ?? []) {
+      if (!vocabulary.fields.includes(clause.field)) {
+        problems.push(`ask ${ask.id} applies when ${clause.field} matches, which is not one of the vocabulary's fields`);
+      }
+    }
+  }
+  return problems;
 }
 
-export interface CompiledFactType {
-  description: string;
-  section: string;
-  pinned: boolean;
-  enduring: boolean;
-  attributeFields: readonly AttributeField[];
-  /** Parses a stored attributes object: what fits is kept, the rest dropped. */
-  attributes: ZodTypeAny;
+export interface CompiledAsk {
+  id: string;
+  question: string;
+  /** The dimension it asks about, or null when it names its types. */
+  dimension: string | null;
+  /** The types whose facts answer it: its own list, or every type in its
+   *  dimension. */
+  answeredBy: readonly string[];
+  when: ReadonlyArray<{ field: string; equals: readonly string[] }>;
+  weight: number;
+  enough: number;
+  after: readonly string[];
+}
+
+export interface CompiledSection {
+  heading: string;
+  dimensions: readonly string[];
 }
 
 export interface Lens {
   definition: LensDefinition;
   id: string;
   version: number;
-  factTypes: Record<string, CompiledFactType>;
-  factTypeKeys: readonly string[];
-  /** Every attribute any type carries, once, in extraction-schema order. */
-  extractAttributes: readonly AttributeField[];
-  briefSections: ReadonlyArray<{ section: string; heading: string }>;
+  objective: string | null;
+  vocabulary: Vocabulary;
+  header: string;
   overHeading: string;
-  fallbackType: string;
-  sourceLabels: Readonly<Record<string, string>>;
-  routingFields: readonly string[];
-  promptFields: readonly string[];
-  briefAttributeTags: readonly string[];
-  entityKinds: readonly string[];
-  charter: string;
-  asks: readonly AskSpec[];
-  prompts: { extract: { ref: string; text: string }; reconcile: { ref: string; text: string } };
+  sections: readonly CompiledSection[];
+  /** Which section, by index, holds each dimension. */
+  sectionOfDimension: ReadonlyMap<string, number>;
+  pinned: ReadonlySet<string>;
+  attributeTags: readonly string[];
+  asks: readonly CompiledAsk[];
 }
 
-export const DEFAULT_PROMPT_REFS = { extract: "extract.v1", reconcile: "reconcile.v1" } as const;
-
-function baseSchema(spec: AttributeSpec): ZodTypeAny {
-  switch (spec.kind) {
-    case "string":
-      return z.string();
-    case "boolean":
-      return z.boolean();
-    case "number":
-      return z.number();
-    case "enum":
-      return z.enum(spec.values as [string, ...string[]]);
-  }
-}
-
-/** Compile a validated definition into what the engine reads. */
-export function compileLens(definition: LensDefinition): Lens {
-  const factTypes: Record<string, CompiledFactType> = {};
-  const met = new Map<string, AttributeField>();
-  for (const [key, spec] of Object.entries(definition.factTypes)) {
-    const attributeFields: AttributeField[] = (spec.attributes ?? []).map((attribute) => ({
-      name: attribute.name,
-      values: attribute.kind === "enum" ? (attribute.values ?? []) : null,
-      schema: baseSchema(attribute),
-    }));
-    for (const field of attributeFields) if (!met.has(field.name)) met.set(field.name, field);
-    const shape: Record<string, ZodTypeAny> = {};
-    for (const attribute of spec.attributes ?? []) {
-      shape[attribute.name] = attribute.optional ? baseSchema(attribute).optional() : baseSchema(attribute);
-    }
-    factTypes[key] = {
-      description: spec.description,
-      section: spec.section,
-      pinned: spec.pinned === true,
-      enduring: spec.enduring === true,
-      attributeFields,
-      // Not strict: an attribute that belongs to another type is dropped,
-      // not a reason to lose the ones that do belong.
-      attributes: z.object(shape),
-    };
-  }
-  const extractAttributes: AttributeField[] = [];
-  for (const name of definition.extractAttributeKeys ?? []) extractAttributes.push(met.get(name)!);
-  for (const field of met.values()) if (!extractAttributes.includes(field)) extractAttributes.push(field);
-  const own = definition.prompts ?? {};
+/** Compile a validated definition against the vocabulary it reads. Throws
+ *  with every unresolved reference named. */
+export function compileLens(definition: LensDefinition, vocabulary: Vocabulary): Lens {
+  const problems = lensProblems(definition, vocabulary);
+  if (problems.length > 0) throw new Error(`lens ${definition.id}@${definition.version}: ${problems.join("; ")}`);
+  const sections: CompiledSection[] =
+    definition.sections?.map((section) => ({ heading: section.heading, dimensions: [...section.dimensions] })) ??
+    vocabulary.dimensions.map((dimension) => ({ heading: dimension.label, dimensions: [dimension.id] }));
+  const sectionOfDimension = new Map<string, number>();
+  sections.forEach((section, index) => {
+    for (const dimension of section.dimensions) sectionOfDimension.set(dimension, index);
+  });
+  const question = new Map(vocabulary.dimensions.map((d) => [d.id, d.question]));
+  const typesIn = (dimension: string) => vocabulary.factTypeKeys.filter((key) => vocabulary.factTypes[key]!.dimension === dimension);
+  const specs: AskSpec[] =
+    definition.asks ??
+    vocabulary.dimensions.filter((dimension) => dimension.question !== null).map((dimension) => ({ id: dimension.id, dimension: dimension.id }));
   return {
     definition,
     id: definition.id,
     version: definition.version,
-    factTypes,
-    factTypeKeys: Object.keys(factTypes),
-    extractAttributes,
-    briefSections: definition.briefSections,
+    objective: definition.objective ?? null,
+    vocabulary,
+    header: definition.header,
     overHeading: definition.overHeading,
-    fallbackType: definition.fallbackType,
-    sourceLabels: definition.sourceLabels ?? {},
-    routingFields: definition.routingFields,
-    promptFields: definition.promptFields ?? [],
-    briefAttributeTags: definition.briefAttributeTags ?? [],
-    entityKinds: definition.entityKinds ?? ["person"],
-    charter: definition.charter,
-    asks: definition.asks ?? [],
-    prompts: {
-      extract: own.extract
-        ? { ref: `lens:${definition.id}@${definition.version}:extract`, text: own.extract }
-        : { ref: DEFAULT_PROMPT_REFS.extract, text: EXTRACT_V1 },
-      reconcile: own.reconcile
-        ? { ref: `lens:${definition.id}@${definition.version}:reconcile`, text: own.reconcile }
-        : { ref: DEFAULT_PROMPT_REFS.reconcile, text: RECONCILE_V1 },
-    },
+    sections,
+    sectionOfDimension,
+    pinned: new Set(definition.pinned ?? vocabulary.factTypeKeys.filter((key) => vocabulary.factTypes[key]!.pinned)),
+    attributeTags: definition.attributeTags ?? [],
+    asks: specs.map((ask) => ({
+      id: ask.id,
+      question: ask.question ?? question.get(ask.dimension!)!,
+      dimension: ask.dimension ?? null,
+      answeredBy: ask.answeredBy ? [...ask.answeredBy] : typesIn(ask.dimension!),
+      when: (ask.when ?? []).map((clause) => ({ field: clause.field, equals: [...clause.equals] })),
+      weight: ask.weight ?? ENGINE_DEFAULTS.weight,
+      enough: ask.enough ?? ENGINE_DEFAULTS.enough,
+      after: [...(ask.after ?? [])],
+    })),
   };
 }
 
 /** Validate and compile in one step. */
-export function lensFrom(input: unknown): Lens {
-  return compileLens(parseLensDefinition(input));
+export function lensFrom(input: unknown, vocabulary: Vocabulary): Lens {
+  return compileLens(parseLensDefinition(input), vocabulary);
 }
 
-/** A stored type string, narrowed. A retired or unknown type reads as the
- *  lens's fallback rather than failing the load. */
-export function asFactType(lens: Lens, type: string): string {
-  return type in lens.factTypes ? type : lens.fallbackType;
-}
-
-export function factType(lens: Lens, type: string): CompiledFactType {
-  return lens.factTypes[asFactType(lens, type)]!;
-}
-
-/** Whether a stored type is enduring: replaceable only by its own type. */
-export function isEnduringFactType(lens: Lens, type: string): boolean {
-  return type in lens.factTypes && lens.factTypes[type]!.enduring;
-}
-
+/** Whether a reader must honor a fact of this stored type rather than weigh
+ *  it. A retired type reads as the fallback, as everywhere. */
 export function isPinnedFactType(lens: Lens, type: string): boolean {
-  return factType(lens, type).pinned;
+  return lens.pinned.has(asFactType(lens.vocabulary, type));
 }
 
-/** A fact's attributes, validated against its type. Anything that does not fit
- *  is dropped to `{}` rather than stored half-right. */
-export function parseFactAttributes(lens: Lens, type: string, attributes: unknown): Record<string, unknown> {
-  const parsed = factType(lens, type).attributes.safeParse(attributes ?? {});
-  return parsed.success ? (parsed.data as Record<string, unknown>) : {};
-}
-
-/**
- * The type list as the extraction prompt reads it — one line per type, with
- * its attributes. The lens is the only place a type is described.
- */
-export function factTypeVocabulary(lens: Lens): string {
-  return lens.factTypeKeys
-    .map((key) => {
-      const definition = lens.factTypes[key]!;
-      const names = definition.attributeFields.map((field) => field.name);
-      const attrs = names.length > 0 ? ` Attributes: ${names.join(", ")}.` : "";
-      return `- ${key}: ${definition.description}${attrs}`;
-    })
-    .join("\n");
-}
-
-/** One fact type as a screen shows it: plain data, safe to hand to a client. */
-export interface FactTypeGlossaryEntry {
-  description: string;
-  /** The brief section's heading, as the engine reads it. */
-  section: string;
-  pinned: boolean;
-  enduring: boolean;
-  attributes: Array<{ name: string; values: string[] | null }>;
-}
-
-export function factTypeGlossary(lens: Lens): Record<string, FactTypeGlossaryEntry> {
-  const heading = new Map(lens.briefSections.map((s) => [s.section, s.heading]));
-  return Object.fromEntries(
-    lens.factTypeKeys.map((key) => {
-      const definition = lens.factTypes[key]!;
-      return [
-        key,
-        {
-          description: definition.description,
-          section: heading.get(definition.section) ?? definition.section,
-          pinned: definition.pinned,
-          enduring: definition.enduring,
-          attributes: definition.attributeFields.map((field) => ({
-            name: field.name,
-            values: field.values ? [...field.values] : null,
-          })),
-        },
-      ];
-    }),
-  );
-}
-
-/** The charter and the vocabulary, as the system context both model calls
- *  carry beside the task prompt. */
-export function systemExtra(lens: Lens): string[] {
-  return [lens.charter, `## Fact types\n\n${factTypeVocabulary(lens)}`];
-}
-
-/** "Linda (mother)" — a name with the lens's prompt fields, when any are set. */
-export function whoLabel(lens: Lens, person: { name: string; fields: Readonly<Record<string, string | null>> }): string {
-  const shown = lens.promptFields
-    .map((field) => person.fields[field])
-    .filter((value): value is string => typeof value === "string" && value.trim() !== "");
-  return shown.length > 0 ? `${person.name} (${shown.join(", ")})` : person.name;
+/** The index of the section a fact of this stored type is printed under. */
+export function sectionIndexOf(lens: Lens, type: string): number {
+  return lens.sectionOfDimension.get(factType(lens.vocabulary, type).dimension)!;
 }
 
 /** The first line of the page, from the lens's template. */
-export function briefHeader(lens: Lens, person: { name: string; fields: Readonly<Record<string, string | null>> }): string {
-  return lens.definition.briefHeader.replaceAll("{who}", whoLabel(lens, person));
+export function briefHeader(lens: Lens, entity: { name: string; fields: Readonly<Record<string, string | null>> }): string {
+  return lens.header.replaceAll("{who}", whoLabel(lens.vocabulary, entity));
 }

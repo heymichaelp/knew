@@ -23,7 +23,7 @@ export default function ContractPage() {
       <DocHeader
         clause="The contract"
         title={`“Implements the contract” means one thing.`}
-        standfirst="There are three drivers of PeopleIntelligence — Postgres, HTTP, and an in-memory fake — and one suite that runs the same cases against all of them. A driver either passes it or does not claim the name."
+        standfirst="There are three drivers of Intelligence — Postgres, HTTP, and an in-memory fake — and one suite that runs the same cases against all of them. A driver either passes it or does not claim the name."
         aside={
           <p className="stamp">
             <span>{cases.length} cases</span>
@@ -38,7 +38,7 @@ export default function ContractPage() {
           <p className="clause">01</p>
           <h2 className="display mt-2 text-3xl">One door</h2>
           <p className="measure mt-4 text-ink-soft">
-            Everything reaches the store through <code className="code">PeopleIntelligence</code>.
+            Everything reaches the store through <code className="code">Intelligence</code>.
             It carries a scope — <code className="code">{`{ clientId, subjectId }`}</code>{" "}
             — on every call and never a database handle. A route is a thin skin over a contract method; a business rule
             lives behind the door, never in front of it.
@@ -93,7 +93,8 @@ contractSuite({
           </p>
           <p className="measure mt-4 text-ink-soft">
             The fake in <code className="code">@popjoker/knew/testing</code> passes all{" "}
-            {cases.length}, which is also how a client tests its own code without a database or a model.
+            {cases.length}, which is also how a client tests its own code without a database or a model. The cases
+            read through the fixture vocabulary and its two lenses, so a driver proves that two lenses read one ledger.
           </p>
         </section>
       </DocBody>
