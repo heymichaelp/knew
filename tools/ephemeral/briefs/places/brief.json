@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "exercises": "A vocabulary written from scratch for a kind that is not a person; hours that go stale after about a month; what kind of place before what it is like.",
+  "pinned": { "vocabulary": "places", "lenses": ["visit"], "types": ["HOURS", "KIND", "VIBE"] },
+  "budgetUsd": 6,
+  "timeoutMin": 30,
+  "inputs": [],
+  "allow": ["id", "name", "question"]
+}

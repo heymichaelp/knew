@@ -1,0 +1,49 @@
+{
+  "id": "regulars",
+  "version": 3,
+  "vocabulary": "regulars",
+  "header": "Before you take an order from {who}:",
+  "overHeading": "No longer true",
+  "attributeTags": [
+    "month"
+  ],
+  "asks": [
+    {
+      "id": "favorites",
+      "question": "What do they love to get?",
+      "answeredBy": [
+        "FAVORITE"
+      ]
+    },
+    {
+      "id": "dates",
+      "question": "Which dates do they buy for every year?",
+      "answeredBy": [
+        "OCCASION"
+      ]
+    },
+    {
+      "id": "standing-order",
+      "question": "How often do they reorder, and how much do they spend?",
+      "answeredBy": [
+        "BUDGET"
+      ],
+      "when": [
+        {
+          "field": "tier",
+          "equals": [
+            "Wholesale",
+            "trade"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "who-they-send-to",
+      "question": "Who do they usually send to?",
+      "answeredBy": [
+        "RECIPIENT"
+      ]
+    }
+  ]
+}

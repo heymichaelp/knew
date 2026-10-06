@@ -1,0 +1,14 @@
+{
+  "id": "visit",
+  "version": 1,
+  "objective": "Decide when to go, and know what to expect on arrival.",
+  "vocabulary": "places",
+  "header": "Before you go to {who}:",
+  "overHeading": "No longer the case",
+  "asks": [
+    { "id": "what-kind", "question": "What kind of place is it?", "answeredBy": ["KIND"], "weight": 4 },
+    { "id": "opening-hours", "question": "When is it open?", "answeredBy": ["HOURS"], "weight": 3 },
+    { "id": "what-its-like", "question": "What is it like to be there?", "answeredBy": ["VIBE"], "after": ["what-kind"] },
+    { "id": "what-to-order", "question": "What's worth ordering there?", "answeredBy": ["ORDER"], "weight": 0.5, "after": ["what-kind"] }
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "name": "@knew/ephemeral",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Ephemeral testing for @popjoker/knew: an agent builds a throwaway app on the package, and the package is judged by how that goes.",
+  "type": "module",
+  "scripts": {
+    "test": "node --import tsx --test test/*.test.ts",
+    "typecheck": "tsc --noEmit -p . && tsc --noEmit -p briefs",
+    "agent": "node --import tsx src/cli.ts agent",
+    "dry-run": "node --import tsx src/cli.ts dry-run",
+    "preflight": "node --import tsx src/cli.ts preflight"
+  },
+  "dependencies": {
+    "@popjoker/knew": "*",
+    "zod": "^4.5.4"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.0"
+  }
+}

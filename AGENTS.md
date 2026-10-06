@@ -9,6 +9,7 @@ knew.dev site. The Postgres service is `heymichaelp/knew-service`.
 |---|---|---|
 | `packages/knew` | `@popjoker/knew` | The pure core. No database, no model, no React. One runtime dependency: zod. |
 | `apps/site` | `@knew/site` | knew.dev — marketing and developer docs, Next App Router. |
+| `tools/ephemeral` | `@knew/ephemeral` | Ephemeral testing: an agent builds a throwaway app on the packed tarball from a product brief, and the package is judged by how that goes. Private. |
 
 ## Rules
 
@@ -52,12 +53,26 @@ knew.dev site. The Postgres service is `heymichaelp/knew-service`.
   no vitest. `scripts/embed-prompts.mjs` generates `src/prompts/*.ts` from `prompts/*.md`, and
   `test/prompts.test.ts` fails when the two drift — regenerate with `npm run prompts -w @popjoker/knew`,
   never hand-edit the generated files.
+- **A brief names no API.** A `tools/ephemeral` brief is a product story, and finding the API is
+  part of what a run measures. `test/briefs.test.ts` fails a `BRIEF.md` that says a runtime export
+  of the package or a field of either definition schema — a name with a capital anywhere, an
+  ordinary word only as code. A word the product needs anyway goes in the brief's `allow`.
+- **Never loosen a checker to get green.** A checker that passes its reference and fails a real
+  run has found something: fix the package, its docs or its errors. If the brief was unfair,
+  change it and bump its version. Every probe is shown failing a broken reference by a mutation
+  in `test/briefs.test.ts`; a probe without one has not shown it can fail.
+- **Model runs are on demand, never in CI.** `npm run agent -w @knew/ephemeral` spends real money
+  on a Claude login. CI runs only the dry run: each reference through its checker against the
+  packed tarball. A full pass, every brief on Opus 5.5, gates any release that changes the API,
+  starting with 1.0. See `tools/ephemeral/README.md`.
 - **A release is a version bump on `main`**, nothing else. Do not run `npm publish` by hand.
 
 ## Verifying
 
 `npm run build && npm run typecheck && npm test && npm run lint` from the root. Turbo builds the
-package before the site typechecks, which matters: the site imports the package's `dist`.
+package before the site typechecks, which matters: the site imports the package's `dist`. CI then
+packs the tarball and runs `npm run dry-run -w @knew/ephemeral -- --tarball <path>`, which installs it
+the way an adopter would and runs every brief's reference against it.
 
 <!-- BEGIN:turborepo-agent-rules -->
 
