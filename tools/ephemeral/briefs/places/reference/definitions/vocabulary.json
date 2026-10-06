@@ -1,0 +1,43 @@
+{
+  "id": "places",
+  "version": 1,
+  "kind": "place",
+  "factTypes": {
+    "KIND": {
+      "description": "What kind of place it is: a café, a wine bar, a record shop, a gallery. What it is, not what it is like.",
+      "dimension": "what-it-is",
+      "enduring": true
+    },
+    "HOURS": {
+      "description": "When it is open: the days, the times, and the days it is closed.",
+      "dimension": "when-to-go",
+      "revisitAfterDays": 30
+    },
+    "BUSY": {
+      "description": "When it is crowded or quiet, and whether it is worth booking.",
+      "dimension": "when-to-go",
+      "revisitAfterDays": 90
+    },
+    "VIBE": {
+      "description": "What it is like to be there: the noise, the light, who goes, and what it is good for.",
+      "dimension": "what-it-is-like"
+    },
+    "ORDER": {
+      "description": "What is worth ordering or buying there.",
+      "dimension": "what-it-is-like"
+    },
+    "OTHER": {
+      "description": "Anything else worth keeping about the place that fits no other type.",
+      "dimension": "other"
+    }
+  },
+  "dimensions": {
+    "what-it-is": { "label": "What it is", "question": "What kind of place is it?" },
+    "when-to-go": { "label": "When to go", "question": "When is it open?" },
+    "what-it-is-like": { "label": "What it's like", "question": "What is it like to be there?" },
+    "other": { "label": "Other" }
+  },
+  "fallbackType": "OTHER",
+  "fields": [],
+  "charter": "# What Haunts keeps\n\nKeep what would change when someone goes to a place, or what they expect when they get there: what kind of place it is, when it is open and when it is busy, what it is like, what to order. Leave out who they went with and how their day went. Haunts is about the place.\n"
+}

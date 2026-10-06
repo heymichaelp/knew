@@ -3,7 +3,8 @@
   "private": true,
   "workspaces": [
     "apps/*",
-    "packages/*"
+    "packages/*",
+    "tools/*"
   ],
   "scripts": {
     "build": "turbo run build",
@@ -12,7 +13,8 @@
     "lint": "turbo run lint",
     "test": "turbo run test",
     "site": "npm run dev -w @knew/site",
-    "knew": "npm run --workspace @popjoker/knew"
+    "knew": "npm run --workspace @popjoker/knew",
+    "ephemeral": "npm run agent -w @knew/ephemeral --"
   },
   "devDependencies": {
     "turbo": "^2.5.0"

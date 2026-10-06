@@ -36,3 +36,8 @@ jobs:
           for f in package/LICENSE package/README.md package/ADOPTING.md package/CHANGELOG.md package/dist/index.js; do
             tar -tzf /tmp/popjoker-knew-*.tgz | grep -qx "$f" || { echo "missing from the tarball: $f"; exit 1; }
           done
+
+      # the deterministic half of ephemeral testing: that tarball, installed as an adopter
+      # installs it, with every brief's reference app run through its hidden checker
+      - name: Run each brief's reference app against the tarball
+        run: npm run dry-run -w @knew/ephemeral -- --tarball /tmp/popjoker-knew-*.tgz

@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "exercises": "Finding and using the move from 0.x: a lens with a section id and a kind that 1.0's patterns refuse, an app on the renamed contract, and every page, must-honor list and question unchanged from what 0.2.1 rendered.",
+  "pinned": { "vocabulary": "regulars", "lenses": ["regulars"], "types": [] },
+  "budgetUsd": 6,
+  "timeoutMin": 30,
+  "inputs": ["inputs"],
+  "allow": []
+}

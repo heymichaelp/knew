@@ -1,0 +1,37 @@
+{
+  "id": "gift",
+  "version": 1,
+  "objective": "Choose a gift they will love, and nothing they must not get.",
+  "vocabulary": "gifts",
+  "header": "Choosing a gift for {who}:",
+  "overHeading": "No longer the case",
+  "attributeTags": [
+    "level"
+  ],
+  "asks": [
+    {
+      "id": "ahead",
+      "dimension": "ahead"
+    },
+    {
+      "id": "has",
+      "dimension": "has"
+    },
+    {
+      "id": "avoid",
+      "dimension": "avoid"
+    },
+    {
+      "id": "what-they-love",
+      "question": "What do they love, and what are they into right now?",
+      "answeredBy": [
+        "INTEREST",
+        "SKILL",
+        "TASTE",
+        "WISH"
+      ],
+      "weight": 3,
+      "enough": 5
+    }
+  ]
+}
