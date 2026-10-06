@@ -1,12 +1,16 @@
 # @popjoker/knew
 
-The attention engine's pure core. One engine, distinct clients: a client registers a
-**lens** (what to remember about a person, how the page reads, what to ask next), keeps a
-**roster** per subject, and records **episodes**, what the subject said, verbatim and dated. The
-engine reads them into typed, dated, sourced **facts** per person, reconciles them against what
-was known (superseding, never editing), keeps a living **summary**, renders a **brief** a reader
-starts from, and reports the **gaps**: the lens's questions the ledger does not yet answer. What
-it may not act on becomes a **proposal**.
+The attention engine's pure core — for building something where a person writes down what
+they noticed and gets back a reason to lean in.
+
+One engine, distinct clients: a client registers a **lens** (what is worth keeping, how the page
+reads, what to ask next), keeps a **roster** per subject, and records **episodes** — what the
+subject said, verbatim and dated. The engine reads those into typed, dated, sourced **facts**,
+reconciles them against what was known (superseding, never editing), keeps a living **summary**,
+renders a **brief** a reader starts from, and reports the **gaps**: the lens's questions the
+ledger does not yet answer. Facts know when they were true and when they were learned, so "what
+did we know in March?" has an answer in March's terms. What the engine may not act on becomes a
+**proposal** rather than a silent write.
 
 This package has no database, no model and no React. It is:
 
@@ -59,8 +63,18 @@ const brief = await intelligence.brief(scope, "linda"); // null until something 
 const gaps = await intelligence.gaps(scope, "linda"); // what is worth asking next
 ```
 
-`ADOPTING.md` is the guide: binding once per process, the outbox pattern, idempotency, holds and
-hints, timeouts, deletion, usage, running the service locally, testing against the fake, and
-proving a driver with the contract suite. `CHANGELOG.md` has the version rule.
+## Documentation
 
-Node 22 or later, ES modules. The only dependency is zod 4.
+[**knew.dev**](https://knew.dev) renders all of it from this package, so the docs cannot describe
+a version that was never shipped.
+
+- [Adopting the engine](https://knew.dev/adopting) — binding once per process, the outbox
+  pattern, idempotency, holds and hints, timeouts, deletion, usage, running the service, testing
+  against the fake, and proving a driver. Also `ADOPTING.md` in this tarball.
+- [Lenses](https://knew.dev/lenses) — every field of a lens definition, generated from the schema.
+- [The API](https://knew.dev/api) — the routes, the envelope, the two headers, the timeouts.
+- [The contract](https://knew.dev/contract) — the cases a driver must pass, listed by the suite.
+- [Privacy](https://knew.dev/privacy) — what the engine will not do, and why that is structural.
+- [Changelog](https://knew.dev/changelog) — and the version rule. Also `CHANGELOG.md`.
+
+Node 22 or later, ES modules. The only dependency is zod 4. MIT.

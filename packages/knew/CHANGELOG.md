@@ -4,6 +4,17 @@ The package follows semver from 1.0.0: a change to the lens schema that keeps ev
 lens valid is a minor; a change to `PeopleIntelligence`, to the wire types or to what a driver
 must do under the contract suite is a major. Before 1.0.0 a minor may break; the entries say so.
 
+## 0.2.1 — 2026-10-05
+
+The listing, since npm is where most people meet this.
+
+- The README opens with what the engine is for rather than its mechanics, and says "subject"
+  where the engine means subject.
+- It links to knew.dev. `ADOPTING.md` and `CHANGELOG.md` ship in the tarball but are not
+  clickable on npm, so pointing at the files alone was a dead end for the reader npm sends.
+- `memory` leaves the keywords. The engine's own rulings reject the word — it looks forward,
+  which is why it is intelligence and not memory — so advertising it was a contradiction.
+
 ## 0.2.0 — 2026-10-05
 
 A home of its own, and a licence. Nothing in the contract moved.

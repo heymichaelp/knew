@@ -1,6 +1,6 @@
 {
   "name": "@popjoker/knew",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "The attention engine's pure core: the contract, the lenses, the brief, the reconciliation plan, the prompt text, and the HTTP client. No database, no model, no React.",
   "license": "MIT",
   "homepage": "https://knew.dev",
@@ -15,11 +15,13 @@
   "keywords": [
     "attention",
     "intelligence",
-    "memory",
     "facts",
     "bi-temporal",
     "lens",
-    "people"
+    "episodes",
+    "knowledge",
+    "people",
+    "typescript"
   ],
   "type": "module",
   "sideEffects": false,
