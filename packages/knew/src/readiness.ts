@@ -25,8 +25,9 @@ import { factType, type Vocabulary } from "./vocabulary.ts";
  * `revisitAfterDays` declared, the gaps are exactly what they always were:
  * every applicable ask with no current fact, in the lens's order.
  *
- * Pure and deterministic. Strength, value and overall are rounded to three
- * places, so every driver answers the same JSON.
+ * Pure and deterministic. Strength, value and overall are worked out exactly
+ * and rounded to three places only on the way out, so every driver answers the
+ * same JSON and a tie is a tie.
  */
 
 const DAY_MS = 86_400_000;
@@ -89,7 +90,9 @@ export function readinessFor(
   at: Date = new Date(),
 ): Readiness {
   const vocabulary = lens.vocabulary;
-  const current = facts.filter((fact) => !fact.expiredAt && !endedByDate(fact, at));
+  // One row per fact id, however the caller assembled the ledger.
+  const unique = [...new Map(facts.map((fact) => [fact.id, fact])).values()];
+  const current = unique.filter((fact) => !fact.expiredAt && !endedByDate(fact, at));
   const due = (fact: Fact) => isDueForRevisit(vocabulary, fact, at);
 
   const dimensions: DimensionEvidence[] = vocabulary.dimensions.map((dimension) => {
@@ -117,12 +120,16 @@ export function readinessFor(
     return !ask || heard.get(id)!.held.length >= ask.enough;
   };
 
+  // The exact strength of each ask: rounding happens once, on the way out.
+  const exact = new Map<string, number>();
   const asks: AskStanding[] = applicable.map((ask) => {
     const { held, due: dueFacts } = heard.get(ask.id)!;
     const n = held.length;
     const d = dueFacts.length;
     const f = n - d;
-    const strength = round(f >= ask.enough ? 1 : (f + ENGINE_DEFAULTS.dueCredit * Math.min(d, ask.enough - f)) / ask.enough);
+    const raw = f >= ask.enough ? 1 : (f + ENGINE_DEFAULTS.dueCredit * Math.min(d, ask.enough - f)) / ask.enough;
+    exact.set(ask.id, raw);
+    const strength = round(raw);
     const waitingOn = f >= ask.enough ? [] : ask.after.filter((id) => !answered(id));
     const state = f >= ask.enough ? "met" : waitingOn.length > 0 ? "waiting" : n >= ask.enough ? "due" : n > 0 ? "thin" : "open";
     return {
@@ -145,7 +152,7 @@ export function readinessFor(
   const next: NextStep[] = asks
     .filter((standing) => standing.state === "open" || standing.state === "thin" || standing.state === "due")
     .map((standing): NextStep => {
-      const value = round(standing.weight * (1 - standing.strength));
+      const value = round(standing.weight * (1 - exact.get(standing.id)!));
       if (standing.state === "due") {
         const dueFacts = [...heard.get(standing.id)!.due].sort(oldestSaidFirst);
         return { kind: "revisit", ask: standing.id, question: standing.question, value, factIds: dueFacts.map((fact) => fact.id) };
@@ -165,7 +172,7 @@ export function readinessFor(
     lens: lens.id,
     objective: lens.objective,
     at,
-    overall: asks.length > 0 ? round(asks.reduce((sum, standing) => sum + standing.weight * standing.strength, 0) / totalWeight) : null,
+    overall: asks.length > 0 ? round(asks.reduce((sum, standing) => sum + standing.weight * exact.get(standing.id)!, 0) / totalWeight) : null,
     dimensions,
     asks,
     next,

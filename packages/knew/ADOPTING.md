@@ -92,7 +92,14 @@ writing never names a lens, so nothing is re-read — while a change to what a v
 mean may be worth a `resetForReplay` (§7). The first lens registered is the client's default.
 
 **Coming from 0.x**, `fromLegacyLens(definition)` splits a 0.x lens into a vocabulary and a lens
-that render the same page and report the same gaps. Register both, keeping the 0.x id and version.
+that report the same gaps and render the same page — unless the 0.x lens had a heading no type used
+(0.x budgeted the page for it, so 1.0 fits a little more) or listed a section twice (0.x printed its
+facts under both headings). Read its `notes`: they name every such difference, any section id or
+kind slugged to the 1.0 patterns, and any extra kind dropped. Register both, keeping the 0.x id and
+version.
+
+A lens that names no asks asks its vocabulary's dimension questions. To patch those by id, hand
+`extendLens` the vocabulary as a third argument and they are written out first.
 
 ## 3. Writing: the outbox pattern
 
@@ -178,9 +185,11 @@ as an episode with `inReplyTo` set to the question as it was asked. The words st
 answer as an answer, so "two, both at university" after "do they have kids?" becomes facts, and
 the ask closes.
 
-**A stateless client** runs `readinessFor(lens, entity, facts, at)` itself, over the facts it
-keeps, and stamps `lastSaidAt` on a fact when a plan merges into it: the plan's `knownAt`, never
-moving it back. A ledger with no `lastSaidAt` reads as last said when first said.
+**A stateless client** runs `readinessFor(lens, entity, factsKnownAt(facts, at), at)` itself.
+`factsKnownAt` comes first, so a past `at` sees only what was believed then — no fact said later,
+no retelling after the moment. It stamps `lastSaidAt` on a fact when a plan merges into it: the
+plan's `knownAt`, never moving it back. A ledger with no `lastSaidAt` reads as last said when first
+said.
 
 ## 6. Corrections and proposals
 

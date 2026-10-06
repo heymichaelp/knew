@@ -82,7 +82,7 @@ const standing = (readiness: Readiness, id: string) => readiness.asks.find((ask)
 export function contractCases(): ContractCase[] {
   return [
     {
-      name: "the roster: an entity known by name has every ask open, fields merge and null clears, and one unknown is nothing",
+      name: "the roster: an entity known by name has every ask open, fields merge and null clears, one unknown is nothing, and one of another kind is refused",
       scripted: false,
       async run({ intelligence: i, scope }) {
         await i.upsertEntity(scope, { id: "linda", name: "Linda", fields: { relationship: "mother" } });
@@ -96,6 +96,8 @@ export function contractCases(): ContractCase[] {
         assert.deepEqual(ids(await i.gaps(scope, "linda")), ["what-they-love", "how-the-days-go"], "a field not sent is kept");
         await i.upsertEntity(scope, { id: "linda", name: "Linda", fields: { relationship: null } });
         assert.deepEqual(ids(await i.gaps(scope, "linda")), ["what-they-love"], "null clears a field");
+        await assert.rejects(i.upsertEntity(scope, { id: "lisbon", name: "Lisbon", kind: "place" }), "the vocabulary describes a person, not a place");
+        assert.equal(await i.gaps(scope, "lisbon"), null, "and the refused entity is not on the roster");
       },
     },
     {
@@ -258,6 +260,8 @@ export function contractCases(): ContractCase[] {
         assert.deepEqual(al.asks.map((a) => [a.id, a.state]), [["what-they-love", "open"], ["people", "open"]], "an ask that does not apply holds nothing back");
         assert.equal(await i.readiness(scope, "nobody"), null);
         await assert.rejects(i.readiness(scope, "linda", { lens: "no-such-lens" }), "a lens the client never registered is refused");
+        await assert.rejects(i.gaps(scope, "linda", { lens: "no-such-lens" }), "for the gaps too");
+        await assert.rejects(i.getEntity(scope, "linda", { includeBrief: true, lens: "no-such-lens" }), "and for the page");
       },
     },
     {

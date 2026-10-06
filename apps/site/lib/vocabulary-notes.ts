@@ -16,7 +16,7 @@ export const VOCABULARY_FIELD_NOTES: Record<string, string> = {
   factTypes:
     "The types of fact there are, by key: what extraction writes in. Each says what it means, which dimension it informs, and optionally the attributes it carries, whether it is pinned, whether it is enduring, and how long until a fact of it is due for a revisit.",
   dimensions:
-    "The facets of the subject, in the order a reader takes them in. Each has a label and, optionally, the question that probes it. Every type informs exactly one, and every one holds at least one type. Readiness reports what is known per dimension.",
+    "The facets of an entity, in the order a reader takes them in. Each has a label and, optionally, the question that probes it. Every type informs exactly one, and every one holds at least one type. Readiness reports what is known per dimension.",
   fallbackType:
     "What a retired or unknown type string reads as, so a stored fact of a type the vocabulary no longer has still has a home. Must be one of your own fact types.",
   fields:
@@ -30,7 +30,7 @@ export const VOCABULARY_FIELD_NOTES: Record<string, string> = {
   extractAttributeKeys:
     "The order of the attribute keys in the schema the model fills. Optional; by default they come in the order first met walking the fact types. Must name attributes some fact type carries.",
   basedOn:
-    "Written by `extendVocabulary`, never by hand: the preset this vocabulary came from, and every type or dimension of it that was changed or dropped — so a fact typed in a type left alone still means what the preset meant.",
+    "Written by `extendVocabulary`, never by hand: the first base this vocabulary came from (a preset, or any vocabulary), every type or dimension of it that was changed or dropped, and every one added — so a fact typed in a type left alone still means what the base meant.",
 };
 
 /** The fields inside a fact type and a dimension. */

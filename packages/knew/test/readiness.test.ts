@@ -118,6 +118,17 @@ describe("Scenario: Enough counts fresh facts, and strength says how far along a
     ]);
     assert.deepEqual(readinessFor(weighted, mother, [], now).next.map((s) => [s.ask, s.value]), [["b", 3], ["a", 1], ["c", 1]]);
 
+    const tied = lensOf([
+      { id: "aa", question: "AA?", answeredBy: ["HAS"], weight: 2 },
+      { id: "bb", question: "BB?", answeredBy: ["LIKES"], weight: 3, enough: 3 },
+    ]);
+    const tie = readinessFor(tied, mother, [fact("LIKES", "Gardens", "2026-01-01")], now);
+    assert.deepEqual(
+      tie.next.map((s) => [s.ask, s.value]),
+      [["aa", 2], ["bb", 2]],
+      "2 and 3 × (1 − ⅓) are the same value, so the lens's order decides — rounding happens only on the way out",
+    );
+
     const thirds = lensOf([
       { id: "x", question: "X?", answeredBy: ["LIKES"], enough: 3 },
       { id: "y", question: "Y?", answeredBy: ["HAS"], weight: 2 },
@@ -126,6 +137,15 @@ describe("Scenario: Enough counts fresh facts, and strength says how far along a
     assert.equal(readiness.asks[0]!.strength, 0.333);
     assert.equal(readiness.next[0]!.value, 0.667);
     assert.equal(readiness.overall, 0.778);
+  });
+});
+
+describe("Scenario: One fact is one fact, however the caller assembled the ledger", () => {
+  it("counts a fact passed twice once", () => {
+    const lens = lensOf([{ id: "love", question: "What do they love?", answeredBy: ["LIKES"], enough: 2 }]);
+    const once = fact("LIKES", "Gardens", "2026-01-01");
+    const standing = readinessFor(lens, mother, [once, { ...once }], at("2026-10-05T00:00:00Z")).asks[0]!;
+    assert.deepEqual([standing.state, standing.facts], ["thin", 1]);
   });
 });
 

@@ -29,7 +29,7 @@ export interface FactTypeSpec {
   /** What the type means. This IS the extraction vocabulary — the prompt
    *  renders these and never restates them. */
   description: string;
-  /** A `dimensions` key: the facet of the subject this kind of fact informs. */
+  /** A `dimensions` key: the facet of an entity this kind of fact informs. */
   dimension: string;
   /** The type's structured payload. Most types have none. */
   attributes?: AttributeSpec[];
@@ -73,7 +73,7 @@ export interface VocabularyDefinition {
   kind: string;
   /** Every kind of fact there is, by type key. */
   factTypes: Record<string, FactTypeSpec>;
-  /** The facets of the subject, in the order a reader takes them in — what
+  /** The facets of an entity, in the order a reader takes them in — what
    *  must never be crossed first. Each holds at least one type. */
   dimensions: Record<string, DimensionSpec>;
   /** The type a retired or unknown type string reads as. */
@@ -95,9 +95,10 @@ export interface VocabularyDefinition {
   /** The order of attribute keys in the extraction schema. Default: the
    *  order they are first met walking `factTypes`. */
   extractAttributeKeys?: string[];
-  /** The preset it was extended from, and which of the preset's types and
-   *  dimensions it changed or dropped. Stamped by `extendVocabulary`. */
-  basedOn?: { preset: string; version: number; changed: string[] };
+  /** The first base it was extended from (a preset, or any vocabulary), which
+   *  of that base's types and dimensions it changed or dropped, and which it
+   *  added. Stamped by `extendVocabulary`. */
+  basedOn?: { preset: string; version: number; changed: string[]; added: string[] };
 }
 
 const attributeSpecSchema = z
@@ -139,7 +140,7 @@ export const vocabularyDefinitionSchema: z.ZodType<VocabularyDefinition> = z
     prompts: z.object({ extract: z.string().min(1).optional(), reconcile: z.string().min(1).optional() }).optional(),
     extractAttributeKeys: z.array(z.string()).optional(),
     basedOn: z
-      .object({ preset: z.string().regex(ID_RE), version: z.number().int().min(1), changed: z.array(z.string()) })
+      .object({ preset: z.string().regex(ID_RE), version: z.number().int().min(1), changed: z.array(z.string()), added: z.array(z.string()) })
       .optional(),
   })
   .superRefine((vocabulary, ctx) => {

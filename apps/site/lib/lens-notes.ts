@@ -11,7 +11,7 @@ export const LENS_FIELD_NOTES: Record<string, string> = {
   id: "The lens's name. A read names it in `lens`; a read that names none gets the client's default.",
   version: "Bumped every time the definition changes. Changing a lens never touches an episode or a fact — it only changes how they read.",
   objective:
-    "What the knower wants to be able to do relative to the subject, in one sentence. A reader writes toward it, and the asks are what it needs known.",
+    "What the knower wants to be able to do relative to the entity, in one sentence. A reader writes toward it, and the asks are what it needs known.",
   vocabulary: "The vocabulary it reads, by id. Several lenses read one vocabulary's facts.",
   header: "The page's first line. Must contain `{who}`, which becomes the name, with the vocabulary's prompt fields in parentheses when there are any.",
   overHeading: "The heading for facts past their own end date, listed last as context — “six months in Lisbon from May” is over in December, whether or not anybody says so.",
@@ -31,7 +31,8 @@ export const LENS_NESTED_NOTES: Record<string, Record<string, string>> = {
     dimension: "The dimension whose facts answer it. An ask names a dimension or the types that answer it — one, never both.",
     answeredBy: "The fact types a current fact of which answers it.",
     when: "Narrows the ask to the entities whose fields match every clause, case-insensitively. Left out, it applies to everyone.",
-    weight: "How much it matters to the objective, relative to the other asks. The gaps run from the heaviest. Default 1.",
+    weight:
+      "How much it matters to the objective, relative to the other asks: more than 0, at most 1,000. Steps run from the highest weight × (1 − strength), so a heavy ask already half met can come after a lighter one still open. Default 1.",
     enough: "How many current facts, each fresh, meet it — facts, not tellings. Below that it is thin; with enough facts but too few of them fresh, it is due. Default 1.",
     after: "Asks that must be answered first: this one is not offered until they are. Coarse before fine. An ask that does not apply to the entity holds nothing back.",
   },

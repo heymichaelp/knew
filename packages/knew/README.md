@@ -4,7 +4,7 @@ The attention engine's pure core — for building something where a person write
 they noticed and gets back a reason to lean in.
 
 One engine, distinct clients. A client registers a **vocabulary** — what can be known about one
-kind of thing: the types of fact, and the dimensions of the subject they inform — and **lenses**
+kind of thing: the types of fact, and the dimensions of an entity they inform — and **lenses**
 over it, one per objective: how the page reads, what must be honored, what to ask next. It keeps a
 **roster** per knower and records **episodes**: what the knower said, verbatim and dated. The
 engine reads those into typed, dated, sourced **facts**, reconciles them against what was known
