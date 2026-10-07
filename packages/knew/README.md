@@ -29,8 +29,8 @@ This package has no database, no model and no React. It is:
   `extendVocabulary` and `extendLens` start a client's own from a base and say only what differs;
   `ENGINE_DEFAULTS` is what the engine assumes when a definition says nothing; `fromLegacyLens`
   moves a 0.x lens across.
-- **Presets**, opt-in, in `./presets`: a generic `person` vocabulary and starter lens to extend.
-  The core ships no content of its own.
+- **Presets**, opt-in, in `./presets`: generic `person`, `place` and `product` vocabularies, each
+  with a starter lens to extend. The core ships no content of its own.
 - **The pure functions** every driver renders with: `renderBrief`, `mustHonorFrom`,
   `readinessFor`, `gapsFor`, `planReconciliation`, `factsKnownAt`, the prompt-input builders and
   the output schemas, and the neutral task prompts as data.

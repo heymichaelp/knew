@@ -34,8 +34,8 @@ it.
 **Defaults, then overrides.**
 
 - `ENGINE_DEFAULTS`: what the engine assumes when a definition says nothing — mechanics only.
-- `@popjoker/knew/presets`, opt-in: a generic `person` vocabulary and starter lens. The core still
-  names no domain; a preset is reviewed like API.
+- `@popjoker/knew/presets`, opt-in: generic `person`, `place` and `product` vocabularies, each with
+  a starter lens. The core still names no domain; a preset is reviewed like API.
 - `extendVocabulary` and `extendLens` start a client's own definition from a base and say only
   what differs (`null` removes). An extended vocabulary is stamped `basedOn`: the first base, what
   of it changed and what was added. A lens that asks its vocabulary's dimension questions is

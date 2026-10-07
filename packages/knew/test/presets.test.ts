@@ -13,7 +13,8 @@ import {
   readinessFor,
   type Fact,
 } from "../src/index.ts";
-import { person } from "../src/presets.ts";
+import * as presets from "../src/presets.ts";
+import { person, place, product } from "../src/presets.ts";
 
 const at = (iso: string) => new Date(iso);
 let n = 0;
@@ -66,6 +67,56 @@ describe("Scenario: The person preset is a vocabulary and a lens a client can us
     const mine = person.vocabulary();
     mine.factTypes.WORK!.description = "changed";
     assert.notEqual(person.vocabulary().factTypes.WORK!.description, "changed");
+  });
+});
+
+describe("Scenario: The place and product presets stand as they are, as person does", () => {
+  const cases = [
+    {
+      preset: place,
+      types: 12,
+      dimensions: ["caution", "what", "where", "when", "offer", "feel", "people", "history", "other"],
+      windows: [["CAUTION", 365], ["HOURS", 30], ["BUSY", 90], ["OFFER", 180], ["PRICE", 365]],
+      pinned: ["CAUTION"],
+      first: "What kind of place is it?",
+    },
+    {
+      preset: product,
+      types: 9,
+      dimensions: ["caution", "what", "details", "standing", "origin", "care", "opinion", "other"],
+      windows: [["OWNERSHIP", 365], ["CONDITION", 180], ["CARE", 365]],
+      pinned: ["CAUTION"],
+      first: "What is it, exactly?",
+    },
+  ] as const;
+
+  for (const { preset, types, dimensions, windows, pinned, first } of cases) {
+    it(`is a valid ${preset.PRESET.id} vocabulary of ${types} types, each dimension but the fallback's with a question, and a starter lens that compiles against it`, () => {
+      const vocabulary = compileVocabulary(parseVocabularyDefinition(preset.vocabulary()));
+      assert.deepEqual([vocabulary.id, vocabulary.version, vocabulary.kind], [preset.PRESET.id, 1, preset.PRESET.id]);
+      assert.equal(vocabulary.factTypeKeys.length, types);
+      assert.deepEqual(vocabulary.dimensions.map((d) => d.id), dimensions);
+      assert.deepEqual(vocabulary.dimensions.filter((d) => d.question === null).map((d) => d.id), ["other"]);
+      assert.deepEqual(
+        vocabulary.factTypeKeys.filter((key) => vocabulary.factTypes[key]!.revisitAfterDays !== null).map((key) => [key, vocabulary.factTypes[key]!.revisitAfterDays]),
+        windows,
+      );
+      assert.deepEqual(vocabulary.factTypeKeys.filter((key) => vocabulary.factTypes[key]!.pinned), pinned);
+      assert.deepEqual(lensProblems(preset.lens(), vocabulary), []);
+      const readiness = readinessFor(compileLens(preset.lens(), vocabulary), { fields: {} }, [], at("2026-10-05T00:00:00Z"));
+      assert.equal(readiness.next[0]!.question, first, "the coarse thing first");
+      assert.equal(readiness.next.length, dimensions.length - 1, "every dimension with a question is asked");
+    });
+  }
+
+  it("hands out fresh copies, and extends like any preset, stamped with its own name", () => {
+    const mine = place.vocabulary();
+    mine.factTypes.HOURS!.revisitAfterDays = 7;
+    assert.equal(place.vocabulary().factTypes.HOURS!.revisitAfterDays, 30);
+    const haunts = extendVocabulary(place.vocabulary(), { id: "haunts", version: 1, factTypes: { HOURS: { revisitAfterDays: 14 } } });
+    assert.deepEqual(haunts.basedOn, { preset: "place", version: 1, changed: ["HOURS"], added: [] });
+    const gear = extendVocabulary(product.vocabulary(), { id: "gear", version: 1, factTypes: { CARE: null }, dimensions: { care: null } });
+    assert.deepEqual(gear.basedOn, { preset: "product", version: 1, changed: ["CARE", "care"], added: [] });
   });
 });
 
@@ -181,9 +232,10 @@ describe("Scenario: A client extends a preset, saying only what differs", () => 
 });
 
 describe("Scenario: The core names no domain; the presets are the only place content lives", () => {
-  it("finds none of the person preset's type keys in the code of the core", () => {
+  it("finds none of any preset's type keys in the code of the core", () => {
     const src = join(dirname(fileURLToPath(import.meta.url)), "..", "src");
-    const keys = Object.keys(person.vocabulary().factTypes);
+    const keys = [...new Set(Object.values(presets).flatMap((preset) => Object.keys(preset.vocabulary().factTypes)))];
+    assert.ok(keys.includes("HOURS") && keys.includes("IDENTITY"), "every preset's keys, not only person's");
     const core = readdirSync(src).filter((name) => name.endsWith(".ts") && !["testing.ts", "contract.ts", "presets.ts"].includes(name));
     for (const file of core) {
       const code = readFileSync(join(src, file), "utf8")

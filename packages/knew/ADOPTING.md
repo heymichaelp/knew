@@ -43,8 +43,8 @@ that sent it; nothing in the engine links scopes.
 Both are JSON. Write them in the client's repo, validate them in a test, and register each once
 per version, at boot or by hand.
 
-**Start from a preset, or from nothing.** `@popjoker/knew/presets` ships a generic `person`
-vocabulary and a starter lens. `extendVocabulary` and `extendLens` take a base and the client's
+**Start from a preset, or from nothing.** `@popjoker/knew/presets` ships generic `person`,
+`place` and `product` vocabularies, each with a starter lens. `extendVocabulary` and `extendLens` take a base and the client's
 overrides — a key given replaces or merges, `null` removes, a key left out keeps the base's — and
 return a complete definition. The vocabulary is stamped `basedOn`, naming the preset and every
 type or dimension of it that changed.
