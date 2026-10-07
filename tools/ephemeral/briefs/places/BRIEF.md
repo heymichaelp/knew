@@ -11,8 +11,8 @@ Haunts that works with it.
 
 ## What there is to know about a place
 
-knew has never been told about places, so its vocabulary for them is yours to write, from scratch.
-Call it `places`. Haunts cares about at least three kinds of note. Our analytics already use their
+knew ships a starting vocabulary for places, but Haunts' notes don't fit it, so write Haunts' own
+from scratch rather than extending knew's. Call it `places`. Haunts cares about at least three kinds of note. Our analytics already use their
 names, so keep them exactly:
 
 - `KIND`: what kind of place it is, such as a café, a wine bar or a record shop.
