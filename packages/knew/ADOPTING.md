@@ -296,7 +296,9 @@ fake.script({ extraction: extraction([extracted("linda", "AVOID", "Vegan")]) });
 
 `script` queues what the next pending episode is read into; `extractNow` applies the same
 reconciliation plan the service applies, with the same attribution rules, so a client test can
-walk from a note to the page. A scripted `reconcile` returns the decisions when the test is
+walk from a note to the page. The queue is one for the whole fake, across scopes and entities: each
+episode an `extractNow` reads takes the next turn, earliest said first, and an episode with no turn
+left stays pending. Script one turn per episode, just before the call that reads it. A scripted `reconcile` returns the decisions when the test is
 about a correction or a retelling.
 
 ## 11. Proving a driver
