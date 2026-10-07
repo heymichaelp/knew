@@ -16,6 +16,10 @@
     "*/reference/src",
     "*/reference/test",
     "*/baseline-reference/src",
-    "*/baseline-reference/test"
+    "*/baseline-reference/test",
+    "*/reference-changed/src",
+    "*/reference-changed/test",
+    "*/baseline-reference-changed/src",
+    "*/baseline-reference-changed/test"
   ]
 }

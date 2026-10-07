@@ -1,9 +1,10 @@
 import { spawnSync } from "node:child_process";
-import { cpSync, mkdirSync, writeFileSync } from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, realpathSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import type { CheckResult } from "../kit/check-kit.ts";
-import { BRIEFS, SCAFFOLD_COMPILER_OPTIONS, WORKSPACE, type Arm } from "./prep.ts";
+import { BRIEFS, SCAFFOLD_COMPILER_OPTIONS, WORKSPACE, installForCheck, removeDir, type Arm, type Tarball } from "./prep.ts";
 
 /**
  * Running a brief's hidden checker. It goes into the app only once the agent
@@ -33,11 +34,13 @@ function checkerEnv(): NodeJS.ProcessEnv {
 }
 
 /** Run a brief's checker against an app directory in a child process, and read back its JSON. */
-export function runChecker(dir: string, brief: string, options: { typecheck: boolean; arm?: Arm; timeoutMs?: number }): CheckResult {
+export type Phase = 1 | 2;
+
+export function runChecker(dir: string, brief: string, options: { typecheck: boolean; arm?: Arm; phase?: Phase; timeoutMs?: number }): CheckResult {
   layChecker(dir, brief);
   const result = spawnSync(
     process.execPath,
-    ["--import", "tsx", join(".check", "kit", "run-check.ts"), join(".check", "briefs", brief, "check.ts"), dir, options.typecheck ? "1" : "0", options.arm ?? "knew"],
+    ["--import", "tsx", join(".check", "kit", "run-check.ts"), join(".check", "briefs", brief, "check.ts"), dir, options.typecheck ? "1" : "0", options.arm ?? "knew", String(options.phase ?? 1)],
     { cwd: dir, encoding: "utf8", timeout: options.timeoutMs ?? 600_000, env: checkerEnv() },
   );
   const line = (result.stdout ?? "").trim().split("\n").filter(Boolean).pop();
@@ -51,9 +54,25 @@ export function runChecker(dir: string, brief: string, options: { typecheck: boo
 }
 
 /** Run a brief's checker in this process, against a directory whose `@popjoker/knew` resolves to the same copy this process sees. */
-export async function checkInProcess(dir: string, brief: string, options: { typecheck: boolean; appTests?: boolean; arm?: Arm }): Promise<CheckResult> {
+export async function checkInProcess(dir: string, brief: string, options: { typecheck: boolean; appTests?: boolean; arm?: Arm; phase?: Phase }): Promise<CheckResult> {
   const module = (await import(pathToFileURL(join(BRIEFS, brief, "check.ts")).href)) as {
-    check: (dir: string, options: { typecheck: boolean; appTests?: boolean; arm?: Arm }) => Promise<CheckResult>;
+    check: (dir: string, options: { typecheck: boolean; appTests?: boolean; arm?: Arm; phase?: Phase }) => Promise<CheckResult>;
   };
   return module.check(dir, options);
+}
+
+/**
+ * Check an app as it stands without leaving the checker where the agent will
+ * work next: a copy is checked, with the package installed into the copy for
+ * a baseline app, and thrown away.
+ */
+export function checkInCopy(dir: string, brief: string, options: { arm: Arm; phase: Phase; tarball: Tarball }): CheckResult {
+  const copy = realpathSync(mkdtempSync(join(tmpdir(), "knew-ephemeral-snapshot-")));
+  try {
+    cpSync(dir, copy, { recursive: true, verbatimSymlinks: true });
+    if (options.arm === "baseline") installForCheck(copy, options.tarball);
+    return runChecker(copy, brief, { typecheck: true, arm: options.arm, phase: options.phase });
+  } finally {
+    removeDir(copy);
+  }
 }

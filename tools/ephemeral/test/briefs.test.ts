@@ -3,8 +3,8 @@ import { cpSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
 import type { CheckResult } from "../kit/check-kit.ts";
-import { briefLeaks, briefNames, loadBrief, referenceOf } from "../src/brief.ts";
-import { checkInProcess } from "../src/check.ts";
+import { briefLeaks, briefNames, changeFileOf, loadBrief, referenceOf } from "../src/brief.ts";
+import { checkInProcess, type Phase } from "../src/check.ts";
 import { packageNames } from "../src/names.ts";
 import { WORKSPACE, type Arm } from "../src/prep.ts";
 
@@ -63,9 +63,27 @@ for (const name of briefNames()) {
     });
 
     for (const arm of brief.arms) {
-      it(`passes its own checker with its ${arm} reference`, async () => {
-        const result = await checkInProcess(referenceOf(brief, arm), name, { typecheck: false, arm });
-        assert.ok(result.passed, failures(result));
+      for (const phase of brief.changes ? ([1, 2] as const) : ([1] as const)) {
+        it(`passes its own checker with its ${arm} reference${phase === 2 ? ", after the change" : ""}`, async () => {
+          const result = await checkInProcess(referenceOf(brief, arm, phase), name, { typecheck: false, arm, phase });
+          assert.ok(result.passed, failures(result));
+        });
+      }
+    }
+
+    if (brief.changes) {
+      for (const arm of brief.arms) {
+        const change = readFileSync(join(brief.dir, changeFileOf(arm)), "utf8");
+        it(`hands the ${arm} arm a change that names no API${arm === "baseline" ? " and no knew" : ""}`, () => {
+          assert.deepEqual(briefLeaks(change, API, new Set(brief.allow)), [], `${changeFileOf(arm)} says the package's names`);
+          if (arm === "baseline") assert.doesNotMatch(change, /knew|@popjoker/i, `${changeFileOf(arm)} must not mention knew`);
+        });
+      }
+      it("tells the agent every id the change adds that its checker relies on", () => {
+        const change = readFileSync(join(brief.dir, "CHANGE.md"), "utf8");
+        for (const id of [...(brief.change?.lenses ?? []), ...(brief.change?.types ?? [])]) {
+          assert.ok(change.includes(`\`${id}\``), `the checker relies on ${id} after the change, and CHANGE.md never names it`);
+        }
       });
     }
 
@@ -79,10 +97,11 @@ for (const name of briefNames()) {
   });
 }
 
-/** A reference, broken one way: which arm's reference (knew by default), which file, how, and the check that must fail. */
+/** A reference, broken one way: which arm's reference (knew by default) and which phase's (1 by default), which file, how, and the check that must fail. */
 interface Mutation {
   what: string;
   arm?: Arm;
+  phase?: Phase;
   file: string;
   edit: (text: string) => string;
   fails: string;
@@ -107,9 +126,89 @@ const STALE = "hours not heard for 45 days come back to be re-checked, and hours
 const ORDERED = "with the kind and hours known, what it is like comes next, then what to order";
 const DROPPED = "a note about a place nobody added is dropped, and stays dropped";
 const ALONE = "a notebook is its owner's alone";
+const PRICED = "a price is kept like any other statement";
+const PRICE_LAST = "the visit view asks how much it costs last";
+const TONIGHT_FIRST = "tonight starts with when it is open, whatever else is unknown, and a place never added has none";
+const TONIGHT_ORDER = "tonight asks what it is like, then how much it costs, and never what kind of place it is or what to order";
+const TONIGHT_STALE = "tonight re-checks hours not heard for 45 days";
 
 const MUTATIONS: Record<string, Mutation[]> = {
   notebook: [
+    {
+      what: "tonight asks what kind of place it is first",
+      phase: 2,
+      file: "definitions/lenses/tonight.json",
+      edit: json((lens) => lens.needs.unshift({ id: "kind-of-place", dimension: "kind-of-place", weight: 4 })),
+      fails: TONIGHT_FIRST,
+    },
+    {
+      what: "tonight wants to know what to order",
+      phase: 2,
+      file: "definitions/lenses/tonight.json",
+      edit: json((lens) => lens.needs.push({ id: "order", dimension: "order", weight: 0.25 })),
+      fails: TONIGHT_ORDER,
+    },
+    {
+      what: "the visit view never asks the price",
+      phase: 2,
+      file: "definitions/lenses/visit.json",
+      edit: json((lens) => (lens.needs = lens.needs.filter((need: { id: string }) => need.id !== "price"))),
+      fails: PRICE_LAST,
+    },
+    {
+      what: "the price outranks what to order",
+      phase: 2,
+      file: "definitions/lenses/visit.json",
+      edit: json((lens) => (lens.needs.find((need: { id: string }) => need.id === "price").weight = 2)),
+      fails: ORDERED,
+    },
+    {
+      what: "both views pass over a re-check",
+      phase: 2,
+      file: "src/app.ts",
+      edit: swap("const direction = readiness?.next[0];", 'const direction = readiness?.next.find((candidate) => candidate.kind === "learn");'),
+      fails: TONIGHT_STALE,
+    },
+    {
+      what: "a price is dropped",
+      arm: "baseline",
+      phase: 2,
+      file: "src/app.ts",
+      edit: swap("        if (!place) continue;", '        if (!place || statement.topic === "PRICE") continue;'),
+      fails: PRICED,
+    },
+    {
+      what: "tonight asks what kind of place it is first",
+      arm: "baseline",
+      phase: 2,
+      file: "src/app.ts",
+      edit: swap('tonight: ["HOURS", "VIBE", "PRICE"],', 'tonight: ["KIND", "HOURS", "VIBE", "PRICE"],'),
+      fails: TONIGHT_FIRST,
+    },
+    {
+      what: "tonight wants to know what to order",
+      arm: "baseline",
+      phase: 2,
+      file: "src/app.ts",
+      edit: swap('tonight: ["HOURS", "VIBE", "PRICE"],', 'tonight: ["HOURS", "VIBE", "PRICE", "ORDER"],'),
+      fails: TONIGHT_ORDER,
+    },
+    {
+      what: "the visit view never asks the price",
+      arm: "baseline",
+      phase: 2,
+      file: "src/app.ts",
+      edit: swap('visit: ["KIND", "HOURS", "VIBE", "ORDER", "PRICE"],', 'visit: ["KIND", "HOURS", "VIBE", "ORDER"],'),
+      fails: PRICE_LAST,
+    },
+    {
+      what: "stale hours are never re-checked",
+      arm: "baseline",
+      phase: 2,
+      file: "src/app.ts",
+      edit: swap('if (topic === "HOURS" && !held.some(', 'if (topic === "NEVER" && !held.some('),
+      fails: TONIGHT_STALE,
+    },
     {
       what: "an ended statement is still known",
       file: "src/app.ts",
@@ -363,16 +462,17 @@ describe("Scenario: Each checker fails its reference broken the ways it claims t
 
   for (const [name, mutations] of Object.entries(MUTATIONS)) {
     mutations.forEach((mutation, index) => {
-      it(`${name}${mutation.arm === "baseline" ? " (baseline)" : ""}: ${mutation.what}`, async () => {
+      it(`${name}${mutation.arm === "baseline" ? " (baseline)" : ""}${mutation.phase === 2 ? " (after the change)" : ""}: ${mutation.what}`, async () => {
         const arm = mutation.arm ?? "knew";
+        const phase = mutation.phase ?? 1;
         const dir = join(MUTANTS, `${name}-${index}`);
-        cpSync(referenceOf(loadBrief(name), arm), dir, { recursive: true });
+        cpSync(referenceOf(loadBrief(name), arm, phase), dir, { recursive: true });
         const path = join(dir, mutation.file);
         const before = readFileSync(path, "utf8");
         const after = mutation.edit(before);
         assert.notEqual(after, before, "the mutation changed nothing");
         writeFileSync(path, after);
-        const result = await checkInProcess(dir, name, { typecheck: false, appTests: false, arm });
+        const result = await checkInProcess(dir, name, { typecheck: false, appTests: false, arm, phase });
         const item = result.checks.find((check) => check.name === mutation.fails);
         assert.ok(item, `the ${name} checker has no check named "${mutation.fails}"; it ran: ${result.checks.map((check) => check.name).join("; ")}`);
         assert.equal(item.passed, false, `"${mutation.fails}" passed with ${mutation.what}`);

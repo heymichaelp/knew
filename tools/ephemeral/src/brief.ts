@@ -29,6 +29,8 @@ const briefSchema = z.object({
   inputs: z.array(z.string()),
   /** Package names this brief may say as code anyway: words its product needs that happen to be the package's too. */
   allow: z.array(z.string()),
+  /** For a brief with a `CHANGE.md`: the ids the change adds, which its checker relies on after it. */
+  change: z.object({ lenses: z.array(z.string()), types: z.array(z.string()) }).optional(),
 });
 
 /**
@@ -36,16 +38,28 @@ const briefSchema = z.object({
  * product, built once on knew and once with no knew at all, judged by the
  * same checker. Its `baseline-reference/` proves the baseline can pass.
  */
-export type Brief = z.infer<typeof briefSchema> & { name: string; dir: string; arms: Arm[] };
+export type Brief = z.infer<typeof briefSchema> & { name: string; dir: string; arms: Arm[]; changes: boolean };
 
+/**
+ * A brief with a `CHANGE.md` (and, if paired, a `CHANGE-BASELINE.md`) changes
+ * after the build: the same session is handed the change, and the app is
+ * checked again, so what a change costs is measured beside what a build does.
+ * Its `reference-changed/` (and `baseline-reference-changed/`) are the apps
+ * after the change.
+ */
 export function loadBrief(name: string): Brief {
   const dir = join(BRIEFS, name);
   const arms: Arm[] = existsSync(join(dir, "BASELINE.md")) ? ["knew", "baseline"] : ["knew"];
-  return { ...briefSchema.parse(JSON.parse(readFileSync(join(dir, "brief.json"), "utf8"))), name, dir, arms };
+  const changes = existsSync(join(dir, "CHANGE.md"));
+  return { ...briefSchema.parse(JSON.parse(readFileSync(join(dir, "brief.json"), "utf8"))), name, dir, arms, changes };
 }
 
-/** Where an arm's known-good app lives. */
-export const referenceOf = (brief: Brief, arm: Arm) => join(brief.dir, arm === "knew" ? "reference" : "baseline-reference");
+/** Where an arm's known-good app lives, as first built or after the change. */
+export const referenceOf = (brief: Brief, arm: Arm, phase: 1 | 2 = 1) =>
+  join(brief.dir, `${arm === "knew" ? "reference" : "baseline-reference"}${phase === 2 ? "-changed" : ""}`);
+
+/** The change as an arm's agent reads it. */
+export const changeFileOf = (arm: Arm) => (arm === "knew" ? "CHANGE.md" : "CHANGE-BASELINE.md");
 
 export function briefNames(): string[] {
   return readdirSync(BRIEFS, { withFileTypes: true })
@@ -57,7 +71,7 @@ export function briefNames(): string[] {
 /** A content hash of what the agent and the checker see, so a result says exactly which brief it measured. */
 export function briefHash(brief: Brief): string {
   const hash = createHash("sha256");
-  for (const file of ["BRIEF.md", "BASELINE.md", "brief.json", "check.ts", ...brief.inputs]) hashPath(hash, join(brief.dir, file));
+  for (const file of ["BRIEF.md", "BASELINE.md", "CHANGE.md", "CHANGE-BASELINE.md", "brief.json", "check.ts", ...brief.inputs]) hashPath(hash, join(brief.dir, file));
   return hash.digest("hex").slice(0, 16);
 }
 
