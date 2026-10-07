@@ -3,7 +3,7 @@
 Thoughtful helps people choose gifts for the people in their life. They jot down what they hear
 ("Dad's really into sourdough now", "Mia already has every Ghibli film", "no alcohol, ever").
 When a birthday comes up, Thoughtful shows gift picks right away if it knows enough. If it
-doesn't, it asks one good question first.
+doesn't, it asks the user one good question first, which Thoughtful writes itself.
 
 Thoughtful is built on knew, the `@popjoker/knew` package, which is installed. knew turns notes
 into what's known about each person and says what's still worth learning. You're building the part
@@ -40,8 +40,8 @@ The gift view is a lens called `gift`. Its purpose is to choose a gift they'll l
     note has been read.
   - `firstMove(userId, personId)`: what Thoughtful does first when the user opens that person's
     gift page.
-    - To ask first, it returns `{ move: "ask-first", question }`. `question` is the most useful
-      question for choosing a gift, worded exactly as the `gift` lens words it.
+    - To ask first, it returns `{ move: "ask-first", about }`. `about` names the most useful thing
+      to learn for choosing a gift, exactly as the `gift` lens labels it.
     - To show first, it returns `{ move: "show-first", page, honor }`. `page` is knew's page about
       them through the `gift` lens, exactly as knew wrote it, for the picks model to read. `honor`
       lists, in knew's words, what the picks must respect.

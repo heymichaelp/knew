@@ -1,9 +1,20 @@
 {
-  "version": 1,
+  "version": 2,
   "exercises": "Extending the person preset without changing its types; knowing enough to show picks as a requirement of five facts in any mix; what to steer clear of and what they have handed over as rules to honor.",
-  "pinned": { "vocabulary": "gifts", "lenses": ["gift"], "types": ["WISH"] },
+  "pinned": {
+    "vocabulary": "gifts",
+    "lenses": [
+      "gift"
+    ],
+    "types": [
+      "WISH"
+    ]
+  },
   "budgetUsd": 6,
   "timeoutMin": 30,
   "inputs": [],
-  "allow": ["id", "name", "question"]
+  "allow": [
+    "id",
+    "name"
+  ]
 }

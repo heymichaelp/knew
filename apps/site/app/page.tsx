@@ -18,9 +18,8 @@ const WORDS = ["No", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eig
 /** "Five facts" — a count as the sentence would say it. */
 const counted = (n: number, noun: string) => `${WORDS[n] ?? n} ${noun}${n === 1 ? "" : "s"}`;
 
-const dimensionLabel = new Map(exampleReadiness.dimensions.map((d) => [d.id, d.label]));
-const asks = new Map(exampleReadiness.asks.map((a) => [a.id, a]));
-const leanIn = exampleReadiness.next.slice(0, 3);
+const missing = exampleReadiness.needs.filter((need) => need.state !== "met");
+const next = exampleReadiness.next.slice(0, 3);
 
 /** "person", "person and place", "person, place and team". */
 const listed = (items: string[]) => (items.length <= 1 ? items.join("") : `${items.slice(0, -1).join(", ")} and ${items.at(-1)}`);
@@ -31,17 +30,17 @@ const install = quickstart.find((b) => b.lang === "sh")?.code ?? "npm install @p
 const usage = quickstart.find((b) => b.lang === "ts")?.code ?? "";
 
 const DOCS = [
-  { href: "/lenses", label: "Lenses", blurb: "The vocabulary and the lens, field by field, generated from the schemas, and the defaults beneath them." },
+  { href: "/lenses", label: "Lenses", blurb: "Every field of a vocabulary and a lens, generated from the schemas, and the defaults." },
   {
     href: "/presets",
     label: "Presets",
-    blurb: `Where a client starts: the ${listed(presetNames)} preset${presetNames.length === 1 ? "" : "s"}, every dimension, type and starter ask, read out of the package.`,
+    blurb: `The ${listed(presetNames)} preset${presetNames.length === 1 ? "" : "s"}: dimensions, fact types and starter lenses.`,
   },
-  { href: "/adopting", label: "Adopting", blurb: "The guide, rendered from the package's own ADOPTING.md." },
+  { href: "/adopting", label: "Adopting", blurb: "The guide: define, write, read, test." },
   { href: "/api", label: "The API", blurb: "Every route, the envelope, and the two headers." },
-  { href: "/contract", label: "The contract", blurb: `The ${contractCaseSummaries().length} cases a driver must pass, listed by the suite.` },
-  { href: "/privacy", label: "Privacy", blurb: "What it will not do, and why that is structural." },
-  { href: "/changelog", label: "Changelog", blurb: "The version rule, and what each release changed." },
+  { href: "/contract", label: "The contract", blurb: `The ${contractCaseSummaries().length} cases a driver must pass.` },
+  { href: "/privacy", label: "Privacy", blurb: "What it will not do." },
+  { href: "/changelog", label: "Changelog", blurb: "What each release changed." },
 ] as const;
 
 /** The last card stretches to the end of its row, so the grid never shows an empty cell. */
@@ -54,13 +53,14 @@ export default function Home() {
       <section className="mx-auto max-w-6xl px-6 pt-20 pb-16 sm:pt-28">
         <p className="clause rise">The attention engine</p>
         <h1 className="display rise mt-5 max-w-4xl text-hero" style={{ animationDelay: "60ms" }}>
-          What you notice, written down, and a reason to lean in.
+          Understanding, by dimension, and where it should go next.
         </h1>
         <div className="mt-10 grid gap-10 lg:grid-cols-[minmax(0,34rem)_auto] lg:items-start lg:justify-between">
           <p className="rise text-lg leading-relaxed text-ink-soft" style={{ animationDelay: "140ms" }}>
-            Write it the way you would say it — a note after a call, a line about a friend. knew reads what you
-            wrote into typed, dated facts, hands back the page you start from, and names the one thing still worth
-            asking. Understanding deepens because you kept leaning in, not because a model guessed.
+            knew reads notes into typed, dated facts, organised by the dimensions of what someone understands about a
+            person, place or thing. For a goal, it reports the current understanding, what is missing, and the most
+            valuable direction to take next. It writes no questions: what to do with a direction is your app&apos;s
+            call.
           </p>
           <p className="stamp press" style={{ animationDelay: "320ms" }}>
             <span>{packageManifest.license}</span>
@@ -126,20 +126,20 @@ export default function Home() {
               <p className="label">Proposed, not written</p>
               <p className="mt-1.5 text-sm text-ink-soft">
                 <code className="code text-stamp">{exampleProposal.field}</code> is a
-                field the knower owns — the client’s business. The engine noticed the move and asks; it does not write.
+                field the client owns. The engine noticed the move and proposes a value; it does not write one.
               </p>
             </div>
           </article>
 
           {/* read */}
           <article className="panel min-w-0 bg-paper-raised p-7">
-            <p className="clause">03 — The page, and where to lean in</p>
-            <p className="label mt-5">Rendered by the engine, not by this site</p>
+            <p className="clause">03 — Understanding, for one goal</p>
+            <p className="label mt-5">The page: current understanding</p>
             <pre className="mt-4 border-l-2 border-rule-strong bg-paper-sunken p-4 code text-[0.75rem] leading-relaxed whitespace-pre-wrap">
               {examplePage}
             </pre>
             <div className="mt-6">
-              <p className="label">What is known, by dimension</p>
+              <p className="label">By dimension</p>
               <div className="mt-2 grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-1 text-sm">
                 {exampleReadiness.dimensions.map((dimension) => (
                   <div key={dimension.id} className="contents">
@@ -149,22 +149,28 @@ export default function Home() {
                 ))}
               </div>
             </div>
-            {leanIn.map((step, index) => {
-              const ask = asks.get(step.ask)!;
-              return (
-                <div key={step.ask} className="mt-5 border-l-2 border-derived pl-4">
-                  <p className="label" style={{ color: "var(--derived)" }}>
-                    {index === 0 ? "Lean in here" : "Then"} · {ask.dimension ? dimensionLabel.get(ask.dimension) : ask.answeredBy.join(", ")}
-                  </p>
-                  <p className="mt-1.5 text-[0.9375rem] leading-snug">{step.question}</p>
-                </div>
-              );
-            })}
+            <div className="mt-6">
+              <p className="label">Missing, for this goal</p>
+              <p className="mt-2 text-sm text-ink-soft">{missing.map((need) => need.label).join(" · ") || "Nothing"}</p>
+            </div>
+            {next.map((direction, index) => (
+              <div key={direction.need} className="mt-5 border-l-2 border-derived pl-4">
+                <p className="label" style={{ color: "var(--derived)" }}>
+                  {index === 0 ? "Next direction" : "Then"} · {direction.kind === "learn" ? "learn" : "revisit"}
+                </p>
+                <p className="mt-1.5 text-[0.9375rem] leading-snug">
+                  {direction.label}
+                  {direction.factIds.length > 0 ? (
+                    <span className="text-ink-faint"> — builds on {counted(direction.factIds.length, "fact").toLowerCase()}</span>
+                  ) : null}
+                </p>
+              </div>
+            ))}
             <p className="mt-6 text-sm text-ink-faint">
               Everything in this panel comes from <code className="code">renderBrief</code> and{" "}
               <code className="code">readinessFor</code>, run at build time through the{" "}
-              <TextLink href="/presets#the-person-preset">person preset</TextLink>, as of {day(AT)}. The objective it
-              reads for: “{exampleReadiness.objective}”
+              <TextLink href="/presets#the-person-preset">person preset</TextLink>, as of {day(AT)}.
+              Goal: “{exampleReadiness.objective}”
             </p>
           </article>
         </div>
@@ -181,12 +187,8 @@ export default function Home() {
             <p className="label">Hosted</p>
             <h3 className="display mt-3 text-2xl">The engine keeps it for you</h3>
             <p className="mt-4 text-ink-soft">
-              The client registers a vocabulary and its lenses, names the entities its knower knows, and posts episodes.
-              Postgres holds the episodes, the facts and their history; a worker runs extraction. The client reads the
-              page, the gaps and how ready it is, through whichever lens fits the moment.
-            </p>
-            <p className="mt-5 text-sm text-ink-faint">
-              For a client that wants the ledger, the bi-temporal history and the replay to be somebody else’s problem.
+              Register a vocabulary and lenses, upsert entities, post episodes. The service stores episodes and facts
+              with their history and runs extraction. Read the page, the gaps and readiness through any lens.
             </p>
           </div>
           <div className="card p-7">
@@ -195,12 +197,8 @@ export default function Home() {
             </p>
             <h3 className="display mt-3 text-2xl">The engine keeps nothing</h3>
             <p className="mt-4 text-ink-soft">
-              One call carries the roster, the facts in hand and a single episode. Back comes a reconciliation plan the
-              client applies to its own store, and the page and readiness are pure functions it runs itself. No knower is
-              named and nothing is kept.
-            </p>
-            <p className="mt-5 text-sm text-ink-faint">
-              For a client that already owns its data and will not hand it over — including one that cannot.
+              Send the roster, the facts you hold and one episode; get back a reconciliation plan to apply to your own
+              store. The page and readiness are pure functions you run yourself. Nothing is kept.
             </p>
           </div>
         </div>
@@ -213,8 +211,7 @@ export default function Home() {
             <p className="clause">Quickstart</p>
             <h2 className="display mt-2 text-3xl">Twenty lines to the first fact.</h2>
             <p className="mt-4 text-sm text-ink-soft">
-              Straight from the package’s own <code className="code">README.md</code>,
-              read at build time. If the README changes, this changes.
+              From the package&apos;s <code className="code">README.md</code>, read at build time.
             </p>
             <p className="mt-4 text-sm text-ink-faint">Node 22 or later, ES modules. The only dependency is zod 4.</p>
           </div>

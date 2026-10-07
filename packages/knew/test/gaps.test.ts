@@ -22,56 +22,56 @@ const fact = (type: string, text: string, extra: Partial<Fact> = {}): Fact => ({
   ...extra,
 });
 
-describe("Scenario: The lens asks questions, and the engine says which are still worth asking, in order", () => {
+describe("Scenario: The gaps are the missing understanding, most valuable first", () => {
   const lens = fixtureLens();
   const jan = at("2026-01-15T00:00:00Z");
 
-  it("lists every applicable ask for an entity known only by name, each with what answers it", () => {
+  it("lists every applicable need for an entity known only by name, each with the types that count toward it", () => {
     const gaps = gapsFor(lens, { fields: { relationship: "mother" } }, [], jan);
     assert.deepEqual(gaps, [
-      { id: "what-they-love", question: "What do they love doing, and how deeply?", dimension: null, answeredBy: ["LIKES", "SKILL"] },
-      { id: "how-the-days-go", question: "What do their days allow, living where they do?", dimension: null, answeredBy: ["CIRCUMSTANCE"] },
+      { need: "what-they-love", label: "What they love", dimension: null, types: ["LIKES", "SKILL"] },
+      { need: "how-the-days-go", label: "How their days go", dimension: null, types: ["CIRCUMSTANCE"] },
     ]);
   });
 
-  it("closes an ask once a current fact of an answering type exists", () => {
-    assert.deepEqual(gapsFor(lens, { fields: { relationship: "mother" } }, [fact("LIKES", "Gardens")], jan).map((g) => g.id), ["how-the-days-go"]);
+  it("closes a need once a current fact of a type it counts exists", () => {
+    assert.deepEqual(gapsFor(lens, { fields: { relationship: "mother" } }, [fact("LIKES", "Gardens")], jan).map((g) => g.need), ["how-the-days-go"]);
   });
 
-  it("applies a conditional ask only when the entity's field matches, case-insensitively", () => {
-    assert.deepEqual(gapsFor(lens, { fields: { relationship: "Mother " } }, [], jan).map((g) => g.id), ["what-they-love", "how-the-days-go"]);
-    assert.deepEqual(gapsFor(lens, { fields: { relationship: "friend" } }, [], jan).map((g) => g.id), ["what-they-love"]);
-    assert.deepEqual(gapsFor(lens, { fields: {} }, [], jan).map((g) => g.id), ["what-they-love"]);
+  it("applies a conditional need only when the entity's field matches, case-insensitively", () => {
+    assert.deepEqual(gapsFor(lens, { fields: { relationship: "Mother " } }, [], jan).map((g) => g.need), ["what-they-love", "how-the-days-go"]);
+    assert.deepEqual(gapsFor(lens, { fields: { relationship: "friend" } }, [], jan).map((g) => g.need), ["what-they-love"]);
+    assert.deepEqual(gapsFor(lens, { fields: {} }, [], jan).map((g) => g.need), ["what-they-love"]);
   });
 
-  it("reopens an ask when its answering fact is retired or has ended by date", () => {
+  it("reopens a need when its fact is retired or has ended by date", () => {
     const retired = fact("CIRCUMSTANCE", "Works nights", { expiredAt: at("2026-02-01T00:00:00Z") });
-    assert.deepEqual(gapsFor(lens, { fields: { relationship: "father" } }, [retired], jan).map((g) => g.id), ["what-they-love", "how-the-days-go"]);
+    assert.deepEqual(gapsFor(lens, { fields: { relationship: "father" } }, [retired], jan).map((g) => g.need), ["what-they-love", "how-the-days-go"]);
     const over = fact("CIRCUMSTANCE", "Six months in Lisbon from May", { invalidAt: at("2026-11-01T00:00:00Z") });
-    assert.deepEqual(gapsFor(lens, { fields: { relationship: "father" } }, [over], at("2026-07-01T00:00:00Z")).map((g) => g.id), ["what-they-love"]);
-    assert.deepEqual(gapsFor(lens, { fields: { relationship: "father" } }, [over], at("2026-12-01T00:00:00Z")).map((g) => g.id), ["what-they-love", "how-the-days-go"]);
+    assert.deepEqual(gapsFor(lens, { fields: { relationship: "father" } }, [over], at("2026-07-01T00:00:00Z")).map((g) => g.need), ["what-they-love"]);
+    assert.deepEqual(gapsFor(lens, { fields: { relationship: "father" } }, [over], at("2026-12-01T00:00:00Z")).map((g) => g.need), ["what-they-love", "how-the-days-go"]);
   });
 
-  it("orders the gaps by weight, leaves out an ask still waiting its turn, and names the dimension an ask asks about", () => {
+  it("orders the gaps by weight, leaves out a need still waiting its turn, and names a need's dimension", () => {
     const visit = fixtureVisitLens();
     const gaps = gapsFor(visit, { fields: { relationship: "mother" } }, [], jan);
-    assert.deepEqual(gaps.map((g) => [g.id, g.dimension]), [["how-the-days-go", null], ["people", "people"]]);
-    assert.deepEqual(gaps[1]!.answeredBy, ["PERSON"]);
+    assert.deepEqual(gaps.map((g) => [g.need, g.dimension]), [["how-the-days-go", null], ["people", "people"]]);
+    assert.deepEqual(gaps[1]!.types, ["PERSON"]);
   });
 });
 
 describe("Scenario: The fake answers gaps and puts them on the brief, like the service", () => {
-  it("knows nothing of a stranger, every ask of a newcomer, and fewer as facts land", async () => {
+  it("knows nothing of a stranger, every need of a newcomer, and fewer as facts land", async () => {
     const memory = fakeIntelligence();
     const scope = { clientId: "test", subjectId: "me" };
     assert.equal(await memory.gaps(scope, "linda"), null);
     await memory.upsertEntity(scope, { id: "linda", name: "Linda", fields: { relationship: "mother" } });
-    assert.deepEqual((await memory.gaps(scope, "linda"))!.map((g) => g.id), ["what-they-love", "how-the-days-go"]);
+    assert.deepEqual((await memory.gaps(scope, "linda"))!.map((g) => g.need), ["what-they-love", "how-the-days-go"]);
     memory.seedFacts(scope, "linda", [{ type: "SKILL", fact: "Throws pots" }]);
-    assert.deepEqual((await memory.gaps(scope, "linda"))!.map((g) => g.id), ["how-the-days-go"]);
+    assert.deepEqual((await memory.gaps(scope, "linda"))!.map((g) => g.need), ["how-the-days-go"]);
     const brief = await memory.brief(scope, "linda");
-    assert.deepEqual(brief!.gaps.map((g) => g.id), ["how-the-days-go"]);
-    assert.deepEqual((await memory.gaps(scope, "linda", { lens: "fixture-visit" }))!.map((g) => g.id), ["how-the-days-go", "people"]);
+    assert.deepEqual(brief!.gaps.map((g) => g.need), ["how-the-days-go"]);
+    assert.deepEqual((await memory.gaps(scope, "linda", { lens: "fixture-visit" }))!.map((g) => g.need), ["how-the-days-go", "people"]);
   });
 
   it("refuses a kind its vocabulary does not describe", async () => {

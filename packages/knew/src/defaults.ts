@@ -1,6 +1,6 @@
 /**
  * What the engine assumes when a definition says nothing — mechanics only.
- * The core ships no content: no fact type, no heading, no question. Those
+ * The core ships no content: no fact type, no dimension, no heading. Those
  * come from a client's own vocabulary and lens, or from a preset in
  * `@popjoker/knew/presets` that a client extends.
  *

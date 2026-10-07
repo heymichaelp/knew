@@ -103,43 +103,34 @@
   },
   "dimensions": {
     "avoid": {
-      "label": "Steer clear of",
-      "question": "Is there anything to steer clear of with them?"
+      "label": "Steer clear of"
     },
     "ahead": {
-      "label": "Coming up",
-      "question": "What is coming up for them?"
+      "label": "Coming up"
     },
     "life": {
-      "label": "How life is arranged",
-      "question": "Where do they live, and how do their days go right now?"
+      "label": "How life is arranged"
     },
     "work": {
-      "label": "Work",
-      "question": "What do they do?"
+      "label": "Work"
     },
     "people": {
-      "label": "People in their life",
-      "question": "Who matters most to them?"
+      "label": "People in their life"
     },
     "pursuits": {
-      "label": "What they love",
-      "question": "What do they love doing, and how deeply?"
+      "label": "What they love"
     },
     "has": {
-      "label": "Already has",
-      "question": "What do they already have and use?"
+      "label": "Already has"
     },
     "background": {
-      "label": "Background",
-      "question": "Where are they from?"
+      "label": "Background"
     },
     "other": {
       "label": "Other"
     },
     "wants": {
-      "label": "Wants",
-      "question": "Is there anything they have said they want?"
+      "label": "Wants"
     }
   },
   "fallbackType": "OTHER",

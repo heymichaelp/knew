@@ -48,7 +48,7 @@ export function fixtureVocabularyDefinition(): VocabularyDefinition {
       has: { label: "Already has" },
       likes: { label: "Likes" },
       life: { label: "Life" },
-      people: { label: "People", question: "Who is in their life?" },
+      people: { label: "People" },
       other: { label: "Other" },
     },
     fallbackType: "OTHER",
@@ -59,9 +59,8 @@ export function fixtureVocabularyDefinition(): VocabularyDefinition {
   };
 }
 
-/** The fixture's default lens: two asks, one of which only applies to some
- *  people, and nothing else declared — so its page and its gaps are exactly
- *  what the 0.x fixture lens produced. */
+/** The fixture's default lens: two needs, one of which only applies to some
+ *  people, and nothing else declared. */
 export function fixtureLensDefinition(): LensDefinition {
   return {
     id: "fixture",
@@ -71,21 +70,21 @@ export function fixtureLensDefinition(): LensDefinition {
     header: "What we know about {who}:",
     overHeading: "No longer the case",
     attributeTags: ["level"],
-    asks: [
-      { id: "what-they-love", question: "What do they love doing, and how deeply?", answeredBy: ["LIKES", "SKILL"] },
+    needs: [
+      { id: "what-they-love", label: "What they love", types: ["LIKES", "SKILL"] },
       {
         id: "how-the-days-go",
-        question: "What do their days allow, living where they do?",
+        label: "How their days go",
         when: [{ field: "relationship", equals: ["mother", "father"] }],
-        answeredBy: ["CIRCUMSTANCE"],
+        types: ["CIRCUMSTANCE"],
       },
     ],
   };
 }
 
 /** A second lens over the same vocabulary, for another objective: its own
- *  sections, header and pinned types, a weighted ask, one that waits for
- *  another and needs two facts, and one asked of a dimension. */
+ *  sections, header and pinned types, a weighted need, one that waits for
+ *  another and needs two facts, and one of a dimension. */
 export function fixtureVisitLensDefinition(): LensDefinition {
   return {
     id: "fixture-visit",
@@ -99,15 +98,15 @@ export function fixtureVisitLensDefinition(): LensDefinition {
       { heading: "Know", dimensions: ["has", "likes", "people", "other"] },
     ],
     pinned: ["LINE"],
-    asks: [
+    needs: [
       {
         id: "how-the-days-go",
-        question: "How do their days go right now?",
+        label: "How their days go",
         when: [{ field: "relationship", equals: ["mother", "father"] }],
-        answeredBy: ["CIRCUMSTANCE"],
+        types: ["CIRCUMSTANCE"],
         weight: 2,
       },
-      { id: "what-they-love", question: "What do they love doing, and how deeply?", answeredBy: ["LIKES", "SKILL"], enough: 2, after: ["how-the-days-go"] },
+      { id: "what-they-love", label: "What they love", types: ["LIKES", "SKILL"], enough: 2, after: ["how-the-days-go"] },
       { id: "people", dimension: "people" },
     ],
   };

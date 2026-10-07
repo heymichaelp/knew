@@ -10,8 +10,8 @@ import type { Fact, MustHonor } from "./types.ts";
  * PURE rendering. Dates are rendered and nothing is weighted: whether a
  * two-year-old interest still counts is the reader's judgment, made from the
  * dates in front of it. The headings, the header, what must be honored and
- * which attributes show come from the lens. What to learn next is a
- * different question, answered by `readinessFor`; it never reorders a page.
+ * which attributes show come from the lens. Where understanding should go
+ * next is `readinessFor`'s to say; it never reorders a page.
  */
 
 /** Default page size: what fits a reader's context beside its own material. */

@@ -80,13 +80,13 @@ export function vocabulary(): VocabularyDefinition {
       },
     },
     dimensions: {
-      caution: { label: "Watch out for", question: "Is there anything to watch out for with it?" },
-      what: { label: "What it is", question: "What is it, exactly?" },
-      details: { label: "Its details", question: "What are its details: size, version, colour?" },
-      standing: { label: "Where it stands", question: "Do you have it, and how is it holding up?" },
-      origin: { label: "Where it came from", question: "Where did it come from, and when?" },
-      care: { label: "Looking after it", question: "How do you look after it?" },
-      opinion: { label: "What you make of it", question: "What do you make of it?" },
+      caution: { label: "Watch out for" },
+      what: { label: "What it is" },
+      details: { label: "Its details" },
+      standing: { label: "Where it stands" },
+      origin: { label: "Where it came from" },
+      care: { label: "Looking after it" },
+      opinion: { label: "What you make of it" },
       other: { label: "Other" },
     },
     fallbackType: "OTHER",
@@ -97,10 +97,10 @@ export function vocabulary(): VocabularyDefinition {
 
 /**
  * The starter lens: know it well enough to use it, look after it, or decide
- * on it. It asks what it is first, then where the knower stands with it, its
- * details, what they make of it, where it came from, how they look after it,
- * and what to watch out for; every ask weighs the same, so that order is the
- * order of the gaps.
+ * on it. Its needs run coarse to fine: what it is, where the knower stands
+ * with it, its details, what they make of it, where it came from, how they
+ * look after it, and what to watch out for. Every need weighs the same, so
+ * that is the order of the directions.
  */
 export function lens(): LensDefinition {
   return {
@@ -111,6 +111,6 @@ export function lens(): LensDefinition {
     header: "What you know about {who}:",
     overHeading: "No longer the case",
     attributeTags: ["state"],
-    asks: ["what", "standing", "details", "opinion", "origin", "care", "caution"].map((dimension) => ({ id: dimension, dimension })),
+    needs: ["what", "standing", "details", "opinion", "origin", "care", "caution"].map((dimension) => ({ id: dimension, dimension })),
   };
 }

@@ -16,24 +16,24 @@ function haunts() {
 }
 
 describe("Haunts on knew", () => {
-  it("asks what kind of place it is before anything else, and nothing about a place never added", async () => {
+  it("learns what kind of place it is before anything else, and nothing about a place never added", async () => {
     const { app } = haunts();
-    assert.equal(await app.nextQuestion("ana", "luna"), null);
+    assert.equal(await app.nextToLearn("ana", "luna"), null);
     await app.addPlace("ana", { id: "luna", name: "Café Luna" });
-    assert.deepEqual(await app.nextQuestion("ana", "luna"), { question: "What kind of place is it?", recheck: [] });
+    assert.deepEqual(await app.nextToLearn("ana", "luna"), { about: "What kind of place it is", recheck: [] });
   });
 
-  it("reads a note before addNote resolves, and only then asks what the place is like", async () => {
+  it("reads a note before addNote resolves, and only then turns to what the place is like", async () => {
     const { engine, app } = haunts();
     await app.addPlace("ana", { id: "luna", name: "Café Luna" });
     engine.script({ extraction: extraction([extracted("luna", "KIND", "A café with a reading room upstairs")]) });
     await app.addNote("ana", "luna", "Luna's a café with a reading room upstairs.");
     const readiness = await engine.readiness({ clientId: "haunts", subjectId: "ana" }, "luna", { lens: "visit" });
     assert.deepEqual(
-      readiness?.next.map((step) => step.ask),
+      readiness?.next.map((direction) => direction.need),
       ["opening-hours", "what-its-like", "what-to-order"],
     );
-    assert.deepEqual(await app.nextQuestion("ana", "luna"), { question: "When is it open?", recheck: [] });
+    assert.deepEqual(await app.nextToLearn("ana", "luna"), { about: "When it is open", recheck: [] });
   });
 
   it("brings hours noted over a month ago back to be re-checked, and leaves recent ones alone", async () => {
@@ -43,16 +43,16 @@ describe("Haunts on knew", () => {
     await app.addNote("ana", "nine", "Nine is a wine bar.");
     engine.script({ extraction: extraction([extracted("nine", "HOURS", "Open 5pm to 1am, closed Sundays")]) });
     await app.addNote("ana", "nine", "Open five till one, shut Sundays.", { at: new Date(Date.now() - 45 * DAY_MS) });
-    assert.deepEqual(await app.nextQuestion("ana", "nine"), { question: "When is it open?", recheck: ["Open 5pm to 1am, closed Sundays"] });
+    assert.deepEqual(await app.nextToLearn("ana", "nine"), { about: "When it is open", recheck: ["Open 5pm to 1am, closed Sundays"] });
 
     engine.script({ extraction: extraction([extracted("nine", "HOURS", "Open 5pm to midnight, closed Sundays")]) });
     await app.addNote("ana", "nine", "They close at midnight now.", { at: new Date(Date.now() - 10 * DAY_MS) });
-    assert.deepEqual(await app.nextQuestion("ana", "nine"), { question: "What is it like to be there?", recheck: [] });
+    assert.deepEqual(await app.nextToLearn("ana", "nine"), { about: "What it is like to be there", recheck: [] });
   });
 
   it("keeps each user's places to that user", async () => {
     const { app } = haunts();
     await app.addPlace("ana", { id: "luna", name: "Café Luna" });
-    assert.equal(await app.nextQuestion("ben", "luna"), null);
+    assert.equal(await app.nextToLearn("ben", "luna"), null);
   });
 });

@@ -46,8 +46,8 @@ export interface FactTypeSpec {
   enduring?: boolean;
   /**
    * Days after it was last said that a current fact of this type is due for a
-   * revisit: worth asking about again. Nothing on the page changes — a
-   * revisit is a question, never a judgment that the fact stopped being true —
+   * revisit: worth confirming again. Nothing on the page changes — a revisit
+   * is a direction, never a judgment that the fact stopped being true —
    * so an enduring type refuses one: time never makes it false, and a revisit
    * of "never bring up Jamie" would tell the knower to bring up Jamie.
    * Default: never.
@@ -56,11 +56,9 @@ export interface FactTypeSpec {
 }
 
 export interface DimensionSpec {
-  /** What a reader calls it: the section heading a lens starts from. */
+  /** What a reader calls it: the section heading a lens starts from, and the
+   *  label of a need of it. */
   label: string;
-  /** The question that probes it, as the knower would be asked it. A lens
-   *  that names no asks of its own asks these. */
-  question?: string;
 }
 
 export interface VocabularyDefinition {
@@ -130,7 +128,7 @@ export const vocabularyDefinitionSchema: z.ZodType<VocabularyDefinition> = z
     ),
     dimensions: z.record(
       z.string().regex(KEY_RE),
-      z.object({ label: z.string().min(1), question: z.string().min(1).optional() }),
+      z.object({ label: z.string().min(1) }),
     ),
     fallbackType: z.string(),
     fields: z.array(z.string().regex(FIELD_RE)),
@@ -203,7 +201,6 @@ export interface CompiledFactType {
 export interface CompiledDimension {
   id: string;
   label: string;
-  question: string | null;
 }
 
 export interface Vocabulary {
@@ -280,7 +277,7 @@ export function compileVocabulary(definition: VocabularyDefinition): Vocabulary 
     kind: definition.kind,
     factTypes,
     factTypeKeys: Object.keys(factTypes),
-    dimensions: Object.entries(definition.dimensions).map(([id, spec]) => ({ id, label: spec.label, question: spec.question ?? null })),
+    dimensions: Object.entries(definition.dimensions).map(([id, spec]) => ({ id, label: spec.label })),
     extractAttributes,
     fallbackType: definition.fallbackType,
     sourceLabels: definition.sourceLabels ?? {},

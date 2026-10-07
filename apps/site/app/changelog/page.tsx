@@ -5,7 +5,7 @@ import { headingsOf, packageManifest, readShipped, renderMarkdown } from "@/lib/
 
 export const metadata: Metadata = {
   title: "Changelog",
-  description: "What each release changed, and the rule that decides the next version number.",
+  description: "What each release changed.",
 };
 
 export default function ChangelogPage() {
@@ -18,7 +18,7 @@ export default function ChangelogPage() {
       <DocHeader
         clause="Releases"
         title="Changelog"
-        standfirst="The package's own CHANGELOG.md. Before 1.0 a minor may break; from 1.0 a lens-schema change that keeps registered lenses valid is a minor, and a change to the contract is a major."
+        standfirst="The package's CHANGELOG.md, read from the installed tarball at build time."
         aside={
           <p className="stamp">
             <span>latest</span>

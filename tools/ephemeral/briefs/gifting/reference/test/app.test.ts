@@ -27,7 +27,7 @@ describe("Thoughtful on knew", () => {
     const { app } = thoughtful();
     assert.equal(await app.firstMove("ana", "dad"), null);
     await app.addPerson("ana", { id: "dad", name: "Dad" });
-    assert.deepEqual(await app.firstMove("ana", "dad"), { move: "ask-first", question: "What do they love, and what are they into right now?" });
+    assert.deepEqual(await app.firstMove("ana", "dad"), { move: "ask-first", about: "What they love or want" });
   });
 
   it("shows picks once five things are known about what they love or want, and not at four", async () => {

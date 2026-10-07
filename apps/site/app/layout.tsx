@@ -39,10 +39,10 @@ export const metadata: Metadata = {
     template: "%s — knew",
   },
   description:
-    "Write down what you noticed. knew reads it into typed, dated facts, hands back the page you start from, and names the one thing still worth asking. One engine, distinct clients.",
+    "knew turns notes into dated facts organised by dimensions of understanding, and reports, for a goal, what is understood, what is missing, and the most valuable direction next.",
   openGraph: {
     title: "knew — the attention engine",
-    description: "Write down what you noticed. knew gives you back the page, and where to lean in.",
+    description: "Understanding, by dimension, and where it should go next.",
     url: "https://knew.dev",
     siteName: "knew",
     type: "website",

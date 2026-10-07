@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import type { ReconcileDecisions } from "./reconcile.ts";
 import type { Extraction } from "./schemas.ts";
-import type { Fact, Intelligence, IntelligenceScope, NewFact, Readiness } from "./types.ts";
+import type { Fact, Gap, Intelligence, IntelligenceScope, NewFact, Readiness } from "./types.ts";
 
 /**
  * The contract, as tests. Every driver of `Intelligence` — the service's Postgres driver, the
@@ -77,25 +77,26 @@ export function extracted(
 
 const at = (iso: string) => new Date(iso);
 const ids = <T extends { id: string }>(items: T[] | null) => (items ?? []).map((item) => item.id);
-const standing = (readiness: Readiness, id: string) => readiness.asks.find((ask) => ask.id === id)!;
+const needs = (gaps: Gap[] | null) => (gaps ?? []).map((gap) => gap.need);
+const standing = (readiness: Readiness, id: string) => readiness.needs.find((need) => need.id === id)!;
 
 export function contractCases(): ContractCase[] {
   return [
     {
-      name: "the roster: an entity known by name has every ask open, fields merge and null clears, one unknown is nothing, and one of another kind is refused",
+      name: "the roster: an entity known by name has every need open, fields merge and null clears, one unknown is nothing, and one of another kind is refused",
       scripted: false,
       async run({ intelligence: i, scope }) {
         await i.upsertEntity(scope, { id: "linda", name: "Linda", fields: { relationship: "mother" } });
-        assert.deepEqual(ids(await i.gaps(scope, "linda")), ["what-they-love", "how-the-days-go"]);
+        assert.deepEqual(needs(await i.gaps(scope, "linda")), ["what-they-love", "how-the-days-go"]);
         await i.upsertEntity(scope, { id: "al", name: "Al" });
-        assert.deepEqual(ids(await i.gaps(scope, "al")), ["what-they-love"], "an ask with a when clause waits for the field");
+        assert.deepEqual(needs(await i.gaps(scope, "al")), ["what-they-love"], "a need with a when clause waits for the field");
         assert.equal(await i.gaps(scope, "nobody"), null);
         assert.equal(await i.getEntity(scope, "linda"), null, "nothing is known yet");
         assert.equal(await i.brief(scope, "linda"), null);
         await i.upsertEntity(scope, { id: "linda", name: "Linda", fields: { city: "Austin" } });
-        assert.deepEqual(ids(await i.gaps(scope, "linda")), ["what-they-love", "how-the-days-go"], "a field not sent is kept");
+        assert.deepEqual(needs(await i.gaps(scope, "linda")), ["what-they-love", "how-the-days-go"], "a field not sent is kept");
         await i.upsertEntity(scope, { id: "linda", name: "Linda", fields: { relationship: null } });
-        assert.deepEqual(ids(await i.gaps(scope, "linda")), ["what-they-love"], "null clears a field");
+        assert.deepEqual(needs(await i.gaps(scope, "linda")), ["what-they-love"], "null clears a field");
         await assert.rejects(i.upsertEntity(scope, { id: "lisbon", name: "Lisbon", kind: "place" }), "the vocabulary describes a person, not a place");
         assert.equal(await i.gaps(scope, "lisbon"), null, "and the refused entity is not on the roster");
       },
@@ -225,7 +226,7 @@ export function contractCases(): ContractCase[] {
       },
     },
     {
-      name: "readiness: an entity known by name has every applicable ask open, an ask waits for the one it comes after, and one unknown is nothing",
+      name: "readiness: an entity known by name has every applicable need open, a need waits for the one it comes after, and one unknown is nothing",
       scripted: false,
       async run({ intelligence: i, scope }) {
         await i.upsertEntity(scope, { id: "linda", name: "Linda", fields: { relationship: "mother" } });
@@ -235,8 +236,8 @@ export function contractCases(): ContractCase[] {
         assert.equal(plain.lens, "fixture", "a read without a lens reads through the default");
         assert.equal(plain.objective, "Treat them well next time.");
         assert.equal(plain.overall, 0);
-        assert.deepEqual(plain.asks.map((a) => [a.id, a.state]), [["what-they-love", "open"], ["how-the-days-go", "open"]]);
-        assert.deepEqual(plain.next.map((s) => [s.kind, s.ask, s.value]), [["ask", "what-they-love", 1], ["ask", "how-the-days-go", 1]]);
+        assert.deepEqual(plain.needs.map((n) => [n.id, n.state]), [["what-they-love", "open"], ["how-the-days-go", "open"]]);
+        assert.deepEqual(plain.next.map((d) => [d.kind, d.need, d.value]), [["learn", "what-they-love", 1], ["learn", "how-the-days-go", 1]]);
         assert.deepEqual(plain.dimensions.map((d) => [d.id, d.facts, d.due, d.lastSaidAt]), [
           ["never-cross", 0, 0, null],
           ["has", 0, 0, null],
@@ -248,16 +249,16 @@ export function contractCases(): ContractCase[] {
 
         const visit = (await i.readiness(scope, "linda", { lens: "fixture-visit" }))!;
         assert.equal(visit.lens, "fixture-visit");
-        assert.deepEqual(visit.asks.map((a) => [a.id, a.state, a.waitingOn]), [
+        assert.deepEqual(visit.needs.map((n) => [n.id, n.state, n.waitingOn]), [
           ["how-the-days-go", "open", []],
           ["what-they-love", "waiting", ["how-the-days-go"]],
           ["people", "open", []],
         ]);
-        assert.deepEqual(visit.next.map((s) => [s.ask, s.value]), [["how-the-days-go", 2], ["people", 1]], "the heavier ask first; one waiting is not offered");
-        assert.equal(visit.next[1]!.question, "Who is in their life?", "an ask of a dimension borrows its question");
+        assert.deepEqual(visit.next.map((d) => [d.need, d.value]), [["how-the-days-go", 2], ["people", 1]], "the heavier need first; one waiting is not a direction");
+        assert.deepEqual([visit.next[1]!.label, visit.next[1]!.dimension], ["People", "people"], "a need of a dimension borrows its label");
 
         const al = (await i.readiness(scope, "al", { lens: "fixture-visit" }))!;
-        assert.deepEqual(al.asks.map((a) => [a.id, a.state]), [["what-they-love", "open"], ["people", "open"]], "an ask that does not apply holds nothing back");
+        assert.deepEqual(al.needs.map((n) => [n.id, n.state]), [["what-they-love", "open"], ["people", "open"]], "a need that does not apply holds nothing back");
         assert.equal(await i.readiness(scope, "nobody"), null);
         await assert.rejects(i.readiness(scope, "linda", { lens: "no-such-lens" }), "a lens the client never registered is refused");
         await assert.rejects(i.gaps(scope, "linda", { lens: "no-such-lens" }), "for the gaps too");
@@ -298,7 +299,7 @@ export function contractCases(): ContractCase[] {
         const brief = (await i.brief(scope, "linda"))!;
         assert.ok(brief.text.startsWith("What we know about Linda (mother):"), brief.text);
         assert.deepEqual(brief.mustHonor, [{ type: "LINE", fact: "Vegan" }]);
-        assert.deepEqual(ids(brief.gaps), ["how-the-days-go"]);
+        assert.deepEqual(needs(brief.gaps), ["how-the-days-go"]);
 
         const view = (await i.getEntity(scope, "linda", { includeBrief: true }))!;
         assert.equal(view.id, "linda", "an entity is known by the client's own id");
@@ -334,7 +335,7 @@ export function contractCases(): ContractCase[] {
 
         await i.invalidateFact(scope, found[0]!.id);
         assert.deepEqual(await i.searchFacts(scope, "gardening"), []);
-        assert.deepEqual(ids(await i.gaps(scope, "linda")), ["what-they-love", "how-the-days-go"], "a retracted fact answers nothing");
+        assert.deepEqual(needs(await i.gaps(scope, "linda")), ["what-they-love", "how-the-days-go"], "a retracted fact counts for nothing");
         assert.deepEqual((await i.getEntity(scope, "linda"))!.facts.map((f) => f.fact), ["Vegan"]);
         assert.deepEqual(await i.factsLearnedBy(scope, ["m-1"]), { "m-1": ["Vegan"] });
 
@@ -421,7 +422,7 @@ export function contractCases(): ContractCase[] {
       },
     },
     {
-      name: "readiness over time: a fact meets its ask, is due for a revisit once its window passes unsaid, and is fresh again when said again",
+      name: "readiness over time: a fact meets its need, is due for a revisit once its window passes unsaid, and is fresh again when said again",
       scripted: true,
       async run({ intelligence: i, scope, script }) {
         const t1 = at("2026-01-10T00:00:00Z");
@@ -434,7 +435,7 @@ export function contractCases(): ContractCase[] {
 
         const fresh = (await i.readiness(scope, "linda", { asOf: at("2026-01-20T00:00:00Z") }))!;
         assert.deepEqual([standing(fresh, "how-the-days-go").state, standing(fresh, "how-the-days-go").strength], ["met", 1]);
-        assert.deepEqual(fresh.next.map((s) => [s.kind, s.ask]), [["ask", "what-they-love"]]);
+        assert.deepEqual(fresh.next.map((d) => [d.kind, d.need]), [["learn", "what-they-love"]]);
         assert.equal(fresh.overall, 0.5);
         const life = fresh.dimensions.find((d) => d.id === "life")!;
         assert.deepEqual([life.facts, life.due, life.lastSaidAt?.getTime(), life.factIds], [1, 0, t1.getTime(), [days.id]]);
@@ -443,13 +444,13 @@ export function contractCases(): ContractCase[] {
         const quietly = at("2026-04-20T00:00:00Z");
         const quiet = (await i.readiness(scope, "linda", { asOf: quietly }))!;
         assert.deepEqual([standing(quiet, "how-the-days-go").state, standing(quiet, "how-the-days-go").strength], ["due", 0.5]);
-        assert.deepEqual(quiet.next.map((s) => [s.kind, s.ask, s.value, s.factIds]), [
-          ["ask", "what-they-love", 1, []],
+        assert.deepEqual(quiet.next.map((d) => [d.kind, d.need, d.value, d.factIds]), [
+          ["learn", "what-they-love", 1, []],
           ["revisit", "how-the-days-go", 0.5, [days.id]],
         ]);
         assert.equal(quiet.overall, 0.25);
         assert.equal(quiet.dimensions.find((d) => d.id === "life")!.due, 1);
-        assert.deepEqual(ids(await i.gaps(scope, "linda", { asOf: quietly })), ["what-they-love"], "a fact due for a revisit still answers its ask");
+        assert.deepEqual(needs(await i.gaps(scope, "linda", { asOf: quietly })), ["what-they-love"], "a fact due for a revisit still counts toward its need");
         assert.match((await i.brief(scope, "linda", { asOf: quietly }))!.text, /Works days at the hospital/);
 
         // Said again, it is fresh again; read from before the retelling, it is still due.
@@ -471,7 +472,7 @@ export function contractCases(): ContractCase[] {
       },
     },
     {
-      name: "two lenses read one ledger: the same facts make a different page and a different next question under each",
+      name: "two lenses read one ledger: the same facts make a different page and a different next direction under each",
       scripted: true,
       async run({ intelligence: i, scope, script }) {
         await i.upsertEntity(scope, { id: "linda", name: "Linda", fields: { relationship: "mother" } });
@@ -496,9 +497,9 @@ export function contractCases(): ContractCase[] {
         assert.ok(visit.text.includes("Mind:\n- Vegan"), visit.text);
         assert.deepEqual(plain.mustHonor.map((m) => m.type).sort(), ["HAS", "LINE"]);
         assert.deepEqual(visit.mustHonor.map((m) => m.type), ["LINE"], "a lens names what it must honor");
-        assert.deepEqual(ids(plain.gaps), ["how-the-days-go"]);
-        assert.deepEqual(ids(visit.gaps), ["how-the-days-go", "people"]);
-        assert.deepEqual(ids(await i.gaps(scope, "linda", { lens: "fixture-visit" })), ["how-the-days-go", "people"]);
+        assert.deepEqual(needs(plain.gaps), ["how-the-days-go"]);
+        assert.deepEqual(needs(visit.gaps), ["how-the-days-go", "people"]);
+        assert.deepEqual(needs(await i.gaps(scope, "linda", { lens: "fixture-visit" })), ["how-the-days-go", "people"]);
         const loves = standing((await i.readiness(scope, "linda", { lens: "fixture-visit" }))!, "what-they-love");
         assert.deepEqual([loves.state, loves.facts, loves.strength], ["waiting", 1, 0.5], "one fact of the two it needs, and it waits its turn");
         assert.equal((await i.getEntity(scope, "linda", { includeBrief: true, lens: "fixture-visit" }))!.brief!.text, visit.text);

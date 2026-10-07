@@ -8,7 +8,7 @@ import {
   lensProblems,
   parseLensDefinition,
   parseVocabularyDefinition,
-  type CompiledAsk,
+  type CompiledNeed,
   type Fact,
   type Intelligence,
   type Lens,
@@ -120,32 +120,32 @@ export function factOf(type: string, text: string, at: Date, daysAgo: number, en
   };
 }
 
-/** Whether an ask applies to an entity with these fields, decided as the engine decides it. */
-function appliesTo(ask: CompiledAsk, fields: Readonly<Record<string, string | null>>): boolean {
-  return ask.when.every((clause) => {
+/** Whether an need applies to an entity with these fields, decided as the engine decides it. */
+function appliesTo(need: CompiledNeed, fields: Readonly<Record<string, string | null>>): boolean {
+  return need.when.every((clause) => {
     const value = fields[clause.field];
     return typeof value === "string" && clause.equals.some((candidate) => candidate.trim().toLowerCase() === value.trim().toLowerCase());
   });
 }
 
 /**
- * Fresh facts, said an hour before `at`, meeting every ask of `lens` that
- * applies to an entity with `fields`, except the asks `skip` picks out:
- * `enough` of them per ask. Each is of a type that answers no skipped ask
- * where the ask has one, so meeting the rest leaves the skipped asks alone.
+ * Fresh facts, said an hour before `at`, meeting every need of `lens` that
+ * applies to an entity with `fields`, except the needs `skip` picks out:
+ * `enough` of them per need. Each is of a type that counts toward no skipped need
+ * where the need has one, so meeting the rest leaves the skipped needs alone.
  */
 export function factsMeeting(
   lens: Lens,
   at: Date,
-  options: { skip?: (ask: CompiledAsk) => boolean; fields?: Readonly<Record<string, string | null>> } = {},
+  options: { skip?: (need: CompiledNeed) => boolean; fields?: Readonly<Record<string, string | null>> } = {},
 ): Fact[] {
-  const skipped = lens.asks.filter((ask) => options.skip?.(ask) === true);
-  const avoid = new Set(skipped.flatMap((ask) => ask.answeredBy));
+  const skipped = lens.needs.filter((need) => options.skip?.(need) === true);
+  const avoid = new Set(skipped.flatMap((need) => need.types));
   const facts: Fact[] = [];
-  for (const ask of lens.asks) {
-    if (skipped.includes(ask) || !appliesTo(ask, options.fields ?? {})) continue;
-    const type = ask.answeredBy.find((candidate) => !avoid.has(candidate)) ?? ask.answeredBy[0]!;
-    for (let index = 1; index <= ask.enough; index += 1) facts.push(factOf(type, `${ask.id}, known (${index})`, at, 1 / 24));
+  for (const need of lens.needs) {
+    if (skipped.includes(need) || !appliesTo(need, options.fields ?? {})) continue;
+    const type = need.types.find((candidate) => !avoid.has(candidate)) ?? need.types[0]!;
+    for (let index = 1; index <= need.enough; index += 1) facts.push(factOf(type, `${need.id}, known (${index})`, at, 1 / 24));
   }
   return facts;
 }

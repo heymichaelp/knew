@@ -93,14 +93,14 @@ export function vocabulary(): VocabularyDefinition {
       },
     },
     dimensions: {
-      caution: { label: "Before you go", question: "Is there anything to know before going?" },
-      what: { label: "What it is", question: "What kind of place is it?" },
-      where: { label: "Where it is", question: "Where is it, and how do you get there?" },
-      when: { label: "When to go", question: "When is it open, and when is it busy?" },
-      offer: { label: "What's on offer", question: "What is there to have or do, and what does it cost?" },
-      feel: { label: "What it's like", question: "What is it like to be there?" },
-      people: { label: "Who you know there", question: "Who do you know there?" },
-      history: { label: "Your history with it", question: "Have you been, and how was it?" },
+      caution: { label: "Before you go" },
+      what: { label: "What it is" },
+      where: { label: "Where it is" },
+      when: { label: "When to go" },
+      offer: { label: "What's on offer" },
+      feel: { label: "What it's like" },
+      people: { label: "Who you know there" },
+      history: { label: "Your history with it" },
       other: { label: "Other" },
     },
     fallbackType: "OTHER",
@@ -110,11 +110,11 @@ export function vocabulary(): VocabularyDefinition {
 }
 
 /**
- * The starter lens: know it well enough to plan a good visit. It asks what
- * sort of place it is first, then where it is and when to go, then what is on
- * offer and what it is like, then the knower's own history with it, who they
- * know there, and what to know before going; every ask weighs the same, so
- * that order is the order of the gaps.
+ * The starter lens: know it well enough to plan a good visit. Its needs run
+ * coarse to fine: what sort of place it is, where it is and when to go, what
+ * is on offer and what it is like, then the knower's own history with it, who
+ * they know there, and what to know before going. Every need weighs the
+ * same, so that is the order of the directions.
  */
 export function lens(): LensDefinition {
   return {
@@ -125,6 +125,6 @@ export function lens(): LensDefinition {
     header: "What you know about {who}:",
     overHeading: "No longer the case",
     attributeTags: ["level"],
-    asks: ["what", "where", "when", "offer", "feel", "history", "people", "caution"].map((dimension) => ({ id: dimension, dimension })),
+    needs: ["what", "where", "when", "offer", "feel", "history", "people", "caution"].map((dimension) => ({ id: dimension, dimension })),
   };
 }

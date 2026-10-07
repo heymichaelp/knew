@@ -6,7 +6,7 @@ import { fixtureLens, fixtureLensDefinition, fixtureVisitLens, fixtureVisitLensD
 const minimal: LensDefinition = { id: "plain", version: 1, vocabulary: "fixture", header: "About {who}:", overHeading: "Over" };
 
 describe("Scenario: A lens says only what differs, and the vocabulary supplies the rest", () => {
-  it("reads every dimension as a section, the vocabulary's pinned types, and each dimension's question as an ask", () => {
+  it("reads every dimension as a section and as a need, labelled as the dimension is, with the vocabulary's pinned types", () => {
     const lens = compileLens(minimal, fixtureVocabulary());
     assert.deepEqual(
       lens.sections.map((s) => [s.heading, s.dimensions]),
@@ -21,16 +21,25 @@ describe("Scenario: A lens says only what differs, and the vocabulary supplies t
     );
     assert.deepEqual([...lens.pinned].sort(), ["HAS", "LINE"]);
     assert.equal(lens.objective, null);
-    assert.deepEqual(lens.asks, [
-      { id: "people", question: "Who is in their life?", dimension: "people", answeredBy: ["PERSON"], when: [], weight: 1, enough: 1, after: [] },
-    ]);
+    assert.deepEqual(
+      lens.needs.map((n) => [n.id, n.label, n.dimension]),
+      [
+        ["never-cross", "Never cross", "never-cross"],
+        ["has", "Already has", "has"],
+        ["likes", "Likes", "likes"],
+        ["life", "Life", "life"],
+        ["people", "People", "people"],
+        ["other", "Other", "other"],
+      ],
+    );
+    assert.deepEqual(lens.needs.find((n) => n.id === "people"), { id: "people", label: "People", dimension: "people", types: ["PERSON"], when: [], weight: 1, enough: 1, after: [] });
   });
 
-  it("fills every ask's weight, enough and order from the engine's defaults", () => {
+  it("fills every need's weight, enough and order from the engine's defaults", () => {
     const lens = fixtureLens();
     assert.equal(lens.objective, "Treat them well next time.");
     assert.deepEqual(
-      lens.asks.map((a) => [a.id, a.weight, a.enough, a.after, a.dimension, a.answeredBy]),
+      lens.needs.map((a) => [a.id, a.weight, a.enough, a.after, a.dimension, a.types]),
       [
         ["what-they-love", 1, 1, [], null, ["LIKES", "SKILL"]],
         ["how-the-days-go", 1, 1, [], null, ["CIRCUMSTANCE"]],
@@ -38,7 +47,7 @@ describe("Scenario: A lens says only what differs, and the vocabulary supplies t
     );
   });
 
-  it("takes its own sections, pinned types, header and asks when it names them", () => {
+  it("takes its own sections, pinned types, header and needs when it names them", () => {
     const lens = fixtureVisitLens();
     assert.deepEqual(lens.sections.map((s) => s.heading), ["Mind", "Know"]);
     assert.equal(sectionIndexOf(lens, "CIRCUMSTANCE"), 0);
@@ -48,9 +57,9 @@ describe("Scenario: A lens says only what differs, and the vocabulary supplies t
     assert.equal(isPinnedFactType(lens, "HAS"), false, "a lens names what it must honor");
     assert.equal(isPinnedFactType(fixtureLens(), "HAS"), true);
     assert.equal(briefHeader(lens, { name: "Linda", fields: { relationship: "mother" } }), "Before you visit Linda (mother):");
-    const people = lens.asks.find((a) => a.id === "people")!;
-    assert.deepEqual([people.question, people.answeredBy], ["Who is in their life?", ["PERSON"]], "an ask of a dimension borrows its question and hears its types");
-    assert.deepEqual(lens.asks.find((a) => a.id === "what-they-love")!.after, ["how-the-days-go"]);
+    const people = lens.needs.find((a) => a.id === "people")!;
+    assert.deepEqual([people.label, people.types], ["People", ["PERSON"]], "a need of a dimension borrows its label and counts its types");
+    assert.deepEqual(lens.needs.find((a) => a.id === "what-they-love")!.after, ["how-the-days-go"]);
   });
 
   it("fills the header from the template and the vocabulary's prompt fields", () => {
@@ -62,38 +71,38 @@ describe("Scenario: A lens says only what differs, and the vocabulary supplies t
 
 describe("Scenario: A lens whose own shape cannot be read is refused with every problem named", () => {
   const base = fixtureVisitLensDefinition();
-  const asks = base.asks!;
+  const needs = base.needs!;
 
   it("refuses a header without {who}", () => {
     assert.throws(() => parseLensDefinition({ ...base, header: "Before you visit:" }));
   });
 
-  it("refuses an ask that names both a dimension and its types, or neither, and one answered by types with no question", () => {
-    assert.throws(() => parseLensDefinition({ ...base, asks: [{ id: "x", dimension: "people", answeredBy: ["PERSON"], question: "?" }] }), /one, not both/);
-    assert.throws(() => parseLensDefinition({ ...base, asks: [{ id: "x", question: "?" }] }), /one, not both and not neither/);
-    assert.throws(() => parseLensDefinition({ ...base, asks: [{ id: "x", answeredBy: ["PERSON"] }] }), /must say what it asks/);
+  it("refuses a need that names both a dimension and its types, or neither, and one naming types with no label", () => {
+    assert.throws(() => parseLensDefinition({ ...base, needs: [{ id: "x", dimension: "people", types: ["PERSON"], label: "?" }] }), /one, not both/);
+    assert.throws(() => parseLensDefinition({ ...base, needs: [{ id: "x", label: "?" }] }), /one, not both and not neither/);
+    assert.throws(() => parseLensDefinition({ ...base, needs: [{ id: "x", types: ["PERSON"] }] }), /must have a label/);
   });
 
-  it("refuses an ask listed twice, a weight that is not positive, and an enough that is not a whole number of facts", () => {
-    assert.throws(() => parseLensDefinition({ ...base, asks: [asks[2]!, asks[2]!] }), /ask people is listed twice/);
-    assert.throws(() => parseLensDefinition({ ...base, asks: [{ ...asks[2]!, weight: 0 }] }));
-    assert.throws(() => parseLensDefinition({ ...base, asks: [{ ...asks[2]!, weight: 1001 }] }), "a weight is relative, and at most 1,000");
-    parseLensDefinition({ ...base, asks: [{ ...asks[2]!, weight: 1000 }] });
-    assert.throws(() => parseLensDefinition({ ...base, asks: [{ ...asks[2]!, enough: 1.5 }] }));
+  it("refuses a need listed twice, a weight that is not positive, and an enough that is not a whole number of facts", () => {
+    assert.throws(() => parseLensDefinition({ ...base, needs: [needs[2]!, needs[2]!] }), /need people is listed twice/);
+    assert.throws(() => parseLensDefinition({ ...base, needs: [{ ...needs[2]!, weight: 0 }] }));
+    assert.throws(() => parseLensDefinition({ ...base, needs: [{ ...needs[2]!, weight: 1001 }] }), "a weight is relative, and at most 1,000");
+    parseLensDefinition({ ...base, needs: [{ ...needs[2]!, weight: 1000 }] });
+    assert.throws(() => parseLensDefinition({ ...base, needs: [{ ...needs[2]!, enough: 1.5 }] }));
   });
 
-  it("refuses an ask that waits on itself, on an ask that is not there, twice on one, or in a circle", () => {
-    assert.throws(() => parseLensDefinition({ ...base, asks: [{ ...asks[2]!, after: ["people"] }] }), /ask people waits on itself/);
-    assert.throws(() => parseLensDefinition({ ...base, asks: [{ ...asks[2]!, after: ["ghost"] }] }), /waits on ghost, which is not an ask/);
+  it("refuses a need that waits on itself, on a need that is not there, twice on one, or in a circle", () => {
+    assert.throws(() => parseLensDefinition({ ...base, needs: [{ ...needs[2]!, after: ["people"] }] }), /need people waits on itself/);
+    assert.throws(() => parseLensDefinition({ ...base, needs: [{ ...needs[2]!, after: ["ghost"] }] }), /waits on ghost, which is not a need/);
     assert.throws(
-      () => parseLensDefinition({ ...base, asks: [asks[0]!, { ...asks[1]!, after: ["how-the-days-go", "how-the-days-go"] }] }),
+      () => parseLensDefinition({ ...base, needs: [needs[0]!, { ...needs[1]!, after: ["how-the-days-go", "how-the-days-go"] }] }),
       /waits on how-the-days-go twice/,
     );
     assert.throws(
       () =>
         parseLensDefinition({
           ...base,
-          asks: [{ ...asks[0]!, after: ["people"] }, asks[1]!, { ...asks[2]!, after: ["what-they-love"] }],
+          needs: [{ ...needs[0]!, after: ["people"] }, needs[1]!, { ...needs[2]!, after: ["what-they-love"] }],
         }),
       /wait on each other in a circle/,
     );
@@ -118,11 +127,10 @@ describe("Scenario: A lens that does not read its vocabulary cleanly is refused 
         sections: [{ heading: "Only", dimensions: ["life", "limbo"] }],
         pinned: ["NOPE"],
         attributeTags: ["colour"],
-        asks: [
+        needs: [
           { id: "a", dimension: "ghost" },
-          { id: "b", dimension: "life" },
-          { id: "c", question: "?", answeredBy: ["NOPE"] },
-          { id: "d", question: "?", answeredBy: ["LIKES"], when: [{ field: "age", equals: ["70"] }] },
+          { id: "c", label: "?", types: ["NOPE"] },
+          { id: "d", label: "?", types: ["LIKES"], when: [{ field: "age", equals: ["70"] }] },
         ],
       },
       vocabulary,
@@ -137,10 +145,9 @@ describe("Scenario: A lens that does not read its vocabulary cleanly is refused 
       "dimension other is in no section, so its facts would never be on the page",
       "pinned names NOPE, which is not a fact type",
       "attributeTags names colour, which no type carries",
-      "ask a asks about dimension ghost, which the vocabulary does not have",
-      "ask b has no question, and dimension life has none to lend it",
-      "ask c is answered by NOPE, which is not a fact type",
-      "ask d applies when age matches, which is not one of the vocabulary's fields",
+      "need a names dimension ghost, which the vocabulary does not have",
+      "need c counts NOPE, which is not a fact type",
+      "need d applies when age matches, which is not one of the vocabulary's fields",
     ]);
   });
 

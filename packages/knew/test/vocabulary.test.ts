@@ -32,8 +32,6 @@ describe("Scenario: A vocabulary is data a client registers, and extraction writ
         ["other", "Other"],
       ],
     );
-    assert.equal(vocabulary.dimensions.find((d) => d.id === "people")!.question, "Who is in their life?");
-    assert.equal(vocabulary.dimensions.find((d) => d.id === "life")!.question, null);
     assert.equal(vocabulary.factTypes.LINE!.pinned, true);
     assert.equal(vocabulary.factTypes.LINE!.enduring, true);
     assert.equal(vocabulary.factTypes.CIRCUMSTANCE!.revisitAfterDays, 90);

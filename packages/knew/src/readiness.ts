@@ -1,29 +1,25 @@
 import { endedByDate, lastSaidOf } from "./brief.ts";
 import { ENGINE_DEFAULTS } from "./defaults.ts";
-import type { CompiledAsk, Lens } from "./lens.ts";
-import type { AskStanding, DimensionEvidence, Fact, Gap, NextStep, Readiness } from "./types.ts";
+import type { CompiledNeed, Lens } from "./lens.ts";
+import type { DimensionEvidence, Direction, Fact, Gap, NeedStanding, Readiness } from "./types.ts";
 import { factType, type Vocabulary } from "./vocabulary.ts";
 
 /**
- * READINESS — the forward-looking half. What is known about an entity, how
- * strongly, and what to learn next to reach the lens's objective. Two kinds of
- * strength, kept apart on purpose:
+ * READINESS: what is understood about an entity, what the lens's objective
+ * still needs, and the most valuable direction to take that understanding.
  *
- *  - EVIDENCE belongs to the vocabulary and needs no objective: per
- *    dimension, how many current facts there are, how many are due for a
- *    revisit, and when any was last said. A single strength per dimension would
- *    smuggle an objective in, because "known how well?" only has an answer to
- *    "enough for what?".
- *  - SUFFICIENCY belongs to the lens: per ask, a strength against its
- *    `enough`, a state, its weight; the overall readiness; and the next steps,
- *    in order — the top one is the next question.
+ *  - CURRENT UNDERSTANDING belongs to the vocabulary and needs no objective:
+ *    per dimension, how many current facts there are, how many are due for a
+ *    revisit, and when any was last said.
+ *  - MISSING UNDERSTANDING belongs to the lens: per need, a strength against
+ *    its `enough` and a state.
+ *  - THE NEXT DIRECTIONS, in order of value: a need to learn more about, or
+ *    understanding gone stale to revisit. knew names the direction; the
+ *    client decides what to do with it.
  *
- * Weights order what to LEARN; they never weigh what is BELIEVED. The page
- * stays dated and unweighted, a revisit is a question rather than a judgment
- * that a fact stopped being true, and a fact due for a revisit is still on
- * the page exactly as before. With no `weight`, `enough`, `after` or
- * `revisitAfterDays` declared, the gaps are exactly what they always were:
- * every applicable ask with no current fact, in the lens's order.
+ * Weights order directions; they never weigh what is believed. The page stays
+ * dated and unweighted, and a fact due for a revisit is still on it exactly
+ * as before.
  *
  * Pure and deterministic. Strength, value and overall are worked out exactly
  * and rounded to three places only on the way out, so every driver answers the
@@ -34,8 +30,8 @@ const DAY_MS = 86_400_000;
 
 const round = (value: number): number => Math.round(value * 1000) / 1000;
 
-function applies(ask: CompiledAsk, fields: Readonly<Record<string, string | null>>): boolean {
-  return ask.when.every((clause) => {
+function applies(need: CompiledNeed, fields: Readonly<Record<string, string | null>>): boolean {
+  return need.when.every((clause) => {
     const value = fields[clause.field];
     if (typeof value !== "string") return false;
     const normalised = value.trim().toLowerCase();
@@ -51,11 +47,10 @@ export function isDueForRevisit(vocabulary: Vocabulary, fact: Fact, at: Date): b
   return days !== null && at.getTime() - lastSaidOf(fact).getTime() >= days * DAY_MS;
 }
 
-/** A dimension ask hears every type in its dimension, a retired type reading as
- *  the fallback; an ask that names its types hears exactly those, as the gaps
- *  always matched them. */
-function answers(vocabulary: Vocabulary, ask: CompiledAsk, fact: Fact): boolean {
-  return ask.dimension !== null ? factType(vocabulary, fact.type).dimension === ask.dimension : ask.answeredBy.includes(fact.type);
+/** A need of a dimension counts every type in it, a retired type reading as
+ *  the fallback; a need that names its types counts exactly those. */
+function counts(vocabulary: Vocabulary, need: CompiledNeed, fact: Fact): boolean {
+  return need.dimension !== null ? factType(vocabulary, fact.type).dimension === need.dimension : need.types.includes(fact.type);
 }
 
 const newestSaidFirst = (a: Fact, b: Fact): number => lastSaidOf(b).getTime() - lastSaidOf(a).getTime() || a.id.localeCompare(b.id);
@@ -66,22 +61,21 @@ const oldestSaidFirst = (a: Fact, b: Fact): number => lastSaidOf(a).getTime() - 
  *
  * `facts` are the facts believed at `at` (`factsKnownAt`); a fact whose own
  * end date has passed by `at` is over and counts for nothing, as on the page.
- * For an ask with n current facts, d of them due for a revisit and f fresh:
+ * For a need with n current facts, d of them due for a revisit and f fresh:
  *
  *  - strength is 1 when f meets `enough`; otherwise
  *    (f + dueCredit · min(d, enough − f)) / enough — a fact due for a revisit
  *    counts for something, and never for enough;
- *  - it is `met` when f ≥ enough; `waiting` while an applicable ask it comes
- *    `after` is not yet answered (n ≥ enough, fresh or not; an ask whose `when`
- *    does not match this entity counts as answered); `due` when n ≥ enough;
+ *  - it is `met` when f ≥ enough; `waiting` while an applicable need it comes
+ *    `after` is not yet met (n ≥ enough, fresh or not; a need whose `when`
+ *    does not match this entity counts as met); `due` when n ≥ enough;
  *    `thin` when n > 0; and `open` otherwise.
  *
- * An open or thin ask is a step of kind "ask", anchored on its own facts,
- * newest said first — or, when it has none, on the facts of the asks it came
- * after, so a client can go one notch finer from something known. A due ask
- * is a step of kind "revisit" carrying the facts due, oldest said first. A
- * step's value is weight · (1 − strength); steps run from the highest value,
- * ties in the lens's order.
+ * An open or thin need is a direction of kind "learn", built on its own facts,
+ * newest said first, or, when it has none, on the facts of the needs it comes
+ * after. A due need is a direction of kind "revisit" carrying the facts due,
+ * oldest said first. A direction's value is weight · (1 − strength);
+ * directions run from the highest value, ties in the lens's order.
  */
 export function readinessFor(
   lens: Lens,
@@ -107,38 +101,38 @@ export function readinessFor(
     };
   });
 
-  const applicable = lens.asks.filter((ask) => applies(ask, entity.fields));
+  const applicable = lens.needs.filter((need) => applies(need, entity.fields));
   const heard = new Map(
-    applicable.map((ask) => {
-      const held = current.filter((fact) => answers(vocabulary, ask, fact)).sort(newestSaidFirst);
-      return [ask.id, { held, due: held.filter(due) }] as const;
+    applicable.map((need) => {
+      const held = current.filter((fact) => counts(vocabulary, need, fact)).sort(newestSaidFirst);
+      return [need.id, { held, due: held.filter(due) }] as const;
     }),
   );
-  // An ask that does not apply to this entity never holds another back.
-  const answered = (id: string): boolean => {
-    const ask = applicable.find((candidate) => candidate.id === id);
-    return !ask || heard.get(id)!.held.length >= ask.enough;
+  // A need that does not apply to this entity never holds another back.
+  const met = (id: string): boolean => {
+    const need = applicable.find((candidate) => candidate.id === id);
+    return !need || heard.get(id)!.held.length >= need.enough;
   };
 
-  // The exact strength of each ask: rounding happens once, on the way out.
+  // The exact strength of each need: rounding happens once, on the way out.
   const exact = new Map<string, number>();
-  const asks: AskStanding[] = applicable.map((ask) => {
-    const { held, due: dueFacts } = heard.get(ask.id)!;
+  const needs: NeedStanding[] = applicable.map((need) => {
+    const { held, due: dueFacts } = heard.get(need.id)!;
     const n = held.length;
     const d = dueFacts.length;
     const f = n - d;
-    const raw = f >= ask.enough ? 1 : (f + ENGINE_DEFAULTS.dueCredit * Math.min(d, ask.enough - f)) / ask.enough;
-    exact.set(ask.id, raw);
+    const raw = f >= need.enough ? 1 : (f + ENGINE_DEFAULTS.dueCredit * Math.min(d, need.enough - f)) / need.enough;
+    exact.set(need.id, raw);
     const strength = round(raw);
-    const waitingOn = f >= ask.enough ? [] : ask.after.filter((id) => !answered(id));
-    const state = f >= ask.enough ? "met" : waitingOn.length > 0 ? "waiting" : n >= ask.enough ? "due" : n > 0 ? "thin" : "open";
+    const waitingOn = f >= need.enough ? [] : need.after.filter((id) => !met(id));
+    const state = f >= need.enough ? "met" : waitingOn.length > 0 ? "waiting" : n >= need.enough ? "due" : n > 0 ? "thin" : "open";
     return {
-      id: ask.id,
-      question: ask.question,
-      dimension: ask.dimension,
-      answeredBy: [...ask.answeredBy],
-      weight: ask.weight,
-      enough: ask.enough,
+      id: need.id,
+      label: need.label,
+      dimension: need.dimension,
+      types: [...need.types],
+      weight: need.weight,
+      enough: need.enough,
       facts: n,
       due: d,
       strength,
@@ -148,41 +142,42 @@ export function readinessFor(
     };
   });
 
-  const order = new Map(lens.asks.map((ask, index) => [ask.id, index]));
-  const next: NextStep[] = asks
+  const order = new Map(lens.needs.map((need, index) => [need.id, index]));
+  const next: Direction[] = needs
     .filter((standing) => standing.state === "open" || standing.state === "thin" || standing.state === "due")
-    .map((standing): NextStep => {
+    .map((standing): Direction => {
       const value = round(standing.weight * (1 - exact.get(standing.id)!));
+      const about = { need: standing.id, label: standing.label, dimension: standing.dimension, types: [...standing.types], value };
       if (standing.state === "due") {
         const dueFacts = [...heard.get(standing.id)!.due].sort(oldestSaidFirst);
-        return { kind: "revisit", ask: standing.id, question: standing.question, value, factIds: dueFacts.map((fact) => fact.id) };
+        return { kind: "revisit", ...about, factIds: dueFacts.map((fact) => fact.id) };
       }
-      let anchors = standing.factIds;
-      if (anchors.length === 0) {
-        const ask = applicable.find((candidate) => candidate.id === standing.id)!;
-        const before = ask.after.flatMap((id) => heard.get(id)?.held ?? []);
-        anchors = [...new Map(before.map((fact) => [fact.id, fact])).values()].sort(newestSaidFirst).map((fact) => fact.id);
+      let builtOn = standing.factIds;
+      if (builtOn.length === 0) {
+        const need = applicable.find((candidate) => candidate.id === standing.id)!;
+        const before = need.after.flatMap((id) => heard.get(id)?.held ?? []);
+        builtOn = [...new Map(before.map((fact) => [fact.id, fact])).values()].sort(newestSaidFirst).map((fact) => fact.id);
       }
-      return { kind: "ask", ask: standing.id, question: standing.question, value, factIds: anchors };
+      return { kind: "learn", ...about, factIds: builtOn };
     })
-    .sort((a, b) => b.value - a.value || order.get(a.ask)! - order.get(b.ask)!);
+    .sort((a, b) => b.value - a.value || order.get(a.need)! - order.get(b.need)!);
 
-  const totalWeight = asks.reduce((sum, standing) => sum + standing.weight, 0);
+  const totalWeight = needs.reduce((sum, standing) => sum + standing.weight, 0);
   return {
     lens: lens.id,
     objective: lens.objective,
     at,
-    overall: asks.length > 0 ? round(asks.reduce((sum, standing) => sum + standing.weight * exact.get(standing.id)!, 0) / totalWeight) : null,
+    overall: needs.length > 0 ? round(needs.reduce((sum, standing) => sum + standing.weight * exact.get(standing.id)!, 0) / totalWeight) : null,
     dimensions,
-    asks,
+    needs,
     next,
   };
 }
 
 /**
- * The gaps: the asks still worth asking, in the order to ask them — the "ask"
- * steps of `readinessFor`. An ask waiting on another, one met, and one whose
- * facts are only due for a revisit are not gaps.
+ * The gaps: the missing understanding, in order of value — the "learn"
+ * directions of `readinessFor`. A need waiting on another, one met, and one
+ * whose facts are only due for a revisit are not gaps.
  */
 export function gapsFor(
   lens: Lens,
@@ -190,11 +185,7 @@ export function gapsFor(
   facts: Fact[],
   at: Date = new Date(),
 ): Gap[] {
-  const byId = new Map(lens.asks.map((ask) => [ask.id, ask]));
   return readinessFor(lens, entity, facts, at)
-    .next.filter((step) => step.kind === "ask")
-    .map((step) => {
-      const ask = byId.get(step.ask)!;
-      return { id: ask.id, question: ask.question, dimension: ask.dimension, answeredBy: [...ask.answeredBy] };
-    });
+    .next.filter((direction) => direction.kind === "learn")
+    .map(({ need, label, dimension, types }) => ({ need, label, dimension, types }));
 }
