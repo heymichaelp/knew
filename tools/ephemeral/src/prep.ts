@@ -36,6 +36,14 @@ export const SCAFFOLD_COMPILER_OPTIONS = {
   types: ["node"],
 } as const;
 
+/**
+ * Which way a brief is built. `knew` builds on the packed package, as an
+ * adopter would. `baseline` builds the same product with no knew installed,
+ * so the same hidden probes measure what knew adds over an app an agent
+ * writes from scratch.
+ */
+export type Arm = "knew" | "baseline";
+
 export interface Tarball {
   path: string;
   file: string;
@@ -83,13 +91,14 @@ export interface Scaffold {
   tsconfig: string;
 }
 
-export function scaffoldFiles(tarballFile: string, name: string, versions = lockfileVersions()): Scaffold {
+/** The scaffold for a run: the tarball as its one dependency, or, for a baseline run (`null`), no dependency at all. */
+export function scaffoldFiles(tarballFile: string | null, name: string, versions = lockfileVersions()): Scaffold {
   const packageJson = {
     name,
     private: true,
     type: "module",
     scripts: { test: "node --import tsx --test test/*.test.ts", typecheck: "tsc --noEmit -p ." },
-    dependencies: { "@popjoker/knew": `file:vendor/${tarballFile}` },
+    ...(tarballFile === null ? {} : { dependencies: { "@popjoker/knew": `file:vendor/${tarballFile}` } }),
     devDependencies: { "@types/node": versions.typesNode, tsx: versions.tsx, typescript: versions.typescript },
   };
   const tsconfig = { compilerOptions: SCAFFOLD_COMPILER_OPTIONS, include: ["src", "test"] };
@@ -111,22 +120,44 @@ export interface PreparedDir {
   scaffold: Scaffold;
 }
 
-/** A fresh, installed directory under the system temp dir, never inside the repo, holding the scaffold and the tarball. */
-export function prepareDir(label: string, tarball: Tarball): PreparedDir {
+/**
+ * A fresh, installed directory under the system temp dir, never inside the
+ * repo, holding the scaffold and, for a knew run, the tarball. A baseline run
+ * has no trace of the package until its checker needs it (`installForCheck`).
+ */
+export function prepareDir(label: string, tarball: Tarball, arm: Arm = "knew"): PreparedDir {
   const dir = realpathSync(mkdtempSync(join(tmpdir(), `knew-ephemeral-${label}-`)));
   assertClearAncestry(dir);
-  mkdirSync(join(dir, "vendor"));
-  copyFileSync(tarball.path, join(dir, "vendor", tarball.file));
-  const scaffold = scaffoldFiles(tarball.file, `ephemeral-${label}`);
+  if (arm === "knew") {
+    mkdirSync(join(dir, "vendor"));
+    copyFileSync(tarball.path, join(dir, "vendor", tarball.file));
+  }
+  const scaffold = scaffoldFiles(arm === "knew" ? tarball.file : null, `ephemeral-${label}`);
   writeFileSync(join(dir, "package.json"), scaffold.packageJson);
   writeFileSync(join(dir, "tsconfig.json"), scaffold.tsconfig);
   npmInstall(dir);
   return { dir, scaffold };
 }
 
-/** Lay a brief's `BRIEF.md` and inputs into a prepared directory. */
-export function layBrief(dir: string, brief: string, inputs: readonly string[]): void {
-  copyFileSync(join(BRIEFS, brief, "BRIEF.md"), join(dir, "BRIEF.md"));
+/**
+ * Install the tarball into a finished baseline app, without touching its
+ * package.json, so the checker (which drives the knew arm with the package's
+ * own fake) can run there. The agent never had it.
+ */
+export function installForCheck(dir: string, tarball: Tarball): void {
+  mkdirSync(join(dir, ".check-vendor"), { recursive: true });
+  copyFileSync(tarball.path, join(dir, ".check-vendor", tarball.file));
+  const result = spawnSync("npm", ["install", "--no-save", "--prefer-offline", "--no-audit", "--no-fund", "--loglevel=error", join(".check-vendor", tarball.file)], {
+    cwd: dir,
+    encoding: "utf8",
+    env: { ...process.env, NPM_CONFIG_USERCONFIG: "/dev/null" },
+  });
+  if (result.status !== 0) throw new Error(`installing the package for the checker failed in ${dir}:\n${result.stderr}`);
+}
+
+/** Lay a brief and its inputs into a prepared directory: `BRIEF.md`, or for a baseline run `BASELINE.md`, as `BRIEF.md`. */
+export function layBrief(dir: string, brief: string, inputs: readonly string[], arm: Arm = "knew"): void {
+  copyFileSync(join(BRIEFS, brief, arm === "knew" ? "BRIEF.md" : "BASELINE.md"), join(dir, "BRIEF.md"));
   for (const input of inputs) cpSync(join(BRIEFS, brief, input), join(dir, input), { recursive: true });
 }
 

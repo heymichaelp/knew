@@ -14,6 +14,8 @@
   },
   "include": [
     "*/reference/src",
-    "*/reference/test"
+    "*/reference/test",
+    "*/baseline-reference/src",
+    "*/baseline-reference/test"
   ]
 }

@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { z } from "zod";
-import { BRIEFS } from "./prep.ts";
+import { BRIEFS, type Arm } from "./prep.ts";
 
 /**
  * A brief is a product story (`BRIEF.md`), what the checker pins (`brief.json`),
@@ -31,12 +31,21 @@ const briefSchema = z.object({
   allow: z.array(z.string()),
 });
 
-export type Brief = z.infer<typeof briefSchema> & { name: string; dir: string };
+/**
+ * A brief with a `BASELINE.md` beside its `BRIEF.md` is paired: the same
+ * product, built once on knew and once with no knew at all, judged by the
+ * same checker. Its `baseline-reference/` proves the baseline can pass.
+ */
+export type Brief = z.infer<typeof briefSchema> & { name: string; dir: string; arms: Arm[] };
 
 export function loadBrief(name: string): Brief {
   const dir = join(BRIEFS, name);
-  return { ...briefSchema.parse(JSON.parse(readFileSync(join(dir, "brief.json"), "utf8"))), name, dir };
+  const arms: Arm[] = existsSync(join(dir, "BASELINE.md")) ? ["knew", "baseline"] : ["knew"];
+  return { ...briefSchema.parse(JSON.parse(readFileSync(join(dir, "brief.json"), "utf8"))), name, dir, arms };
 }
+
+/** Where an arm's known-good app lives. */
+export const referenceOf = (brief: Brief, arm: Arm) => join(brief.dir, arm === "knew" ? "reference" : "baseline-reference");
 
 export function briefNames(): string[] {
   return readdirSync(BRIEFS, { withFileTypes: true })
@@ -48,7 +57,7 @@ export function briefNames(): string[] {
 /** A content hash of what the agent and the checker see, so a result says exactly which brief it measured. */
 export function briefHash(brief: Brief): string {
   const hash = createHash("sha256");
-  for (const file of ["BRIEF.md", "brief.json", "check.ts", ...brief.inputs]) hashPath(hash, join(brief.dir, file));
+  for (const file of ["BRIEF.md", "BASELINE.md", "brief.json", "check.ts", ...brief.inputs]) hashPath(hash, join(brief.dir, file));
   return hash.digest("hex").slice(0, 16);
 }
 

@@ -7,7 +7,7 @@ import { debriefPrompt } from "../src/claude.ts";
 import { anchorsOf, errorKey, findingsOf } from "../src/findings.ts";
 import type { RunMetrics } from "../src/metrics.ts";
 import { forInterview, momentsOf, notesOf, type Moment } from "../src/moments.ts";
-import { summaryMarkdown, verifyDebrief, type Debrief, type RunRecord } from "../src/report.ts";
+import { comparisonLines, summaryMarkdown, verifyDebrief, type Debrief, type RunRecord } from "../src/report.ts";
 import { eventsFromFile, parseTranscript, type Transcript } from "../src/transcript.ts";
 
 /**
@@ -178,7 +178,7 @@ const NO_DEBRIEF: Debrief = { guessed: [], unhelpfulErrors: [], missingFromDocs:
 
 function record(brief: string, run: number, changes: Partial<RunRecord> = {}): RunRecord {
   return {
-    identity: { brief, briefVersion: 1, briefHash: "h", run, model: "m", effort: null, cliVersion: "c", tarballSha256: "t", gitSha: "0123456789", dirty: false, promptHash: "p", zodVersion: null, thinkAloud: false },
+    identity: { brief, briefVersion: 1, briefHash: "h", run, model: "m", effort: null, cliVersion: "c", tarballSha256: "t", gitSha: "0123456789", dirty: false, promptHash: "p", zodVersion: null, thinkAloud: false, arm: "knew" },
     outcome: "pass",
     reason: "",
     timedOut: false,
@@ -244,5 +244,26 @@ describe("Scenario: A pass's findings rank what several runs raised above what o
     assert.match(summary, /### error: lens …: pinned names …, which is not a fact type — 2 runs, 2 briefs/);
     assert.match(summary, /- behaviour · places#1, step 6: opened the compiled dist\/readiness\.js/);
     assert.match(summary, /Think-aloud was on/);
+  });
+});
+
+describe("Scenario: A paired brief's summary sets knew against the baseline, probe by probe", () => {
+  it("counts each arm's passes per probe, and leaves out a brief built only one way", () => {
+    const probe = (name: string, passed: boolean) => ({ name, passed, detail: "" });
+    const knew = record("notebook", 1, { check: { passed: true, checks: [probe("a correction keeps its history", true), probe("a notebook is its owner's alone", true)] } });
+    const baseline = record("notebook", 1, {
+      identity: { ...knew.identity, arm: "baseline" },
+      outcome: "fail",
+      check: { passed: false, checks: [probe("a correction keeps its history", false), probe("a notebook is its owner's alone", true)] },
+    });
+    assert.deepEqual(comparisonLines([knew, baseline, record("places", 1)]), [
+      "### notebook",
+      "",
+      "| Probe | On knew | Baseline |",
+      "|---|---|---|",
+      "| a correction keeps its history | 1/1 | 0/1 |",
+      "| a notebook is its owner's alone | 1/1 | 1/1 |",
+      "",
+    ]);
   });
 });

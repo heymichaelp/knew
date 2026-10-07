@@ -29,6 +29,8 @@ export interface Identity {
   zodVersion: string | null;
   /** Whether the agent kept a think-aloud log, which changes how it works and so what its effort means. */
   thinkAloud: boolean;
+  /** Built on knew, or with no knew at all (a paired brief's baseline). */
+  arm: "knew" | "baseline";
 }
 
 /** The debrief's answer about one numbered moment of the session, with the moment it was asked about. */
@@ -125,7 +127,7 @@ export function writeRun(dir: string, record: RunRecord): void {
 
 /** The app the agent left, minus what was installed, for reading after the directory is gone. */
 export function archiveTree(runDir: string, into: string): boolean {
-  const result = spawnSync("tar", ["czf", join(into, "tree.tgz"), "--exclude=./node_modules", "--exclude=./vendor", "--exclude=./.check", "-C", runDir, "."], {
+  const result = spawnSync("tar", ["czf", join(into, "tree.tgz"), "--exclude=./node_modules", "--exclude=./vendor", "--exclude=./.check", "--exclude=./.check-vendor", "-C", runDir, "."], {
     encoding: "utf8",
   });
   return result.status === 0;
@@ -143,6 +145,7 @@ const minutes = (ms: number | null) => (ms === null ? "—" : `${(ms / 60_000).t
 
 export interface BriefSummary {
   brief: string;
+  arm: "knew" | "baseline";
   version: number;
   scored: number;
   passed: number;
@@ -152,16 +155,23 @@ export interface BriefSummary {
   medianDuration: number | null;
 }
 
-/** Per brief: pass k of N among the runs that measured the package (infra and contaminated runs do not), and the medians. */
+const scoredOf = (runs: readonly RunRecord[]) => runs.filter((run) => run.outcome !== "infra" && run.outcome !== "contaminated");
+
+/** Per brief and arm: pass k of N among the runs that measured the package (infra and contaminated runs do not), and the medians. */
 export function summarize(records: readonly RunRecord[]): BriefSummary[] {
   const byBrief = new Map<string, RunRecord[]>();
-  for (const record of records) byBrief.set(record.identity.brief, [...(byBrief.get(record.identity.brief) ?? []), record]);
-  return [...byBrief.entries()].map(([brief, runs]) => {
-    const scored = runs.filter((run) => run.outcome !== "infra" && run.outcome !== "contaminated");
+  for (const record of records) {
+    const key = `${record.identity.brief}\u0000${record.identity.arm}`;
+    byBrief.set(key, [...(byBrief.get(key) ?? []), record]);
+  }
+  return [...byBrief.values()].map((runs) => {
+    const brief = runs[0]!.identity.brief;
+    const scored = scoredOf(runs);
     const outcomes: Partial<Record<Outcome, number>> = {};
     for (const run of runs) outcomes[run.outcome] = (outcomes[run.outcome] ?? 0) + 1;
     return {
       brief,
+      arm: runs[0]!.identity.arm,
       version: runs[0]!.identity.briefVersion,
       scored: scored.length,
       passed: scored.filter((run) => run.outcome === "pass").length,
@@ -173,6 +183,25 @@ export function summarize(records: readonly RunRecord[]): BriefSummary[] {
   });
 }
 
+/**
+ * For a paired brief built both ways: each probe, and how many of each arm's
+ * runs passed it. Where the baseline fails and knew passes, that is what knew
+ * adds; where both pass, knew adds little there.
+ */
+export function comparisonLines(records: readonly RunRecord[]): string[] {
+  const lines: string[] = [];
+  for (const brief of [...new Set(records.map((record) => record.identity.brief))].sort()) {
+    const arm = (which: "knew" | "baseline") => scoredOf(records.filter((record) => record.identity.brief === brief && record.identity.arm === which));
+    const knew = arm("knew");
+    const baseline = arm("baseline");
+    if (knew.length === 0 || baseline.length === 0) continue;
+    const probes = [...new Set([...knew, ...baseline].flatMap((run) => run.check.checks.map((check) => check.name)))];
+    const passed = (runs: RunRecord[], probe: string) => `${runs.filter((run) => run.check.checks.some((check) => check.name === probe && check.passed)).length}/${runs.length}`;
+    lines.push(`### ${brief}`, "", "| Probe | On knew | Baseline |", "|---|---|---|", ...probes.map((probe) => `| ${probe} | ${passed(knew, probe)} | ${passed(baseline, probe)} |`), "");
+  }
+  return lines;
+}
+
 export function summaryMarkdown(
   records: readonly RunRecord[],
   header: { stamp: string; gitSha: string; dirty: boolean; model: string; thinkAloud: boolean },
@@ -180,7 +209,7 @@ export function summaryMarkdown(
 ): string {
   const rows = summarize(records).map(
     (s) =>
-      `| ${s.brief} | v${s.version} | ${s.passed}/${s.scored} | ${Object.entries(s.outcomes).map(([o, n]) => `${o} ${n}`).join(", ")} | ${money(s.medianCost)} | ${s.medianTurns ?? "—"} | ${minutes(s.medianDuration)} |`,
+      `| ${s.brief} | ${s.arm} | v${s.version} | ${s.passed}/${s.scored} | ${Object.entries(s.outcomes).map(([o, n]) => `${o} ${n}`).join(", ")} | ${money(s.medianCost)} | ${s.medianTurns ?? "—"} | ${minutes(s.medianDuration)} |`,
   );
   const disqualified = records.filter((r) => r.outcome === "infra" || r.outcome === "contaminated");
   return [
@@ -189,10 +218,11 @@ export function summaryMarkdown(
     `Commit \`${header.gitSha.slice(0, 8)}\`${header.dirty ? " (with uncommitted changes)" : ""}, builder \`${header.model}\`. Cost is the CLI's API-rate estimate.` +
       (header.thinkAloud ? " Think-aloud was on: the agents kept notes as they worked, so effort is not comparable with a plain pass." : ""),
     "",
-    "| Brief | Version | Passed | Outcomes | Median cost | Median turns | Median time |",
-    "|---|---|---|---|---|---|---|",
+    "| Brief | Arm | Version | Passed | Outcomes | Median cost | Median turns | Median time |",
+    "|---|---|---|---|---|---|---|---|",
     ...rows,
     "",
+    ...(comparisonLines(records).length > 0 ? ["## On knew against the baseline", "", ...comparisonLines(records)] : []),
     "## Findings",
     "",
     "Grouped by what they are about, the most widely raised first. Each item says what backs it: behaviour (what the agent did),",
@@ -211,6 +241,6 @@ export function summaryMarkdown(
 export function printTable(records: readonly RunRecord[]): void {
   for (const s of summarize(records)) {
     const outcomes = Object.entries(s.outcomes).map(([o, n]) => `${o} ${n}`).join(", ");
-    process.stdout.write(`${s.brief.padEnd(10)} passed ${s.passed}/${s.scored}  ${outcomes.padEnd(28)} ${money(s.medianCost).padStart(7)}  ${String(s.medianTurns ?? "—").padStart(4)} turns  ${minutes(s.medianDuration)}\n`);
+    process.stdout.write(`${`${s.brief}${s.arm === "baseline" ? " (baseline)" : ""}`.padEnd(22)} passed ${s.passed}/${s.scored}  ${outcomes.padEnd(28)} ${money(s.medianCost).padStart(7)}  ${String(s.medianTurns ?? "—").padStart(4)} turns  ${minutes(s.medianDuration)}\n`);
   }
 }

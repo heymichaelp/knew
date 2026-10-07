@@ -41,6 +41,8 @@ export interface CheckOptions {
   typecheck: boolean;
   /** Run the app's own tests. Off only where a caller runs them itself. */
   appTests?: boolean;
+  /** Which way the app was built: on knew (the default), or with no knew at all, for a paired brief. */
+  arm?: "knew" | "baseline";
 }
 
 /** A collector of named checks. A check passes unless it throws; what it returns is its detail. */

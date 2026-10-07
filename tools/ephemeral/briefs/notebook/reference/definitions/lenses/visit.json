@@ -1,0 +1,14 @@
+{
+  "id": "visit",
+  "version": 1,
+  "objective": "Know what to expect, and when to go.",
+  "vocabulary": "notebook",
+  "header": "Before you go to {who}:",
+  "overHeading": "No longer the case",
+  "needs": [
+    { "id": "kind-of-place", "dimension": "kind-of-place", "weight": 4 },
+    { "id": "hours", "dimension": "hours", "weight": 3 },
+    { "id": "vibe", "dimension": "vibe" },
+    { "id": "order", "dimension": "order", "weight": 0.5 }
+  ]
+}

@@ -31,11 +31,16 @@ export const BUILD_PROMPT =
  * plain one's, and its identity says which it was.
  */
 export const THINK_ALOUD =
-  " As you work, keep a file named NOTES.md in this directory: add one line each time you have to guess how the package " +
-  "behaves, find its docs or an error message confusing, or work around something. Say what happened and what you did " +
-  "about it. It is read by the package's authors.";
+  " As you work, keep a file named NOTES.md in this directory: add one line each time you have to guess how something " +
+  "behaves, find documentation or an error message confusing, or work around something. Say what happened and what you " +
+  "did about it. It is read by the people who wrote the brief.";
 
-export const buildPrompt = (thinkAloud: boolean) => BUILD_PROMPT + (thinkAloud ? THINK_ALOUD : "");
+/** A baseline run builds the same product with no package named or installed. */
+export const BASELINE_PROMPT =
+  "BRIEF.md describes the app to build. Work only inside this directory. You're done when `npm test` and `npm run typecheck` pass.";
+
+export const buildPrompt = (thinkAloud: boolean, arm: "knew" | "baseline" = "knew") =>
+  (arm === "knew" ? BUILD_PROMPT : BASELINE_PROMPT) + (thinkAloud ? THINK_ALOUD : "");
 
 const DEBRIEF_QUESTIONS = [
   "This directory is about to be deleted. Before it is, answer some questions about building on @popjoker/knew,",

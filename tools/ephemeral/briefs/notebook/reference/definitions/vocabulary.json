@@ -1,0 +1,20 @@
+{
+  "id": "notebook",
+  "version": 1,
+  "kind": "place",
+  "factTypes": {
+    "KIND": { "description": "What kind of place it is: a café, a wine bar, a record shop.", "dimension": "kind-of-place", "enduring": true },
+    "HOURS": { "description": "When it is open: days and times.", "dimension": "hours", "revisitAfterDays": 30 },
+    "VIBE": { "description": "What it is like to be there: noise, light, crowd, what it is good for.", "dimension": "vibe" },
+    "ORDER": { "description": "Something worth ordering there.", "dimension": "order" }
+  },
+  "dimensions": {
+    "kind-of-place": { "label": "What kind of place it is" },
+    "hours": { "label": "When it is open" },
+    "vibe": { "label": "What it is like to be there" },
+    "order": { "label": "What to order" }
+  },
+  "fallbackType": "VIBE",
+  "fields": [],
+  "charter": "# What we keep about places\n\nKeep what changes the next visit: what kind of place it is, when it is open, what it is like, what to order. Keep only what the note says.\n"
+}
