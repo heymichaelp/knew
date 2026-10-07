@@ -127,25 +127,25 @@ export interface MustHonor {
   fact: string;
 }
 
-/** An ask still worth asking: open, or thin against what its lens needs.
- *  Gaps come in the order to ask them — the first is the next question. */
+/** Missing understanding: a need that is open, or thin against what its lens
+ *  needs. Gaps come in order of value. */
 export interface Gap {
-  id: string;
-  question: string;
-  /** The dimension it asks about, or null when it names its types. */
+  need: string;
+  label: string;
+  /** Its dimension, or null when it names its types. */
   dimension: string | null;
-  /** The types whose facts answer it. */
-  answeredBy: string[];
+  /** The types whose facts count toward it. */
+  types: string[];
 }
 
 export interface Brief {
   text: string;
   mustHonor: MustHonor[];
-  /** What the page is missing, by the lens's own asks, in the order to ask. */
+  /** What the lens's objective still needs understood, in order of value. */
   gaps: Gap[];
 }
 
-/** What is known about one dimension of an entity: evidence, with no
+/** Current understanding of one dimension of an entity: evidence, with no
  *  objective in it. */
 export interface DimensionEvidence {
   id: string;
@@ -161,60 +161,62 @@ export interface DimensionEvidence {
   factIds: string[];
 }
 
-/** Where an ask stands: met by fresh facts; waiting on an ask that must be
- *  answered first; due, with enough facts but not enough of them fresh; thin,
- *  with some but too few; or open, with none. */
-export type AskState = "met" | "waiting" | "due" | "thin" | "open";
+/** Where a need stands: met by fresh facts; waiting on a need that must be
+ *  met first; due, with enough facts but not enough of them fresh; thin, with
+ *  some but too few; or open, with none. */
+export type NeedState = "met" | "waiting" | "due" | "thin" | "open";
 
-/** How one ask of the lens stands for this entity: sufficiency, against what
- *  the lens's objective needs. */
-export interface AskStanding {
+/** How one need of the lens stands for this entity. */
+export interface NeedStanding {
   id: string;
-  question: string;
+  label: string;
   dimension: string | null;
-  answeredBy: string[];
+  types: string[];
   weight: number;
   enough: number;
-  /** Current facts that answer it. */
+  /** Current facts that count toward it. */
   facts: number;
   /** Of those, how many are due for a revisit. */
   due: number;
   /** 0 to 1, three places: 1 when enough fresh facts answer it. */
   strength: number;
-  state: AskState;
-  /** The asks it waits on, while it is waiting. */
+  state: NeedState;
+  /** The needs it waits on, while it is waiting. */
   waitingOn: string[];
   /** Its facts, newest said first. */
   factIds: string[];
 }
 
-/** One thing to learn next. An `ask` puts the question, anchored on the facts
- *  already known, so it can go one notch finer; a `revisit` puts facts that
- *  have gone unsaid past their window back to the knower. */
-export interface NextStep {
-  kind: "ask" | "revisit";
-  /** The ask it serves. */
-  ask: string;
-  question: string;
-  /** weight · (1 − strength), three places: steps run from the highest. */
+/** A direction for understanding to grow in: `learn` where a need is open or
+ *  thin, built on the facts already known; `revisit` where understanding has
+ *  gone unsaid past its window, carrying the facts due. */
+export interface Direction {
+  kind: "learn" | "revisit";
+  /** The need it serves. */
+  need: string;
+  label: string;
+  dimension: string | null;
+  types: string[];
+  /** weight · (1 − strength), three places: directions run from the highest. */
   value: number;
   factIds: string[];
 }
 
-/** How ready the knower is, about one entity, for one lens's objective. */
+/** Current understanding of one entity, what one lens's objective still
+ *  needs, and the next directions. */
 export interface Readiness {
   lens: string;
   objective: string | null;
   /** The moment it describes. */
   at: Date;
-  /** The weighted mean strength of the applicable asks; null when none apply. */
+  /** The weighted mean strength of the applicable needs; null when none apply. */
   overall: number | null;
-  /** Evidence per dimension, in the vocabulary's order. */
+  /** Current understanding, per dimension, in the vocabulary's order. */
   dimensions: DimensionEvidence[];
-  /** Every ask that applies to this entity, in the lens's order. */
-  asks: AskStanding[];
-  /** What to learn next, in order. */
-  next: NextStep[];
+  /** Every need that applies to this entity, in the lens's order. */
+  needs: NeedStanding[];
+  /** The next directions, most valuable first. */
+  next: Direction[];
 }
 
 export interface EntityInput {
@@ -334,7 +336,7 @@ export interface SubjectExport {
 
 /**
  * The one door. `brief`, `gaps` and `readiness` are INSIDE the interface on
- * purpose: a client never assembles a page or a next question from raw facts
+ * purpose: a client never works out a page or a direction from raw facts
  * itself, so each is the same whichever driver produced it. Every read that
  * renders takes a lens; writing never names one.
  */
@@ -363,12 +365,12 @@ export interface Intelligence {
   /** Null when nothing is known about it yet — the caller falls back to its
    *  own note. */
   brief(scope: IntelligenceScope, entityId: string, options?: BriefOptions): Promise<Brief | null>;
-  /** The lens's asks still worth asking, in order: open or thin, and not
-   *  waiting on an ask that must be answered first. Null when the entity is
-   *  not on the roster. */
+  /** The missing understanding, in order of value: needs open or thin, and
+   *  not waiting on a need that must be met first. Null when the entity is not
+   *  on the roster. */
   gaps(scope: IntelligenceScope, entityId: string, options?: ReadOptions): Promise<Gap[] | null>;
-  /** What is known, how strongly, and what to learn next for the lens's
-   *  objective. Null when the entity is not on the roster. */
+  /** Current understanding, what the lens's objective still needs, and the
+   *  next directions. Null when the entity is not on the roster. */
   readiness(scope: IntelligenceScope, entityId: string, options?: ReadOptions): Promise<Readiness | null>;
   searchFacts(scope: IntelligenceScope, query: string, options?: SearchFactsOptions): Promise<Fact[]>;
   /** What the engine kept from the given source refs — current facts only. */

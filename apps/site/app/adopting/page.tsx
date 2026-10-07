@@ -5,7 +5,7 @@ import { headingsOf, packageManifest, readShipped, renderMarkdown } from "@/lib/
 
 export const metadata: Metadata = {
   title: "Adopting the engine",
-  description: "The guide a client follows, rendered from the package's own ADOPTING.md.",
+  description: "The guide: define, write, read, test. Rendered from the package's ADOPTING.md.",
 };
 
 export default function AdoptingPage() {
@@ -18,7 +18,7 @@ export default function AdoptingPage() {
       <DocHeader
         clause="The guide"
         title="Adopting the engine"
-        standfirst="How a client takes knew on, in the order the questions come up. This page is the package's own ADOPTING.md, read out of the installed tarball at build time — so it cannot describe a version that was never shipped."
+        standfirst="The package's ADOPTING.md, read from the installed tarball at build time."
         aside={
           <p className="stamp">
             <span>as shipped in</span>

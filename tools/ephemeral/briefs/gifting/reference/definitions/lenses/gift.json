@@ -8,7 +8,7 @@
   "attributeTags": [
     "level"
   ],
-  "asks": [
+  "needs": [
     {
       "id": "ahead",
       "dimension": "ahead"
@@ -23,8 +23,8 @@
     },
     {
       "id": "what-they-love",
-      "question": "What do they love, and what are they into right now?",
-      "answeredBy": [
+      "label": "What they love or want",
+      "types": [
         "INTEREST",
         "SKILL",
         "TASTE",

@@ -110,14 +110,14 @@ export function vocabulary(): VocabularyDefinition {
       },
     },
     dimensions: {
-      avoid: { label: "Steer clear of", question: "Is there anything to steer clear of with them?" },
-      ahead: { label: "Coming up", question: "What is coming up for them?" },
-      life: { label: "How life is arranged", question: "Where do they live, and how do their days go right now?" },
-      work: { label: "Work", question: "What do they do?" },
-      people: { label: "People in their life", question: "Who matters most to them?" },
-      pursuits: { label: "What they love", question: "What do they love doing, and how deeply?" },
-      has: { label: "Already has", question: "What do they already have and use?" },
-      background: { label: "Background", question: "Where are they from?" },
+      avoid: { label: "Steer clear of" },
+      ahead: { label: "Coming up" },
+      life: { label: "How life is arranged" },
+      work: { label: "Work" },
+      people: { label: "People in their life" },
+      pursuits: { label: "What they love" },
+      has: { label: "Already has" },
+      background: { label: "Background" },
       other: { label: "Other" },
     },
     fallbackType: "OTHER",
@@ -127,11 +127,11 @@ export function vocabulary(): VocabularyDefinition {
 }
 
 /**
- * The starter lens: know them well enough to meet them well next time. It
- * asks the coarse things first — work, people, how life is arranged, where
- * they are from — then what they love, what is coming up, what they have,
- * and what to steer clear of; every ask weighs the same, so that order is
- * the order of the gaps.
+ * The starter lens: know them well enough to meet them well next time. Its
+ * needs run coarse to fine: work, people, how life is arranged, where they
+ * are from, then what they love, what is coming up, what they have, and what
+ * to steer clear of. Every need weighs the same, so that is the order of the
+ * directions.
  */
 export function lens(): LensDefinition {
   return {
@@ -142,6 +142,6 @@ export function lens(): LensDefinition {
     header: "What you know about {who}:",
     overHeading: "No longer the case",
     attributeTags: ["level"],
-    asks: ["work", "people", "life", "background", "pursuits", "ahead", "has", "avoid"].map((dimension) => ({ id: dimension, dimension })),
+    needs: ["work", "people", "life", "background", "pursuits", "ahead", "has", "avoid"].map((dimension) => ({ id: dimension, dimension })),
   };
 }

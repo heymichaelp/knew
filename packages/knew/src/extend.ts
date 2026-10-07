@@ -1,4 +1,4 @@
-import { parseLensDefinition, type AskSpec, type LensDefinition, type SectionSpec } from "./lens.ts";
+import { parseLensDefinition, type NeedSpec, type LensDefinition, type SectionSpec } from "./lens.ts";
 import { parseVocabularyDefinition, type DimensionSpec, type FactTypeSpec, type VocabularyDefinition } from "./vocabulary.ts";
 
 /**
@@ -137,16 +137,14 @@ export interface LensOverrides {
   /** Replaces the pinned types; `null` goes back to the vocabulary's. */
   pinned?: string[] | null;
   attributeTags?: string[] | null;
-  /** By ask id: a patch merged into the base ask, a complete ask appended
+  /** By need id: a patch merged into the base need, a complete need appended
    *  after the base's, or `null` to drop it. */
-  asks?: Record<string, Patch<Omit<AskSpec, "id">> | null>;
+  needs?: Record<string, Patch<Omit<NeedSpec, "id">> | null>;
 }
 
-/** The asks a lens that names none asks: one per dimension with a question. */
-function defaultAsks(vocabulary: VocabularyDefinition): AskSpec[] {
-  return Object.entries(vocabulary.dimensions)
-    .filter(([, dimension]) => dimension.question !== undefined)
-    .map(([id]) => ({ id, dimension: id }));
+/** The needs of a lens that names none: one per dimension. */
+function defaultNeeds(vocabulary: VocabularyDefinition): NeedSpec[] {
+  return Object.keys(vocabulary.dimensions).map((id) => ({ id, dimension: id }));
 }
 
 /**
@@ -154,9 +152,9 @@ function defaultAsks(vocabulary: VocabularyDefinition): AskSpec[] {
  * another of the client's. Throws when the result is not a lens; references
  * into the vocabulary are checked when it is compiled against one.
  *
- * A base that names no asks asks its vocabulary's dimension questions. To
+ * A base that names no needs has one per dimension of its vocabulary. To
  * patch those by id, pass the vocabulary it reads, and they are written out
- * first; without it, `asks` overrides are refused rather than guessed at.
+ * first; without it, `needs` overrides are refused rather than guessed at.
  */
 export function extendLens(base: LensDefinition, overrides: LensOverrides, vocabulary?: VocabularyDefinition): LensDefinition {
   const result: Record<string, unknown> = { ...base };
@@ -169,30 +167,30 @@ export function extendLens(base: LensDefinition, overrides: LensOverrides, vocab
   replace(result, "sections", overrides.sections);
   replace(result, "pinned", overrides.pinned);
   replace(result, "attributeTags", overrides.attributeTags);
-  if (overrides.asks) {
-    let asks: AskSpec[];
-    if (base.asks) asks = base.asks.map((ask) => ({ ...ask }));
+  if (overrides.needs) {
+    let needs: NeedSpec[];
+    if (base.needs) needs = base.needs.map((need) => ({ ...need }));
     else {
       const reads = (overrides.vocabulary ?? base.vocabulary) as string;
       if (!vocabulary) {
         throw new Error(
-          `lens ${base.id} asks its vocabulary's dimension questions rather than naming asks, so they can only be patched by id ` +
+          `lens ${base.id} leaves its needs to its vocabulary's dimensions rather than naming them, so they can only be patched by id ` +
             `with that vocabulary in hand: pass ${reads} as the third argument`,
         );
       }
       if (vocabulary.id !== reads) throw new Error(`the extended lens reads vocabulary ${reads}, and was given ${vocabulary.id}`);
-      asks = defaultAsks(vocabulary);
+      needs = defaultNeeds(vocabulary);
     }
-    for (const [id, patch] of Object.entries(overrides.asks)) {
-      const at = asks.findIndex((ask) => ask.id === id);
+    for (const [id, patch] of Object.entries(overrides.needs)) {
+      const at = needs.findIndex((need) => need.id === id);
       if (patch === null) {
-        if (at >= 0) asks.splice(at, 1);
+        if (at >= 0) needs.splice(at, 1);
         continue;
       }
-      if (at >= 0) asks[at] = merge(asks[at], patch as Patch<AskSpec>);
-      else asks.push(merge<AskSpec>({ id } as AskSpec, patch as Patch<AskSpec>));
+      if (at >= 0) needs[at] = merge(needs[at], patch as Patch<NeedSpec>);
+      else needs.push(merge<NeedSpec>({ id } as NeedSpec, patch as Patch<NeedSpec>));
     }
-    result.asks = asks;
+    result.needs = needs;
   }
   return parseLensDefinition(result);
 }

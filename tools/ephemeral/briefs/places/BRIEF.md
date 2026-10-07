@@ -43,11 +43,11 @@ know what to expect when they get there. It needs to know:
     new name renames it.
   - `addNote(userId, placeId, text, { at })`: a user writes a note on a place's page. `at` is
     optional. It's when the note was written, for notes imported from elsewhere, and it defaults
-    to now. By the time `addNote` resolves, the note has been read, so the next question already
+    to now. By the time `addNote` resolves, the note has been read, so what to learn next already
     takes it into account.
-  - `nextQuestion(userId, placeId)`: the one thing worth finding out next before a visit, as
-    `{ question, recheck }`.
-    - `question` is worded exactly as the `visit` lens words it.
+  - `nextToLearn(userId, placeId)`: the one thing most worth finding out next before a visit, as
+    `{ about, recheck }`. Haunts words its own prompts from it.
+    - `about` names what to find out, exactly as the `visit` lens labels it.
     - When the most useful thing is to re-check something already noted, `recheck` lists those
       notes, in the words knew used for what it took from them. Otherwise `recheck` is empty.
     - It returns `null` when there's nothing left worth finding out, or when the user never added

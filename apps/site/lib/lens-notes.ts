@@ -1,43 +1,38 @@
 /**
  * What each field of a lens definition is for.
  *
- * The field *names*, types and constraints are generated from the zod schema
- * (lib/engine.ts). This file holds only the prose the schema cannot carry.
- * test/drift.test.ts asserts these keys are exactly the schema's keys — the
- * top-level fields and the fields inside each ask and section — so adding a
- * field to the lens fails the site's build until it is explained.
+ * The field names, types and constraints are generated from the zod schema
+ * (lib/engine.ts). This file holds only the prose. test/drift.test.ts asserts
+ * these keys are exactly the schema's, top-level and inside each need and
+ * section, so a new field fails the build until it is explained.
  */
 export const LENS_FIELD_NOTES: Record<string, string> = {
-  id: "The lens's name. A read names it in `lens`; a read that names none gets the client's default.",
-  version: "Bumped every time the definition changes. Changing a lens never touches an episode or a fact — it only changes how they read.",
-  objective:
-    "What the knower wants to be able to do relative to the entity, in one sentence. A reader writes toward it, and the asks are what it needs known.",
-  vocabulary: "The vocabulary it reads, by id. Several lenses read one vocabulary's facts.",
-  header: "The page's first line. Must contain `{who}`, which becomes the name, with the vocabulary's prompt fields in parentheses when there are any.",
-  overHeading: "The heading for facts past their own end date, listed last as context — “six months in Lisbon from May” is over in December, whether or not anybody says so.",
-  sections:
-    "The page's sections, in reading order, each holding one or more dimensions. Left out, there is one per dimension, headed by its label; given, they hold every dimension exactly once.",
-  pinned: "The fact types a reader must honor rather than weigh while acting on this objective. Left out, the ones the vocabulary pins.",
-  attributeTags: "The attributes worth showing in brackets after a fact line. Must name attributes some fact type carries.",
-  asks:
-    "The knowledge the objective needs: each ask names a dimension or the types that answer it, and may be weighted, need more than one fact, wait for another, or apply only to some entities. Left out, each dimension's question.",
+  id: "The lens's name. Reads name it in `lens`; without one, the client's default.",
+  version: "Bump on every change. Changing a lens touches no episode or fact.",
+  objective: "The goal, in one sentence. The needs are what it requires understood.",
+  vocabulary: "The vocabulary it reads. Several lenses can read one.",
+  header: "The page's first line. `{who}` becomes the name, with the prompt fields.",
+  overHeading: "The heading for facts whose own end date has passed.",
+  sections: "The page's sections, in order, each holding dimensions. Default: one per dimension.",
+  pinned: "The types a reader must honor. Default: the vocabulary's pinned types.",
+  attributeTags: "Attributes shown in brackets after a fact.",
+  needs: "What the objective needs understood. Default: one need per dimension.",
 };
 
-/** The fields inside an ask and a section. */
+/** The fields inside a need and a section. */
 export const LENS_NESTED_NOTES: Record<string, Record<string, string>> = {
-  "asks[]": {
-    id: "The ask's name, unique within the lens. Readiness and the gaps report it.",
-    question: "The question as the knower would be asked it. Optional for an ask of a dimension, which borrows the dimension's.",
-    dimension: "The dimension whose facts answer it. An ask names a dimension or the types that answer it — one, never both.",
-    answeredBy: "The fact types a current fact of which answers it.",
-    when: "Narrows the ask to the entities whose fields match every clause, case-insensitively. Left out, it applies to everyone.",
-    weight:
-      "How much it matters to the objective, relative to the other asks: more than 0, at most 1,000. Steps run from the highest weight × (1 − strength), so a heavy ask already half met can come after a lighter one still open. Default 1.",
-    enough: "How many current facts, each fresh, meet it — facts, not tellings. Below that it is thin; with enough facts but too few of them fresh, it is due. Default 1.",
-    after: "Asks that must be answered first: this one is not offered until they are. Coarse before fine. An ask that does not apply to the entity holds nothing back.",
+  "needs[]": {
+    id: "The need's name, unique in the lens.",
+    label: "What to understand. Default: the dimension's label; required with `types`.",
+    dimension: "The dimension whose facts count. Name a dimension or `types`, not both.",
+    types: "The fact types whose facts count.",
+    when: "Applies only to entities whose fields match every clause, case-insensitively.",
+    weight: "Relative value, 0 to 1,000. Directions run from the highest weight × (1 − strength). Default 1.",
+    enough: "Fresh facts needed to meet it. Default 1.",
+    after: "Needs that must be met first: coarse before fine.",
   },
   "sections[]": {
-    heading: "The section's heading on the page.",
-    dimensions: "The dimensions whose facts it holds, by id.",
+    heading: "The section's heading.",
+    dimensions: "The dimensions it holds.",
   },
 };

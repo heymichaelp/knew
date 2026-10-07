@@ -149,7 +149,7 @@ export function reviveReadiness(raw: Json): Readiness {
       lastSaidAt: date(d.lastSaidAt),
       factIds: (d.factIds as string[]) ?? [],
     })),
-    asks: (raw.asks as Readiness["asks"]) ?? [],
+    needs: (raw.needs as Readiness["needs"]) ?? [],
     next: (raw.next as Readiness["next"]) ?? [],
   };
 }

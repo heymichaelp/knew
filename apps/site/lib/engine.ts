@@ -20,7 +20,7 @@ import {
   readinessFor,
   SUBJECT_HEADER,
   vocabularyDefinitionSchema,
-  type CompiledAsk,
+  type CompiledNeed,
   type Lens,
   type Vocabulary,
 } from "@popjoker/knew";
@@ -114,7 +114,7 @@ function fieldsOf(node: JsonSchemaNode): DefinitionField[] {
 
 /**
  * The fields one level inside a field that holds objects — a record of them
- * (`factTypes.*`) or a list of them (`asks[]`) — by that path. A plain object
+ * (`factTypes.*`) or a list of them (`needs[]`) — by that path. A plain object
  * field (`prompts`, `basedOn`) is explained by its own note.
  */
 function nestedFieldsOf(node: JsonSchemaNode): Record<string, DefinitionField[]> {
@@ -174,7 +174,6 @@ export interface PresetType {
 export interface PresetDimension {
   readonly id: string;
   readonly label: string;
-  readonly question: string | null;
   /** The types that inform it, in the vocabulary's order. */
   readonly types: readonly PresetType[];
 }
@@ -187,8 +186,8 @@ export interface PresetOutline {
   readonly dimensions: readonly PresetDimension[];
   /** The starter lens, compiled, so every default it leaves to the engine is filled in. */
   readonly lens: Lens;
-  /** What the starter lens asks first about an entity nothing is known about. */
-  readonly firstQuestion: string | null;
+  /** The starter lens's first direction for an entity nothing is known about: its label. */
+  readonly firstDirection: string | null;
 }
 
 function outlineOf(name: string, preset: (typeof presets)[keyof typeof presets]): PresetOutline {
@@ -216,12 +215,11 @@ function outlineOf(name: string, preset: (typeof presets)[keyof typeof presets])
     dimensions: vocabulary.dimensions.map((dimension) => ({
       id: dimension.id,
       label: dimension.label,
-      question: dimension.question,
       types: vocabulary.factTypeKeys.filter((key) => vocabulary.factTypes[key]!.dimension === dimension.id).map(typeOf),
     })),
     lens,
     // Nothing is known, so the moment asked at does not matter.
-    firstQuestion: readinessFor(lens, { fields: {} }, [], new Date(0)).next[0]?.question ?? null,
+    firstDirection: readinessFor(lens, { fields: {} }, [], new Date(0)).next[0]?.label ?? null,
   };
 }
 
@@ -231,17 +229,17 @@ export function presetOutlines(): PresetOutline[] {
 }
 
 /**
- * What sets an ask apart from the rest, as `Inline` text: a weight when the
- * asks differ in weight, a count of facts other than the engine's default,
- * the asks it waits for, and whom it applies to. Empty for an ask that leaves
+ * What sets a need apart from the rest, as `Inline` text: a weight when the
+ * needs differ in weight, a count of facts other than the engine's default,
+ * the needs it waits for, and whom it applies to. Empty for a need that leaves
  * all of it to the defaults.
  */
-export function askMarks(ask: CompiledAsk, sameWeight: boolean): string[] {
+export function needMarks(need: CompiledNeed, sameWeight: boolean): string[] {
   return [
-    sameWeight ? null : `weighs ${ask.weight}`,
-    ask.enough === ENGINE_DEFAULTS.enough ? null : `met by ${ask.enough} facts`,
-    ask.after.length === 0 ? null : `after ${ask.after.map((id) => `\`${id}\``).join(" and ")}`,
-    ...ask.when.map((clause) => `only when \`${clause.field}\` is ${clause.equals.map((value) => `“${value}”`).join(" or ")}`),
+    sameWeight ? null : `weighs ${need.weight}`,
+    need.enough === ENGINE_DEFAULTS.enough ? null : `met by ${need.enough} facts`,
+    need.after.length === 0 ? null : `after ${need.after.map((id) => `\`${id}\``).join(" and ")}`,
+    ...need.when.map((clause) => `only when \`${clause.field}\` is ${clause.equals.map((value) => `“${value}”`).join(" or ")}`),
   ].filter((mark) => mark !== null);
 }
 

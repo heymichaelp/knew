@@ -214,7 +214,7 @@ describe("Scenario: A pass's findings rank what several runs raised above what o
       metrics: { ...NO_METRICS, packageErrors: [{ message: "lens gift@1: pinned names WISHES, which is not a fact type", count: 1 }] },
       debrief: { ...NO_DEBRIEF, missingFromDocs: ["whether the revisit window counts from first said or last said"], wouldChange: "Put the valid types in the pinned error." },
     }),
-    record("migrate", 1, { outcome: "contaminated", metrics: { ...NO_METRICS, packageErrors: [{ message: "lens regulars@3: pinned names X, which is not a fact type", count: 1 }] } }),
+    record("journal", 1, { outcome: "contaminated", metrics: { ...NO_METRICS, packageErrors: [{ message: "lens regulars@3: pinned names X, which is not a fact type", count: 1 }] } }),
   ];
   const findings = findingsOf(records, NAMES);
 
@@ -222,7 +222,7 @@ describe("Scenario: A pass's findings rank what several runs raised above what o
     assert.match(findings[0]!.about, /^error: lens …: pinned names …, which is not a fact type$/);
     assert.deepEqual(findings[0]!.runs, ["gifting#1", "places#1"]);
     assert.deepEqual(findings[0]!.briefs, ["gifting", "places"]);
-    assert.ok(findings.every((finding) => !finding.runs.includes("migrate#1")));
+    assert.ok(findings.every((finding) => !finding.runs.includes("journal#1")));
   });
 
   it("groups two runs' words about the same thing, and files an answer that names nothing under its moment", () => {

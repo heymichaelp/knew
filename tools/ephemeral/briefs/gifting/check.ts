@@ -31,7 +31,7 @@ const LOVES = ["INTEREST", "TASTE"] as const;
 /** The preset's types for what a pick must honor. */
 const HONOR = ["AVOID", "HAS"] as const;
 
-type FirstMove = { move: "ask-first"; question: string } | { move: "show-first"; page: string; honor: string[] };
+type FirstMove = { move: "ask-first"; about: string } | { move: "show-first"; page: string; honor: string[] };
 
 interface Thoughtful {
   addPerson(userId: string, person: { id: string; name: string }): Promise<void>;
@@ -55,8 +55,8 @@ function canonical(value: unknown): string {
   );
 }
 
-/** The asks that count interests, tastes and wishes together, among those that apply to everyone. */
-const picksAsks = (lens: Lens) => lens.asks.filter((ask) => ask.when.length === 0 && [...LOVES, "WISH"].every((type) => ask.answeredBy.includes(type)));
+/** The needs that count interests, tastes and wishes together, among those that apply to everyone. */
+const picksNeeds = (lens: Lens) => lens.needs.filter((need) => need.when.length === 0 && [...LOVES, "WISH"].every((type) => need.types.includes(type)));
 
 /** `n` things someone loves or wants, in a mix of the three types, said an hour before `at`. */
 const lovesOrWants = (n: number, at: Date): Fact[] =>
@@ -77,10 +77,10 @@ async function definitionProbes(checks: Checks, definitions: Definitions, lens: 
   });
 
   await checks.run("picks wait for five things about what they love or want, in any mix", () => {
-    const asks = picksAsks(lens);
-    ensure(asks.length > 0, "no ask of the gift lens is answered by interests, tastes and wishes alike, so nothing counts them together");
+    const needs = picksNeeds(lens);
+    ensure(needs.length > 0, "no need of the gift lens counts interests, tastes and wishes alike, so nothing counts them together");
     const standing = (n: number) =>
-      readinessFor(lens, { fields: {} }, lovesOrWants(n, AT), AT).asks.filter((candidate) => asks.some((ask) => ask.id === candidate.id));
+      readinessFor(lens, { fields: {} }, lovesOrWants(n, AT), AT).needs.filter((candidate) => needs.some((need) => need.id === candidate.id));
     const early = standing(4).filter((candidate) => candidate.state === "met");
     ensure(early.length === 0, `with four things known, ${early.map((candidate) => candidate.id).join(" and ")} is already met`);
     const late = standing(5).filter((candidate) => candidate.state !== "met");
@@ -127,15 +127,15 @@ async function appProbes(checks: Checks, dir: string, definitions: Definitions):
     return { fake, app, placed };
   };
 
-  await checks.run("someone new is asked the gift lens's first question, and someone never added gets null", async () => {
+  await checks.run("someone new gets the gift lens's first direction, and someone never added gets null", async () => {
     const { fake, app, placed } = open();
     const unknown = await app.firstMove("ana", "dad");
     ensure(unknown === null, `before ana added dad, firstMove answered ${shown(unknown)}`);
     await app.addPerson("ana", { id: "dad", name: "Dad" });
     const { scope, id } = placed();
     const step = (await fake.readiness(scope, id, { lens: LENS }))?.next[0];
-    ensure(step, "the gift lens has nothing to ask about someone new");
-    const expected = { move: "ask-first", question: step.question };
+    ensure(step, "the gift lens has no direction for someone new");
+    const expected = { move: "ask-first", about: step.label };
     const move = await app.firstMove("ana", "dad");
     ensure(shown(move) === shown(expected), `for someone new, expected ${shown(expected)}, got ${shown(move)}`);
   });

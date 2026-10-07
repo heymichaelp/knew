@@ -5,10 +5,10 @@
   "vocabulary": "places",
   "header": "Before you go to {who}:",
   "overHeading": "No longer the case",
-  "asks": [
-    { "id": "what-kind", "question": "What kind of place is it?", "answeredBy": ["KIND"], "weight": 4 },
-    { "id": "opening-hours", "question": "When is it open?", "answeredBy": ["HOURS"], "weight": 3 },
-    { "id": "what-its-like", "question": "What is it like to be there?", "answeredBy": ["VIBE"], "after": ["what-kind"] },
-    { "id": "what-to-order", "question": "What's worth ordering there?", "answeredBy": ["ORDER"], "weight": 0.5, "after": ["what-kind"] }
+  "needs": [
+    { "id": "what-kind", "label": "What kind of place it is", "types": ["KIND"], "weight": 4 },
+    { "id": "opening-hours", "label": "When it is open", "types": ["HOURS"], "weight": 3 },
+    { "id": "what-its-like", "label": "What it is like to be there", "types": ["VIBE"], "after": ["what-kind"] },
+    { "id": "what-to-order", "label": "What is worth ordering", "types": ["ORDER"], "weight": 0.5, "after": ["what-kind"] }
   ]
 }

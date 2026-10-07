@@ -37,11 +37,10 @@ const fact = (type: string, text: string, said: string): Fact => ({
 describe("Scenario: The person preset is a vocabulary and a lens a client can use as they stand", () => {
   const vocabulary = compileVocabulary(parseVocabularyDefinition(person.vocabulary()));
 
-  it("is a valid vocabulary of fourteen types across nine dimensions, each but the fallback's with a question", () => {
+  it("is a valid vocabulary of fourteen types across nine dimensions", () => {
     assert.equal(vocabulary.kind, "person");
     assert.equal(vocabulary.factTypeKeys.length, 14);
     assert.deepEqual(vocabulary.dimensions.map((d) => d.id), ["avoid", "ahead", "life", "work", "people", "pursuits", "has", "background", "other"]);
-    assert.deepEqual(vocabulary.dimensions.filter((d) => d.question === null).map((d) => d.id), ["other"]);
     assert.deepEqual(
       vocabulary.factTypeKeys.filter((key) => vocabulary.factTypes[key]!.revisitAfterDays !== null).map((key) => [key, vocabulary.factTypes[key]!.revisitAfterDays]),
       [
@@ -54,13 +53,13 @@ describe("Scenario: The person preset is a vocabulary and a lens a client can us
     assert.deepEqual(person.PRESET, { id: "person", version: 1 });
   });
 
-  it("comes with a starter lens that asks the coarse things first", () => {
+  it("comes with a starter lens whose directions run coarse to fine", () => {
     assert.deepEqual(lensProblems(person.lens(), vocabulary), []);
     const lens = compileLens(person.lens(), vocabulary);
     assert.equal(lens.objective, "Know them well enough to meet them well next time.");
     const readiness = readinessFor(lens, { fields: {} }, [], at("2026-10-05T00:00:00Z"));
-    assert.deepEqual(readiness.next.map((s) => s.ask), ["work", "people", "life", "background", "pursuits", "ahead", "has", "avoid"]);
-    assert.equal(readiness.next[0]!.question, "What do they do?");
+    assert.deepEqual(readiness.next.map((s) => s.need), ["work", "people", "life", "background", "pursuits", "ahead", "has", "avoid"]);
+    assert.deepEqual([readiness.next[0]!.kind, readiness.next[0]!.label], ["learn", "Work"]);
   });
 
   it("hands out a fresh copy every time, so a client's edits never reach another's", () => {
@@ -78,7 +77,7 @@ describe("Scenario: The place and product presets stand as they are, as person d
       dimensions: ["caution", "what", "where", "when", "offer", "feel", "people", "history", "other"],
       windows: [["CAUTION", 365], ["HOURS", 30], ["BUSY", 90], ["OFFER", 180], ["PRICE", 365]],
       pinned: ["CAUTION"],
-      first: "What kind of place is it?",
+      first: "What it is",
     },
     {
       preset: product,
@@ -86,17 +85,16 @@ describe("Scenario: The place and product presets stand as they are, as person d
       dimensions: ["caution", "what", "details", "standing", "origin", "care", "opinion", "other"],
       windows: [["OWNERSHIP", 365], ["CONDITION", 180], ["CARE", 365]],
       pinned: ["CAUTION"],
-      first: "What is it, exactly?",
+      first: "What it is",
     },
   ] as const;
 
   for (const { preset, types, dimensions, windows, pinned, first } of cases) {
-    it(`is a valid ${preset.PRESET.id} vocabulary of ${types} types, each dimension but the fallback's with a question, and a starter lens that compiles against it`, () => {
+    it(`is a valid ${preset.PRESET.id} vocabulary of ${types} types, with a starter lens that compiles against it and needs every dimension but the fallback's`, () => {
       const vocabulary = compileVocabulary(parseVocabularyDefinition(preset.vocabulary()));
       assert.deepEqual([vocabulary.id, vocabulary.version, vocabulary.kind], [preset.PRESET.id, 1, preset.PRESET.id]);
       assert.equal(vocabulary.factTypeKeys.length, types);
       assert.deepEqual(vocabulary.dimensions.map((d) => d.id), dimensions);
-      assert.deepEqual(vocabulary.dimensions.filter((d) => d.question === null).map((d) => d.id), ["other"]);
       assert.deepEqual(
         vocabulary.factTypeKeys.filter((key) => vocabulary.factTypes[key]!.revisitAfterDays !== null).map((key) => [key, vocabulary.factTypes[key]!.revisitAfterDays]),
         windows,
@@ -104,8 +102,8 @@ describe("Scenario: The place and product presets stand as they are, as person d
       assert.deepEqual(vocabulary.factTypeKeys.filter((key) => vocabulary.factTypes[key]!.pinned), pinned);
       assert.deepEqual(lensProblems(preset.lens(), vocabulary), []);
       const readiness = readinessFor(compileLens(preset.lens(), vocabulary), { fields: {} }, [], at("2026-10-05T00:00:00Z"));
-      assert.equal(readiness.next[0]!.question, first, "the coarse thing first");
-      assert.equal(readiness.next.length, dimensions.length - 1, "every dimension with a question is asked");
+      assert.equal(readiness.next[0]!.label, first, "the coarse thing first");
+      assert.deepEqual(readiness.needs.map((n) => n.dimension).sort(), dimensions.filter((d) => d !== "other").sort(), "every dimension but the fallback's is a need");
     });
   }
 
@@ -130,7 +128,7 @@ describe("Scenario: A client extends a preset, saying only what differs", () => 
         CIRCUMSTANCE: { revisitAfterDays: null },
         HAS: null,
       },
-      dimensions: { context: { label: "How you know each other", question: "Where did you meet?" }, has: null },
+      dimensions: { context: { label: "How you know each other" }, has: null },
       charter: "# Our charter\n\nKeep what helps the next conversation.\n",
     });
     assert.deepEqual([extended.id, extended.version, extended.kind], ["relationships", 1, "person"]);
@@ -182,7 +180,7 @@ describe("Scenario: A client extends a preset, saying only what differs", () => 
         id: "relationships",
         version: 1,
         factTypes: { CONTEXT: { description: "How the two of you know each other.", dimension: "context", enduring: true } },
-        dimensions: { context: { label: "How you know each other", question: "Where did you meet?" } },
+        dimensions: { context: { label: "How you know each other" } },
       }),
     );
     const prep = extendLens(person.lens(), {
@@ -190,44 +188,44 @@ describe("Scenario: A client extends a preset, saying only what differs", () => 
       version: 1,
       vocabulary: "relationships",
       objective: "Walk into the next conversation ready.",
-      asks: {
+      needs: {
         ahead: { weight: 3 },
         pursuits: { weight: 2, enough: 2, after: ["work"] },
         avoid: null,
         context: { dimension: "context" },
       },
     });
-    assert.deepEqual(prep.asks!.map((a) => a.id), ["work", "people", "life", "background", "pursuits", "ahead", "has", "context"]);
+    assert.deepEqual(prep.needs!.map((a) => a.id), ["work", "people", "life", "background", "pursuits", "ahead", "has", "context"]);
     const lens = compileLens(prep, vocabulary);
     const facts = [fact("INTEREST", "Training for a marathon in October", "2026-09-01")];
     const readiness = readinessFor(lens, { fields: {} }, facts, at("2026-10-05T00:00:00Z"));
-    assert.deepEqual(readiness.next.slice(0, 2).map((s) => [s.ask, s.value]), [["ahead", 3], ["work", 1]]);
-    const pursuits = readiness.asks.find((a) => a.id === "pursuits")!;
+    assert.deepEqual(readiness.next.slice(0, 2).map((s) => [s.need, s.value]), [["ahead", 3], ["work", 1]]);
+    const pursuits = readiness.needs.find((a) => a.id === "pursuits")!;
     assert.deepEqual([pursuits.state, pursuits.waitingOn, pursuits.strength], ["waiting", ["work"], 0.5]);
     assert.equal(readiness.dimensions.find((d) => d.id === "pursuits")!.facts, 1);
   });
 
-  it("patches a lens that leaves its asks to the dimension questions, once it is handed the vocabulary", () => {
+  it("patches a lens that leaves its needs to the dimensions, once it is handed the vocabulary", () => {
     const implicit = { id: "plain", version: 1, vocabulary: "person", header: "About {who}:", overHeading: "Over" };
-    assert.throws(() => extendLens(implicit, { id: "mine", version: 1, asks: { work: { weight: 3 } } }), /pass person as the third argument/);
+    assert.throws(() => extendLens(implicit, { id: "mine", version: 1, needs: { work: { weight: 3 } } }), /pass person as the third argument/);
     const vocabulary = person.vocabulary();
-    const weighted = extendLens(implicit, { id: "mine", version: 1, asks: { work: { weight: 3 }, other: { question: "Anything else?", dimension: "other" } } }, vocabulary);
+    const weighted = extendLens(implicit, { id: "mine", version: 1, needs: { work: { weight: 3 }, other: { label: "Anything else?", dimension: "other" } } }, vocabulary);
     assert.deepEqual(
-      weighted.asks!.map((a) => [a.id, a.weight ?? 1]),
+      weighted.needs!.map((a) => [a.id, a.weight ?? 1]),
       [["avoid", 1], ["ahead", 1], ["life", 1], ["work", 3], ["people", 1], ["pursuits", 1], ["has", 1], ["background", 1], ["other", 1]],
-      "the defaults are written out, patched by id, and a new ask goes last",
+      "the defaults are written out, patched by id, and a new need goes last",
     );
-    const fewer = extendLens(implicit, { id: "mine", version: 1, asks: { avoid: null } }, vocabulary);
-    assert.equal(fewer.asks!.length, 7, "dropping one default keeps the other seven");
-    assert.throws(() => extendLens(implicit, { id: "mine", version: 1, vocabulary: "elsewhere", asks: { work: { weight: 3 } } }, vocabulary), /reads vocabulary elsewhere/);
+    const fewer = extendLens(implicit, { id: "mine", version: 1, needs: { avoid: null } }, vocabulary);
+    assert.equal(fewer.needs!.length, 8, "dropping one default keeps the other eight");
+    assert.throws(() => extendLens(implicit, { id: "mine", version: 1, vocabulary: "elsewhere", needs: { work: { weight: 3 } } }, vocabulary), /reads vocabulary elsewhere/);
   });
 
-  it("refuses a lens extension that leaves an ask waiting on one it dropped, and clears what it sets to null", () => {
-    const base = extendLens(person.lens(), { id: "lens-a", version: 1, asks: { pursuits: { after: ["work"] } } });
-    assert.throws(() => extendLens(base, { id: "lens-b", version: 1, asks: { work: null } }), /waits on work, which is not an ask/);
-    const plain = extendLens(base, { id: "lens-c", version: 1, objective: null, asks: { pursuits: { after: null } } });
+  it("refuses a lens extension that leaves a need waiting on one it dropped, and clears what it sets to null", () => {
+    const base = extendLens(person.lens(), { id: "lens-a", version: 1, needs: { pursuits: { after: ["work"] } } });
+    assert.throws(() => extendLens(base, { id: "lens-b", version: 1, needs: { work: null } }), /waits on work, which is not a need/);
+    const plain = extendLens(base, { id: "lens-c", version: 1, objective: null, needs: { pursuits: { after: null } } });
     assert.equal(plain.objective, undefined);
-    assert.equal(plain.asks!.find((a) => a.id === "pursuits")!.after, undefined);
+    assert.equal(plain.needs!.find((a) => a.id === "pursuits")!.after, undefined);
   });
 });
 

@@ -8,7 +8,7 @@ import {
   isDueForRevisit,
   readinessFor,
   renderBrief,
-  type AskSpec,
+  type NeedSpec,
   type Fact,
   type Lens,
   type LensDefinition,
@@ -37,22 +37,22 @@ const fact = (type: string, text: string, said: string, extra: Partial<Fact> = {
 const mother = { fields: { relationship: "mother" } };
 const friend = { fields: { relationship: "friend" } };
 
-const lensOf = (asks: AskSpec[], extra: Partial<LensDefinition> = {}): Lens =>
-  compileLens({ id: "t", version: 1, vocabulary: "fixture", header: "About {who}:", overHeading: "Over", asks, ...extra }, fixtureVocabulary());
+const lensOf = (needs: NeedSpec[], extra: Partial<LensDefinition> = {}): Lens =>
+  compileLens({ id: "t", version: 1, vocabulary: "fixture", header: "About {who}:", overHeading: "Over", needs, ...extra }, fixtureVocabulary());
 
-/** The 0.2.1 rule, kept here as the oracle: an ask is a gap when it applies and
- *  no current fact of one of its types exists. */
-function gapsAsTheyWere(lens: Lens, fields: Record<string, string | null>, facts: Fact[], when: Date): string[] {
+/** The plain rule, as an oracle: a need is a gap when it applies and no current
+ *  fact of one of its types exists. */
+function plainGaps(lens: Lens, fields: Record<string, string | null>, facts: Fact[], when: Date): string[] {
   const live = new Set(facts.filter((f) => !f.expiredAt && !(f.invalidAt && f.invalidAt <= when)).map((f) => f.type));
-  const applies = (ask: Lens["asks"][number]) =>
-    ask.when.every((clause) => {
+  const applies = (need: Lens["needs"][number]) =>
+    need.when.every((clause) => {
       const value = fields[clause.field];
       return typeof value === "string" && clause.equals.some((e) => e.trim().toLowerCase() === value.trim().toLowerCase());
     });
-  return lens.asks.filter((ask) => applies(ask) && !ask.answeredBy.some((type) => live.has(type))).map((ask) => ask.id);
+  return lens.needs.filter((need) => applies(need) && !need.types.some((type) => live.has(type))).map((need) => need.id);
 }
 
-describe("Scenario: With nothing new declared, the gaps are exactly what they always were", () => {
+describe("Scenario: With nothing but types declared, a gap is an applicable need with no current fact", () => {
   const now = at("2026-10-05T00:00:00Z");
   const fieldsCases: Array<Record<string, string | null>> = [{ relationship: "mother" }, { relationship: "Mother " }, { relationship: "friend" }, {}];
   const factCases: Fact[][] = [
@@ -67,74 +67,74 @@ describe("Scenario: With nothing new declared, the gaps are exactly what they al
     [fact("CIRCUMSTANCE", "Works days", "2025-01-01")],
   ];
 
-  it("reports the same gaps as the 0.2.1 rule, for every entity and ledger", () => {
+  it("reports the plain rule's gaps, for every entity and ledger", () => {
     const lens = fixtureLens();
     for (const fields of fieldsCases) {
       for (const facts of factCases) {
-        const expected = gapsAsTheyWere(lens, fields, facts, now);
-        assert.deepEqual(gapsFor(lens, { fields }, facts, now).map((g) => g.id), expected, JSON.stringify({ fields, facts: facts.map((f) => f.fact) }));
+        const expected = plainGaps(lens, fields, facts, now);
+        assert.deepEqual(gapsFor(lens, { fields }, facts, now).map((g) => g.need), expected, JSON.stringify({ fields, facts: facts.map((f) => f.fact) }));
       }
     }
   });
 
-  it("with no revisit windows either, every next step is a gap and readiness is the share answered", () => {
+  it("with no revisit windows either, every direction is a gap and readiness is the share met", () => {
     const definition = fixtureVocabularyDefinition();
     const { revisitAfterDays: _window, ...circumstance } = definition.factTypes.CIRCUMSTANCE!;
     const vocabulary = compileVocabulary({ ...definition, factTypes: { ...definition.factTypes, CIRCUMSTANCE: circumstance } });
     const lens = compileLens(fixtureLensDefinition(), vocabulary);
     for (const fields of fieldsCases) {
       for (const facts of factCases) {
-        const expected = gapsAsTheyWere(lens, fields, facts, now);
+        const expected = plainGaps(lens, fields, facts, now);
         const readiness = readinessFor(lens, { fields }, facts, now);
-        assert.deepEqual(readiness.next.map((s) => [s.kind, s.ask]), expected.map((id) => ["ask", id]));
-        assert.ok(readiness.asks.every((a) => a.state === "met" || a.state === "open"), "nothing is thin, waiting or due");
-        const answered = readiness.asks.length - expected.length;
-        assert.equal(readiness.overall, Math.round((answered / readiness.asks.length) * 1000) / 1000);
+        assert.deepEqual(readiness.next.map((s) => [s.kind, s.need]), expected.map((id) => ["learn", id]));
+        assert.ok(readiness.needs.every((a) => a.state === "met" || a.state === "open"), "nothing is thin, waiting or due");
+        const answered = readiness.needs.length - expected.length;
+        assert.equal(readiness.overall, Math.round((answered / readiness.needs.length) * 1000) / 1000);
       }
     }
   });
 });
 
-describe("Scenario: Enough counts fresh facts, and strength says how far along an ask is", () => {
-  const lens = lensOf([{ id: "love", question: "What do they love?", answeredBy: ["LIKES"], enough: 2 }]);
+describe("Scenario: Enough counts fresh facts, and strength says how far along a need is", () => {
+  const lens = lensOf([{ id: "love", label: "What do they love?", types: ["LIKES"], enough: 2 }]);
   const now = at("2026-10-05T00:00:00Z");
 
   it("goes open, thin, met as facts arrive", () => {
     const one = fact("LIKES", "Gardens", "2026-01-01");
     const two = fact("LIKES", "Paints tiles", "2026-02-01");
-    const standing = (facts: Fact[]) => readinessFor(lens, mother, facts, now).asks[0]!;
+    const standing = (facts: Fact[]) => readinessFor(lens, mother, facts, now).needs[0]!;
     assert.deepEqual([standing([]).state, standing([]).strength], ["open", 0]);
     assert.deepEqual([standing([one]).state, standing([one]).strength, standing([one]).facts], ["thin", 0.5, 1]);
     assert.deepEqual([standing([one, two]).state, standing([one, two]).strength], ["met", 1]);
     const thin = readinessFor(lens, mother, [one], now);
-    assert.deepEqual(thin.next, [{ kind: "ask", ask: "love", question: "What do they love?", value: 0.5, factIds: [one.id] }], "a thin ask is anchored on what is known");
+    assert.deepEqual(thin.next, [{ kind: "learn", need: "love", label: "What do they love?", dimension: null, types: ["LIKES"], value: 0.5, factIds: [one.id] }], "a thin need builds on what is known");
   });
 
-  it("puts the heavier ask first, keeps the lens's order on a tie, and rounds to three places", () => {
+  it("puts the heavier need first, keeps the lens's order on a tie, and rounds to three places", () => {
     const weighted = lensOf([
-      { id: "a", question: "A?", answeredBy: ["LIKES"] },
-      { id: "b", question: "B?", answeredBy: ["HAS"], weight: 3 },
-      { id: "c", question: "C?", answeredBy: ["PERSON"] },
+      { id: "a", label: "A?", types: ["LIKES"] },
+      { id: "b", label: "B?", types: ["HAS"], weight: 3 },
+      { id: "c", label: "C?", types: ["PERSON"] },
     ]);
-    assert.deepEqual(readinessFor(weighted, mother, [], now).next.map((s) => [s.ask, s.value]), [["b", 3], ["a", 1], ["c", 1]]);
+    assert.deepEqual(readinessFor(weighted, mother, [], now).next.map((s) => [s.need, s.value]), [["b", 3], ["a", 1], ["c", 1]]);
 
     const tied = lensOf([
-      { id: "aa", question: "AA?", answeredBy: ["HAS"], weight: 2 },
-      { id: "bb", question: "BB?", answeredBy: ["LIKES"], weight: 3, enough: 3 },
+      { id: "aa", label: "AA?", types: ["HAS"], weight: 2 },
+      { id: "bb", label: "BB?", types: ["LIKES"], weight: 3, enough: 3 },
     ]);
     const tie = readinessFor(tied, mother, [fact("LIKES", "Gardens", "2026-01-01")], now);
     assert.deepEqual(
-      tie.next.map((s) => [s.ask, s.value]),
+      tie.next.map((s) => [s.need, s.value]),
       [["aa", 2], ["bb", 2]],
       "2 and 3 × (1 − ⅓) are the same value, so the lens's order decides — rounding happens only on the way out",
     );
 
     const thirds = lensOf([
-      { id: "x", question: "X?", answeredBy: ["LIKES"], enough: 3 },
-      { id: "y", question: "Y?", answeredBy: ["HAS"], weight: 2 },
+      { id: "x", label: "X?", types: ["LIKES"], enough: 3 },
+      { id: "y", label: "Y?", types: ["HAS"], weight: 2 },
     ]);
     const readiness = readinessFor(thirds, mother, [fact("LIKES", "Gardens", "2026-01-01"), fact("HAS", "A wheel", "2026-01-01")], now);
-    assert.equal(readiness.asks[0]!.strength, 0.333);
+    assert.equal(readiness.needs[0]!.strength, 0.333);
     assert.equal(readiness.next[0]!.value, 0.667);
     assert.equal(readiness.overall, 0.778);
   });
@@ -142,9 +142,9 @@ describe("Scenario: Enough counts fresh facts, and strength says how far along a
 
 describe("Scenario: One fact is one fact, however the caller assembled the ledger", () => {
   it("counts a fact passed twice once", () => {
-    const lens = lensOf([{ id: "love", question: "What do they love?", answeredBy: ["LIKES"], enough: 2 }]);
+    const lens = lensOf([{ id: "love", label: "What do they love?", types: ["LIKES"], enough: 2 }]);
     const once = fact("LIKES", "Gardens", "2026-01-01");
-    const standing = readinessFor(lens, mother, [once, { ...once }], at("2026-10-05T00:00:00Z")).asks[0]!;
+    const standing = readinessFor(lens, mother, [once, { ...once }], at("2026-10-05T00:00:00Z")).needs[0]!;
     assert.deepEqual([standing.state, standing.facts], ["thin", 1]);
   });
 });
@@ -162,29 +162,29 @@ describe("Scenario: A fact goes due for a revisit when its window passes unsaid 
     assert.equal(isDueForRevisit(vocabulary, days, day90), true);
     const before = readinessFor(lens, mother, [days], day89);
     const after = readinessFor(lens, mother, [days], day90);
-    assert.equal(before.asks.find((a) => a.id === "how-the-days-go")!.state, "met");
-    const due = after.asks.find((a) => a.id === "how-the-days-go")!;
+    assert.equal(before.needs.find((a) => a.id === "how-the-days-go")!.state, "met");
+    const due = after.needs.find((a) => a.id === "how-the-days-go")!;
     assert.deepEqual([due.state, due.strength, due.facts, due.due], ["due", 0.5, 1, 1]);
-    assert.deepEqual(after.next.find((s) => s.kind === "revisit"), { kind: "revisit", ask: "how-the-days-go", question: due.question, value: 0.5, factIds: [days.id] });
+    assert.deepEqual(after.next.find((s) => s.kind === "revisit"), { kind: "revisit", need: "how-the-days-go", label: due.label, dimension: null, types: ["CIRCUMSTANCE"], value: 0.5, factIds: [days.id] });
     assert.equal(after.dimensions.find((d) => d.id === "life")!.due, 1);
   });
 
   it("counts from when it was last said, not when it was first said", () => {
     const retold = fact("CIRCUMSTANCE", "Works days", said, { lastSaidAt: at("2026-03-15T00:00:00Z") });
-    assert.equal(readinessFor(lens, mother, [retold], day90).asks.find((a) => a.id === "how-the-days-go")!.state, "met");
+    assert.equal(readinessFor(lens, mother, [retold], day90).needs.find((a) => a.id === "how-the-days-go")!.state, "met");
   });
 
   it("never comes due for a type that names no window, however old", () => {
     const old = fact("LIKES", "Gardens", "2016-01-01");
-    assert.equal(readinessFor(lens, friend, [old], day90).asks[0]!.state, "met");
+    assert.equal(readinessFor(lens, friend, [old], day90).needs[0]!.state, "met");
     assert.equal(ENGINE_DEFAULTS.revisitAfterDays, null);
   });
 
-  it("does not let facts due for a revisit meet an ask, however many there are", () => {
+  it("does not let facts due for a revisit meet a need, however many there are", () => {
     const one = fact("CIRCUMSTANCE", "Works days", "2025-12-01");
     const two = fact("CIRCUMSTANCE", "Cares for her mother at weekends", "2025-11-01");
     const readiness = readinessFor(lens, mother, [one, two], day90);
-    const standing = readiness.asks.find((a) => a.id === "how-the-days-go")!;
+    const standing = readiness.needs.find((a) => a.id === "how-the-days-go")!;
     assert.deepEqual([standing.state, standing.strength], ["due", 0.5], "two quiet facts are not one fresh one");
     assert.deepEqual(readiness.next.find((s) => s.kind === "revisit")!.factIds, [two.id, one.id], "oldest said first");
   });
@@ -196,17 +196,17 @@ describe("Scenario: A fact goes due for a revisit when its window passes unsaid 
   });
 });
 
-describe("Scenario: Coarse before fine — an ask waits until the one it comes after is answered", () => {
+describe("Scenario: Coarse before fine — a need waits until the one it comes after is met", () => {
   const lens = fixtureVisitLens();
   const now = at("2026-10-05T00:00:00Z");
   const loves = (entity: { fields: Record<string, string | null> }, facts: Fact[]) =>
-    readinessFor(lens, entity, facts, now).asks.find((a) => a.id === "what-they-love");
+    readinessFor(lens, entity, facts, now).needs.find((a) => a.id === "what-they-love");
 
   it("waits while what it comes after is open, and is not offered", () => {
     const readiness = readinessFor(lens, mother, [fact("LIKES", "Gardens", "2026-09-01")], now);
-    const standing = readiness.asks.find((a) => a.id === "what-they-love")!;
+    const standing = readiness.needs.find((a) => a.id === "what-they-love")!;
     assert.deepEqual([standing.state, standing.waitingOn, standing.strength], ["waiting", ["how-the-days-go"], 0.5]);
-    assert.ok(!readiness.next.some((s) => s.ask === "what-they-love"));
+    assert.ok(!readiness.next.some((s) => s.need === "what-they-love"));
   });
 
   it("stays met once met, whatever it waits on", () => {
@@ -217,13 +217,13 @@ describe("Scenario: Coarse before fine — an ask waits until the one it comes a
   it("goes ahead once what it comes after is answered — even by a fact due for a revisit — or does not apply", () => {
     const quiet = fact("CIRCUMSTANCE", "Works days", "2025-01-01");
     assert.equal(loves(mother, [quiet])!.state, "open", "answered, though due: the coarse thing is known");
-    assert.equal(loves(friend, [])!.state, "open", "the ask it comes after does not apply to a friend");
+    assert.equal(loves(friend, [])!.state, "open", "the need it comes after does not apply to a friend");
   });
 
-  it("anchors an open ask on the facts of the ask it came after, so the question can go one notch finer", () => {
+  it("builds an open need's direction on the facts of the need it comes after", () => {
     const days = fact("CIRCUMSTANCE", "Works days", "2026-09-01");
-    const step = readinessFor(lens, mother, [days], now).next.find((s) => s.ask === "what-they-love")!;
-    assert.deepEqual([step.kind, step.factIds], ["ask", [days.id]]);
+    const step = readinessFor(lens, mother, [days], now).next.find((s) => s.need === "what-they-love")!;
+    assert.deepEqual([step.kind, step.factIds], ["learn", [days.id]]);
   });
 
   it("terminates on a lens that skipped validation and waits in a circle", () => {
@@ -234,14 +234,14 @@ describe("Scenario: Coarse before fine — an ask waits until the one it comes a
         vocabulary: "fixture",
         header: "{who}",
         overHeading: "Over",
-        asks: [
-          { id: "a", question: "A?", answeredBy: ["LIKES"], after: ["b"] },
-          { id: "b", question: "B?", answeredBy: ["HAS"], after: ["a"] },
+        needs: [
+          { id: "a", label: "A?", types: ["LIKES"], after: ["b"] },
+          { id: "b", label: "B?", types: ["HAS"], after: ["a"] },
         ],
       },
       fixtureVocabulary(),
     );
-    assert.deepEqual(readinessFor(circular, mother, [], now).asks.map((a) => a.state), ["waiting", "waiting"]);
+    assert.deepEqual(readinessFor(circular, mother, [], now).needs.map((a) => a.state), ["waiting", "waiting"]);
   });
 });
 
@@ -277,23 +277,23 @@ describe("Scenario: The evidence per dimension needs no objective", () => {
     assert.deepEqual(readinessFor(fixtureLens(), mother, facts, now).dimensions, readinessFor(fixtureVisitLens(), mother, facts, now).dimensions);
   });
 
-  it("has nothing to report for a lens with nothing to ask of this entity", () => {
+  it("has nothing to report for a lens with no need that applies to this entity", () => {
     const silent = readinessFor(lensOf([]), mother, facts, now);
-    assert.deepEqual([silent.overall, silent.asks, silent.next], [null, [], []]);
-    const parentsOnly = readinessFor(lensOf([{ id: "p", question: "P?", answeredBy: ["PERSON"], when: [{ field: "relationship", equals: ["father"] }] }]), mother, facts, now);
+    assert.deepEqual([silent.overall, silent.needs, silent.next], [null, [], []]);
+    const parentsOnly = readinessFor(lensOf([{ id: "p", label: "P?", types: ["PERSON"], when: [{ field: "relationship", equals: ["father"] }] }]), mother, facts, now);
     assert.equal(parentsOnly.overall, null);
   });
 });
 
-describe("Scenario: An ask of a dimension hears every type in it, a retired type as the fallback", () => {
+describe("Scenario: A need of a dimension counts every type in it, a retired type as the fallback", () => {
   const now = at("2026-10-05T00:00:00Z");
   const retired = fact("RETIRED_TYPE", "Kept under the fallback", "2026-03-01");
 
-  it("answers a dimension ask with a retired type's fact, and leaves an ask by type to the raw type", () => {
-    const byDimension = lensOf([{ id: "anything-else", question: "Anything else?", dimension: "other" }]);
-    const byType = lensOf([{ id: "anything-else", question: "Anything else?", answeredBy: ["OTHER"] }]);
-    assert.equal(readinessFor(byDimension, mother, [retired], now).asks[0]!.state, "met");
-    assert.equal(readinessFor(byType, mother, [retired], now).asks[0]!.state, "open");
+  it("counts a retired type's fact toward a dimension need, and leaves a need by type to the raw type", () => {
+    const byDimension = lensOf([{ id: "anything-else", label: "Anything else?", dimension: "other" }]);
+    const byType = lensOf([{ id: "anything-else", label: "Anything else?", types: ["OTHER"] }]);
+    assert.equal(readinessFor(byDimension, mother, [retired], now).needs[0]!.state, "met");
+    assert.equal(readinessFor(byType, mother, [retired], now).needs[0]!.state, "open");
   });
 
   it("names the lens and its objective, and the moment it describes", () => {

@@ -23,7 +23,7 @@ export default function ContractPage() {
       <DocHeader
         clause="The contract"
         title={`“Implements the contract” means one thing.`}
-        standfirst="There are three drivers of Intelligence — Postgres, HTTP, and an in-memory fake — and one suite that runs the same cases against all of them. A driver either passes it or does not claim the name."
+        standfirst="Three drivers implement Intelligence: Postgres, HTTP and an in-memory fake. One suite runs the same cases against each."
         aside={
           <p className="stamp">
             <span>{cases.length} cases</span>
@@ -87,9 +87,8 @@ contractSuite({
           <p className="clause">03</p>
           <h2 className="display mt-2 text-3xl">Proving a driver</h2>
           <p className="measure mt-4 text-ink-soft">
-            A change to what a driver must do is a change to the suite first, a major of the package, and a line in the
-            changelog. That order is the whole point: the cases are the specification, and the specification ships in
-            the tarball so every driver is held to the same one.
+            The cases are the specification, and they ship in the tarball, so every driver is held to the same one. A
+            change to what a driver must do starts in the suite.
           </p>
           <p className="measure mt-4 text-ink-soft">
             The fake in <code className="code">@popjoker/knew/testing</code> passes all{" "}

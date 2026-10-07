@@ -32,9 +32,9 @@
     }
   },
   "dimensions": {
-    "what-it-is": { "label": "What it is", "question": "What kind of place is it?" },
-    "when-to-go": { "label": "When to go", "question": "When is it open?" },
-    "what-it-is-like": { "label": "What it's like", "question": "What is it like to be there?" },
+    "what-it-is": { "label": "What it is" },
+    "when-to-go": { "label": "When to go" },
+    "what-it-is-like": { "label": "What it's like" },
     "other": { "label": "Other" }
   },
   "fallbackType": "OTHER",

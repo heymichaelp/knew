@@ -8,10 +8,10 @@ import type { Intelligence, IntelligenceScope } from "@popjoker/knew";
  */
 
 const LENS = "gift";
-/** The gift lens's ask that says whether enough is known to show picks first. */
+/** The gift lens's need that says whether enough is known to show picks first. */
 const KNOWS_ENOUGH = "what-they-love";
 
-export type FirstMove = { move: "ask-first"; question: string } | { move: "show-first"; page: string; honor: string[] };
+export type FirstMove = { move: "ask-first"; about: string } | { move: "show-first"; page: string; honor: string[] };
 
 export interface Thoughtful {
   addPerson(userId: string, person: { id: string; name: string }): Promise<void>;
@@ -43,9 +43,9 @@ export function createApp(engine: Intelligence): Thoughtful {
     async firstMove(userId, personId) {
       const readiness = await engine.readiness(scope(userId), personId, { lens: LENS });
       if (!readiness) return null;
-      const knowsEnough = readiness.asks.find((ask) => ask.id === KNOWS_ENOUGH)?.state === "met";
-      const step = readiness.next[0];
-      if (!knowsEnough && step) return { move: "ask-first", question: step.question };
+      const knowsEnough = readiness.needs.find((need) => need.id === KNOWS_ENOUGH)?.state === "met";
+      const direction = readiness.next[0];
+      if (!knowsEnough && direction) return { move: "ask-first", about: direction.label };
       const brief = await engine.brief(scope(userId), personId, { lens: LENS });
       return { move: "show-first", page: brief?.text ?? "", honor: brief?.mustHonor.map((item) => item.fact) ?? [] };
     },

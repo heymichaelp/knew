@@ -25,7 +25,7 @@ export default function ApiPage() {
       <DocHeader
         clause="The API"
         title="One door, and a scope on every call."
-        standfirst="The hosted service is a thin skin over the contract: a route per method, the same envelope on every answer, and two headers that decide who is asking and about whom. The client in the package speaks all of it, so most adopters never write a request by hand."
+        standfirst="One route per contract method, one envelope on every answer, two headers for who is asking and about whom. The package's client speaks all of it."
         aside={
           <p className="stamp">
             <span>{ALL_ROUTES.length} routes</span>

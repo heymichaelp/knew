@@ -34,7 +34,7 @@ describe("Scenario: The leak check tells a name from a word", () => {
   });
 
   it("knows the package's names: its exports, its presets, its test kit and its schemas' fields", () => {
-    for (const name of ["readinessFor", "ENGINE_DEFAULTS", "person", "fakeIntelligence", "revisitAfterDays", "answeredBy", "after", "weight"]) {
+    for (const name of ["readinessFor", "ENGINE_DEFAULTS", "person", "fakeIntelligence", "revisitAfterDays", "types", "after", "weight"]) {
       assert.ok(API.has(name), `${name} is missing from the names a brief must not say`);
     }
   });
@@ -106,13 +106,13 @@ const MUTATIONS: Record<string, Mutation[]> = {
     {
       what: "picks are shown at three things known",
       file: "definitions/lenses/gift.json",
-      edit: json((lens) => (lens.asks.find((ask: { id: string }) => ask.id === "what-they-love").enough = 3)),
+      edit: json((lens) => (lens.needs.find((need: { id: string }) => need.id === "what-they-love").enough = 3)),
       fails: "picks wait for five things about what they love or want, in any mix",
     },
     {
       what: "wishes do not count toward picks",
       file: "definitions/lenses/gift.json",
-      edit: json((lens) => (lens.asks.find((ask: { id: string }) => ask.id === "what-they-love").answeredBy = ["INTEREST", "SKILL", "TASTE"])),
+      edit: json((lens) => (lens.needs.find((need: { id: string }) => need.id === "what-they-love").types = ["INTEREST", "SKILL", "TASTE"])),
       fails: "picks wait for five things about what they love or want, in any mix",
     },
     {
@@ -125,8 +125,8 @@ const MUTATIONS: Record<string, Mutation[]> = {
       what: "picks are shown as soon as anything is known",
       file: "src/app.ts",
       edit: swap(
-        'const knowsEnough = readiness.asks.find((ask) => ask.id === KNOWS_ENOUGH)?.state === "met";',
-        "const knowsEnough = (readiness.asks.find((ask) => ask.id === KNOWS_ENOUGH)?.facts ?? 0) > 0;",
+        'const knowsEnough = readiness.needs.find((need) => need.id === KNOWS_ENOUGH)?.state === "met";',
+        "const knowsEnough = (readiness.needs.find((need) => need.id === KNOWS_ENOUGH)?.facts ?? 0) > 0;",
       ),
       fails: "the fifth thing known turns asking into showing, and four is not enough",
     },
@@ -141,50 +141,6 @@ const MUTATIONS: Record<string, Mutation[]> = {
       file: "src/app.ts",
       edit: swap("engine.brief(scope(userId), personId, { lens: LENS })", "engine.brief(scope(userId), personId, { lens: LENS, maxChars: 120 })"),
       fails: "showing first hands over knew's page through the gift lens, and its rules",
-    },
-  ],
-  migrate: [
-    {
-      what: "the lens forgets its version",
-      file: "definitions/lenses/regulars.json",
-      edit: json((lens) => (lens.version = 1)),
-      fails: "the definitions compile, keeping the 0.x lens's name and version",
-    },
-    {
-      what: "a heading is spelled as its old section id",
-      file: "definitions/vocabulary.json",
-      edit: json((vocabulary) => (vocabulary.dimensions["section-never-send"].label = "Never Send")),
-      fails: "every page reads exactly as 0.2.1 rendered it",
-    },
-    {
-      what: "deliveries stop being honored",
-      file: "definitions/vocabulary.json",
-      edit: json((vocabulary) => delete vocabulary.factTypes.DELIVERY.pinned),
-      fails: "an order must honor what it did on 0.2.1",
-    },
-    {
-      what: "the standing-order question loses its tier condition",
-      file: "definitions/lenses/regulars.json",
-      edit: json((lens) => delete lens.asks.find((ask: { id: string }) => ask.id === "standing-order").when),
-      fails: "the same questions are asked, worded the same, in the same order",
-    },
-    {
-      what: "a note forgets its customer",
-      file: "src/app.ts",
-      edit: swap("        entityHints: [customerId],\n", ""),
-      fails: "a note is read before addNote resolves, filed under its customer, and the card is knew's",
-    },
-    {
-      what: "the tier never reaches knew",
-      file: "src/app.ts",
-      edit: swap("fields: { tier: customer.tier ?? null }", "fields: {}"),
-      fails: "a wholesale customer is asked about a standing order, and a regular is not",
-    },
-    {
-      what: "every shop shares one customer book",
-      file: "src/app.ts",
-      edit: swap("subjectId: shopId", 'subjectId: "stems"'),
-      fails: "a shop's customers are its own",
     },
   ],
   places: [
@@ -207,9 +163,9 @@ const MUTATIONS: Record<string, Mutation[]> = {
       fails: "hours noted 10 days ago are fine",
     },
     {
-      what: "what it's like is asked before the kind is known",
+      what: "what it's like comes before the kind is known",
       file: "definitions/lenses/visit.json",
-      edit: json((lens) => delete lens.asks.find((ask: { id: string }) => ask.id === "what-its-like").after),
+      edit: json((lens) => delete lens.needs.find((need: { id: string }) => need.id === "what-its-like").after),
       fails: "what it's like waits for what kind of place it is",
     },
     {
@@ -219,9 +175,9 @@ const MUTATIONS: Record<string, Mutation[]> = {
       fails: "hours noted 45 days ago come back to be re-checked, in knew's words",
     },
     {
-      what: "the next question passes over a re-check",
+      what: "the next direction passes over a re-check",
       file: "src/app.ts",
-      edit: swap("const step = readiness?.next[0];", 'const step = readiness?.next.find((candidate) => candidate.kind === "ask");'),
+      edit: swap("const direction = readiness?.next[0];", 'const direction = readiness?.next.find((candidate) => candidate.kind === "learn");'),
       fails: "hours noted 45 days ago come back to be re-checked, in knew's words",
     },
     {

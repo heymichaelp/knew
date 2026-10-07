@@ -4,7 +4,7 @@ import type { DefinitionField } from "@/lib/engine";
 /**
  * A definition's fields, generated from its schema, each beside the one line
  * of prose the schema cannot carry. A field that holds objects — a record of
- * fact types, a list of asks — lists the fields inside them beneath it.
+ * fact types, a list of needs — lists the fields inside them beneath it.
  */
 export function FieldTable({
   fields,
