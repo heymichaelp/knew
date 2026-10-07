@@ -41,10 +41,6 @@ compares it against the published version and publishes when they differ, using 
 publishing — no token in the repo, and provenance is attached automatically. The package's own
 `prepublishOnly` still regenerates the prompts, builds, and runs the tests before anything leaves.
 
-The version rule is in `packages/knew/CHANGELOG.md`: before 1.0 a minor may break; from 1.0 a
-lens-schema change that keeps registered lenses valid is a minor, and a change to the contract is
-a major.
-
 ## The site
 
 Git-connected to Vercel, root directory `apps/site`. Merges to `main` go to production; pull

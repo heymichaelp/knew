@@ -1,29 +1,36 @@
 # Adopting the engine
 
-How a client takes `@popjoker/knew` on, in the order the questions come up. A second client
-follows it without reading anybody else's code.
+## 1. Concepts
 
-The words: the **knower** is the client's own user, whose notebook this is — the scope's
-`subjectId`. What they know about is an **entity** on their roster, of the vocabulary's **kind**: a
-person, a place, a thing. An entity's `kind`, when the client gives one, must be the vocabulary's; a
-fact type or a dimension the client happens to call "kind" is only a name. A **vocabulary** is what
-extraction writes in; a **lens** is a direction over it for one objective.
+- **Knower**: your user, whose notebook this is: the scope's `subjectId`.
+- **Entity**: what the knower knows about, on their roster: a person, a place, a thing. Its `kind`
+  is the vocabulary's.
+- **Episode**: what the knower wrote, verbatim and dated. Facts are derived from episodes.
+- **Fact**: a typed, dated statement, citing its episodes. Superseded, never edited.
+- **Vocabulary**: the **dimensions** of understanding for one kind of entity, and the fact types
+  that inform them.
+- **Lens**: one goal over a vocabulary: its **needs** (what the goal needs understood), and how
+  its page reads.
 
-## 1. Install, and bind once per process
+For an entity and a lens, knew reports three things:
+
+| | Where |
+|---|---|
+| Current understanding | `brief().text`, and `readiness().dimensions` |
+| Missing understanding | `gaps()`, and `readiness().needs` that are not `met` |
+| The next directions | `readiness().next` |
+
+knew names directions; it writes no questions.
+
+## 2. Setup
 
 ```sh
 npm install @popjoker/knew
 ```
 
-The package is ES modules for Node 22 or later, or any bundler that reads `exports`. Until it is
-on a registry, `npm pack` in `packages/knew` makes a tarball that installs the same way.
-
-Make one `Intelligence` per process and hand it around; never build one per request. The HTTP
-client holds no connection, so the cost is only the discipline: one place knows the URL and the
-key, and one place can swap the driver.
+ES modules, Node 22 or later. Make one client per process:
 
 ```ts
-// intelligence.ts
 import { intelligenceClient, type Intelligence } from "@popjoker/knew";
 
 export const intelligence: Intelligence = intelligenceClient({
@@ -33,21 +40,14 @@ export const intelligence: Intelligence = intelligenceClient({
 });
 ```
 
-Everything in the client's own code imports `intelligence` from here. The scope goes on every
-call: `{ clientId, subjectId }`, where `clientId` is what the service minted the key for and
-`subjectId` is the client's own id for the knower. A subject id means nothing outside the client
-that sent it; nothing in the engine links scopes.
+Every call takes a scope, `{ clientId, subjectId }`. Scopes never share data.
 
-## 2. Register a vocabulary and its lenses
+## 3. Define
 
-Both are JSON. Write them in the client's repo, validate them in a test, and register each once
-per version, at boot or by hand.
-
-**Start from a preset, or from nothing.** `@popjoker/knew/presets` ships generic `person`,
-`place` and `product` vocabularies, each with a starter lens. `extendVocabulary` and `extendLens` take a base and the client's
-overrides — a key given replaces or merges, `null` removes, a key left out keeps the base's — and
-return a complete definition. The vocabulary is stamped `basedOn`, naming the preset and every
-type or dimension of it that changed.
+Start from a preset (`person`, `place`, `product`) or write your own. `extendVocabulary` and
+`extendLens` take a base and your overrides: a key given replaces or merges, `null` removes, a
+key left out is kept. The vocabulary records `basedOn`: the base, its version, and what changed
+or was added.
 
 ```ts
 import { compileLens, compileVocabulary, extendLens, extendVocabulary } from "@popjoker/knew";
@@ -65,247 +65,111 @@ export const prep = extendLens(person.lens(), {
   version: 1,
   vocabulary: "my-app",
   objective: "Walk into the next conversation ready.",
-  asks: { ahead: { weight: 3 }, pursuits: { enough: 2, after: ["work"] } },
+  needs: { ahead: { weight: 3 }, pursuits: { enough: 2, after: ["work"] } },
 });
 
-compileLens(prep, compileVocabulary(vocabulary)); // throws, naming every problem, in your own test
+compileLens(prep, compileVocabulary(vocabulary)); // throws, naming every problem
 ```
 
-**The vocabulary** holds what extraction needs: `factTypes` with descriptions the model reads,
-each informing one of the `dimensions` (`pinned` for what must be honored and comes back as
-`mustHonor`; `enduring` for what is replaced only by its own type; `revisitAfterDays` for how long
-until a fact of it is due for a revisit; attributes for structure), the `fields` an entity carries
-that the knower edits and extraction may only propose, `promptFields` shown beside a name, and a
-`charter` in the client's own words about what is worth remembering and why. `prompts.extract` and
-`prompts.reconcile` override the engine's neutral task prompts only when a client has a reason; the
-charter is the normal place for voice.
+**Vocabulary.** `factTypes`, each informing one of the `dimensions`. On a type: `pinned` (always
+on the page, returned as `mustHonor`), `enduring` (only its own type replaces it),
+`revisitAfterDays` (when an unrepeated fact is due for a revisit), `attributes`. Also `fields`
+(entity fields you own; extraction may only propose values), `promptFields`, and a `charter`
+telling the model what to keep.
 
-**A lens** holds what one objective needs: the `objective` sentence, the `asks` that are its
-knowledge requirements (§5), the `pinned` types to hold in view, and how the page reads — `sections`
-of dimensions, a `header`, an `overHeading`. A lens says only what differs: its sections default to
-one per dimension, its pinned types to the vocabulary's, its asks to each dimension's question.
+**Lens.** `objective`, `needs`, `pinned`, `sections`, `header`, `overHeading`. Left out: one
+section and one need per dimension, and the vocabulary's pinned types. A need names a
+`dimension` or `types` (then it needs a `label`), and may set `weight`, `enough`, `after` and
+`when`. A lens that names no needs can be extended by need id if you pass the vocabulary as
+`extendLens`'s third argument.
 
-**Every field, offline.** Each field of both definitions is documented where it is declared, so the
-reference ships in the tarball: `VocabularyDefinition`, `FactTypeSpec` and `DimensionSpec` in
-`dist/vocabulary.d.ts`; `LensDefinition`, `AskSpec` and `SectionSpec` in `dist/lens.d.ts`.
-knew.dev/lenses renders the same fields as tables.
+**Every field** is documented where it is declared: `dist/vocabulary.d.ts` and `dist/lens.d.ts`,
+and as tables at knew.dev/lenses.
 
-`PUT /v1/vocabulary` with the vocabulary, then `PUT /v1/lens` with each lens, registers them (or
-the service's CLI: `vocabulary set` and `lens set`). A version already registered is immutable:
-re-sending it changed is 409, so a change is a new `version`. Facts carry type keys, so a type is
-renamed by adding the new one and leaving the old in the vocabulary. **A lens change is free** —
-writing never names a lens, so nothing is re-read — while a change to what a vocabulary's types
-mean may be worth a `resetForReplay` (§7). The first lens registered is the client's default.
+**Register** with `PUT /v1/vocabulary`, then `PUT /v1/lens` for each lens, or the service CLI's
+`vocabulary set` and `lens set`. A registered version is immutable; change the `version`. The
+first lens registered is the default. Changing a lens touches no stored data; changing what a
+vocabulary's types mean may call for `resetForReplay`.
 
-**Coming from 0.x**, `fromLegacyLens(definition)` splits a 0.x lens into a vocabulary and a lens
-that report the same gaps and render the same page — unless the 0.x lens had a heading no type used
-(0.x budgeted the page for it, so 1.0 fits a little more) or listed a section twice (0.x printed its
-facts under both headings). Read its `notes`: they name every such difference, any section id or
-kind slugged to the 1.0 patterns, and any extra kind dropped. Register both, keeping the 0.x id and
-version.
+## 4. Write
 
-A lens that names no asks asks its vocabulary's dimension questions. To patch those by id, hand
-`extendLens` the vocabulary as a third argument and they are written out first.
+1. In your transaction, write your own row (the note, the message).
+2. After commit, `addEpisode` with `sourceRef` (your row's id), `content`, `referenceAt` and
+   `entityHints`. Idempotent on `(source, sourceRef)`.
+3. Then `requestExtract(scope)`, never before the commit.
 
-## 3. Writing: the outbox pattern
+An outbox table makes steps 2 and 3 survive a crash.
 
-The engine is enrichment. The client's own write succeeds or fails on its own, and the episode
-follows it; nothing the client stores waits on the engine.
+- **Hints** point into the roster; they never add to it. `upsertEntity` first: a fact pinned on an
+  id not on the roster is dropped and counted as `offRoster`.
+- **`hold: "until-hinted"`** keeps an episode out of extraction until `hintEpisodes({ sourceRefs,
+  entityId })` names its entity.
+- **`inReplyTo`**: when the episode answers a question your app asked, pass that question. The
+  model reads the answer in context; `content` stays the knower's words.
+- **Inline extraction**: `extract: "inline"`, then `extractNow(scope, { maxEpisodes, deadlineMs,
+  askedSourceRef })`. `outcome` is `extracted`, `busy` (another worker holds this knower),
+  `budget` (deadline reached; work done is kept), `failed` or `none`. Don't loop: if
+  `askedIngested` is false, answer from what you hold and call `requestExtract(scope)`. Once it is
+  true, the next read includes the facts.
 
-1. In the client's transaction, write the client's own row (the note, the message, the turn).
-2. After commit, `addEpisode` with `sourceRef` = that row's id, `content` = what the knower said,
-   `referenceAt` = when they said it, `entityHints` = what it is about when the client knows.
-   `addEpisode` is idempotent on `(source, sourceRef)`: a retry answers `existing` and the same
-   episode id, never a duplicate. A producer that legitimately repeats a ref appends a
-   discriminator (`${turnId}#2`).
-3. After that, `requestExtract(scope)`. Never inside `addEpisode`'s caller's transaction, never
-   before the commit: a sweep that starts before the row exists finds nothing to cite.
+## 5. Read
 
-A hint points into the roster; it never puts anything on it. `upsertEntity` an entity before an
-episode hints it: a fact the model pins on an id that is not on the roster is dropped, and counted
-as `offRoster` in the extraction's outcome.
+Every read that renders takes `lens`; without it, the default lens.
 
-An outbox table in the client's store makes step 2 and 3 survive a crash between the commit and
-the call: write the intent in the same transaction, drain it after, delete on success. The
-idempotent ref makes a drain that runs twice harmless.
+- `brief(scope, entityId, { lens, asOf, maxChars })`: the page (`text`), `mustHonor`, and `gaps`.
+  Null until something is known.
+- `readiness(scope, entityId, { lens, asOf })`:
+  - `dimensions`: per dimension, current facts, how many are due, when last said.
+  - `needs`: per need, `state` (`met`, `waiting`, `due`, `thin`, `open`) and `strength` (0 to 1).
+  - `next`: directions, most valuable first. Each has `kind` (`learn` where a need is open or
+    thin, `revisit` where facts have gone stale), `need`, `label`, `dimension`, `types`, `value`,
+    and `factIds`: the facts it builds on, readable through `getEntity`.
+- `gaps(scope, entityId, { lens })`: the `learn` directions only.
+- `getEntity(scope, entityId, { asOf })`: the facts. As of a date, each fact as it was believed then.
+- `searchFacts`, `factsLearnedBy(scope, sourceRefs)`, `episodes`.
 
-`hold: "until-hinted"` records an episode the client cannot yet attribute (the first message of
-a thread that will name the entity later) and keeps it out of extraction; `hintEpisodes({
-sourceRefs, entityId })` names them and frees them, counting only the episodes it changed.
+Reads throw `IntelligenceClientError` past their timeout. Answer from what you hold.
 
-`extract: "inline"` plus `extractNow(scope, { maxEpisodes, deadlineMs, askedSourceRef })` is
-for a turn that needs the facts now: the client runs the step itself under its own deadline and
-reads `askedIngested` to know whether its own episode made it. `outcome` says why the step
-stopped: `extracted`, `busy` (another worker holds this knower), `budget` (the deadline),
-`failed`, `none`.
+**How directions are ordered.** A direction's value is `weight × (1 − strength)`. A fact due for a
+revisit counts half, so with `enough: 1` a stale need of weight `w` ranks like an open need of
+weight `w / 2`. Use `after` for coarse-before-fine, not weights. With equal weights, directions
+follow the lens's order. A fact is due once `revisitAfterDays` days have passed since it was last
+said (or recorded); on that day, it is due. Weights order directions only: the page is never
+reweighted.
 
-Don't loop on it. `busy` means another worker holds this knower and is reading the same pending
-episodes; `budget` means the deadline came first, and what was read is kept. Either way, when
-`askedIngested` is false the turn answers from what the client already holds, and
-`requestExtract(scope)` hands the episode to the background sweep, which an `inline` episode does
-not trigger by itself. Once `askedIngested` is true its facts are committed: the next read
-includes them.
+**Stateless.** Run `readinessFor(lens, entity, factsKnownAt(facts, at), at)` yourself. When you
+apply a plan's merge, set `lastSaidAt` to the plan's `knownAt` if later.
 
-## 4. Reading
+## 6. Corrections, proposals, deletion
 
-Every read that renders takes `lens`; without one it reads through the client's default.
+- `invalidateFact(scope, factId, { at })`: the knower's correction. The fact ends; its history stays.
+- `listProposals` and `resolveProposal`: names not on the roster, and field values the engine
+  would set. Accepting a field update means your own write, then `upsertEntity`.
+- `deleteEntity(scope, entityId)` removes the entity, its facts and its episodes.
+  `deleteSubject(scope)` removes everything in the scope. `exportSubject(scope)` returns the
+  knower's episodes. `resetForReplay(scope)` drops derived facts so extraction can rerun.
+- `GET /v1/usage?day=YYYY-MM-DD`: model calls and cost for a day.
 
-- `brief(scope, entityId, { lens })` first. It is the page: text in the lens's sections,
-  `mustHonor` for the pinned facts a reader must obey rather than consider, `gaps` for what is
-  still worth asking. Null means nothing is known yet, and the client falls back to its own note.
-- `readiness(scope, entityId, { lens, asOf })` when the question is how well the entity is known
-  for the lens's objective, and what to learn next (§5).
-- `gaps(scope, entityId, { lens })` alone, when the question is only what to ask.
-- `getEntity(scope, entityId, { asOf, includeBrief, lens })` for the facts themselves, as of a
-  moment when the question is what was known then. An as-of read shows each fact as it was
-  believed: no end date, no successor and no retelling that came later.
-- `searchFacts(scope, query, { entityId, types, asOf, limit })` for a keyword.
-- `factsLearnedBy(scope, sourceRefs)` for what one source taught, current facts only: how a
-  client shows "from this message, we kept…".
+## 7. Testing
 
-Every read degrades: when the engine is slow or down, answer from what the client already
-holds. The timeouts above are the budget for that; a read past its timeout throws
-`IntelligenceClientError` with the status, and the client catches it at the feature.
-
-## 5. Knowing what to learn next
-
-`readiness` answers two questions, kept apart on purpose.
-
-**What is known** is evidence, and needs no objective: per dimension of the vocabulary, how many
-current facts there are, how many are due for a revisit, and when any was last said.
-
-**Whether it is enough** belongs to a lens. Each ask is a knowledge requirement of the lens's
-objective, and stands as one of:
-
-- `met` — at least `enough` current facts answer it, each said within its type's revisit window;
-- `waiting` — an ask it comes `after` is not answered yet, so it is not offered (coarse before
-  fine; an ask that does not apply to this entity holds nothing back);
-- `due` — enough facts, but too few of them fresh;
-- `thin` — some facts, fewer than `enough`;
-- `open` — none.
-
-Its `strength` runs from 0 to 1 (a fact due for a revisit counts for half, and never meets an ask
-alone), `overall` is the weighted mean over the applicable asks, and `next` is what to do, in
-order — the highest `weight · (1 − strength)` first, ties in the lens's order. A step of kind
-`ask` puts the question, anchored on the facts already known so it can go one notch finer; a step
-of kind `revisit` puts facts that have gone unsaid past their window back to the knower. The gaps
-are the `ask` steps. A step carries the ids of the facts it is about; their words are in
-`getEntity(scope, entityId).facts`, by id.
-
-**Revisit windows.** A fact is due for a revisit once `revisitAfterDays` days or more have passed
-since it was last said: its `lastSaidAt`, or, never retold, when it was recorded. On the day the
-window ends, it is due.
-
-**Choosing weights.** Weights are relative, and only order the steps. A fact due for a revisit
-counts for half, so with `enough: 1` a due ask of weight `w` ranks like an open ask of weight
-`w / 2`: for a stale answer to come before an open question of weight 1, give its ask a weight above
-2. An order that is coarse before fine belongs in `after`, not in weights; with every weight left
-at 1, the lens's order is the order of the gaps.
-
-Weights order what to learn; they never weigh what is believed. The page is unchanged by any of
-it — dated, not weighted — and a revisit is a question, never a judgment that a fact stopped being
-true. With no `weight`, `enough`, `after` or `revisitAfterDays` declared, the gaps are exactly what
-they were in 0.x.
-
-**Closing the loop.** When the knower answers a question the client put to them, write the answer
-as an episode with `inReplyTo` set to the question as it was asked. The words stay theirs —
-`content` is the answer, and the export keeps the question apart — while extraction reads the
-answer as an answer, so "two, both at university" after "do they have kids?" becomes facts, and
-the ask closes.
-
-**A stateless client** runs `readinessFor(lens, entity, factsKnownAt(facts, at), at)` itself.
-`factsKnownAt` comes first, so a past `at` sees only what was believed then — no fact said later,
-no retelling after the moment. It stamps `lastSaidAt` on a fact when a plan merges into it: the
-plan's `knownAt`, never moving it back. A ledger with no `lastSaidAt` reads as last said when first
-said.
-
-## 6. Corrections and proposals
-
-`invalidateFact(scope, factId, { at })` is the knower's own correction: the fact stops being
-current and keeps its history. The engine's own corrections arrive as supersessions and need
-nothing from the client.
-
-`listProposals(scope, { entityId, status })` is what the engine would not do on its own: a name
-not on the roster (`unresolved_name`), a change to one of the vocabulary's fields
-(`field_update`). The client shows them, the knower decides, `resolveProposal(scope, id,
-"accepted" | "dismissed")` records the decision. Accepting a field update is the client's write to
-its own roster, then `upsertEntity`; the engine never writes a field.
-
-## 7. Deletion and export
-
-Add a `remote` entry to the client's own deletion registry, beside its tables: deleting a user
-calls `deleteSubject(scope)`; removing an entity from the roster calls `deleteEntity(scope,
-entityId)`, which takes its facts and every episode hinted at it or cited by its facts.
-`exportSubject(scope)` returns the knower's own words, where they were said and when, with the
-question each reply answered kept apart; facts and summaries are derived and stay out, by design.
-`resetForReplay(scope)` forgets everything derived and marks every episode pending again, for a
-new vocabulary version or a better prompt.
-
-## 8. The usage line
-
-`GET /v1/usage?day=YYYY-MM-DD` with the service key answers the client's model calls for a day:
-requests, unpriced requests (a call that never came back is counted and left unpriced, never
-shown as free), cost, by method. A client that shows cost shows this; nothing else in the engine
-is a spend.
-
-## 9. Running the service locally
-
-The service is its own repo, and takes the package from npm like any other client:
-
-```sh
-git clone https://github.com/heymichaelp/knew-service
-cd knew-service
-npm install
-cp .env.example .env
-npm run db:start                            # one Postgres in docker compose
-npm run db:migrate
-npm run cli -- client add my-app --name "My app"
-npm run cli -- vocabulary set my-app vocabulary.json
-npm run cli -- lens set my-app lens.json
-npm run dev                                 # http on 8080
-npm run worker                              # the sweep, in a second terminal
-```
-
-Or the container, against any Postgres:
-
-```sh
-docker build -t knew-service .
-docker run --rm -p 8080:8080 -e DATABASE_URL=postgresql://… -e OPENROUTER_API_KEY=… knew-service
-docker run --rm -e DATABASE_URL=… knew-service node dist/migrate.js
-docker run --rm -e DATABASE_URL=… -e OPENROUTER_API_KEY=… knew-service node dist/worker.js
-```
-
-Without `OPENROUTER_API_KEY` the service runs, registers clients, vocabularies and lenses, and
-records episodes; extraction fails on its first call and the episodes stay pending.
-
-## 10. Testing a client
-
-`fakeIntelligence()` from `@popjoker/knew/testing` is an in-memory driver that passes the
-contract suite. A client's tests bind it where `intelligenceClient` would be bound, with the
-client's own lenses (all over one vocabulary; the first is the default).
+`fakeIntelligence()` from `@popjoker/knew/testing` passes the contract suite. Bind it where
+`intelligenceClient` would go, with your own lenses (one vocabulary; the first lens is the default):
 
 ```ts
 import { compileLens, compileVocabulary } from "@popjoker/knew";
 import { extraction, extracted, fakeIntelligence } from "@popjoker/knew/testing";
 
-const mine = compileVocabulary(vocabulary);
-const fake = fakeIntelligence({ lenses: [compileLens(prep, mine)] });      // or fakeIntelligence() for the fixture
+const fake = fakeIntelligence({ lenses: [compileLens(prep, compileVocabulary(vocabulary))] });
 await fake.upsertEntity(scope, { id: "linda", name: "Linda" });
-fake.seedFacts(scope, "linda", [{ type: "INTEREST", fact: "Gardening" }]);  // a page without an episode
-fake.script({ extraction: extraction([extracted("linda", "AVOID", "Vegan")]) }); // what the next extractNow finds
+fake.seedFacts(scope, "linda", [{ type: "INTEREST", fact: "Gardening" }]);
+fake.script({ extraction: extraction([extracted("linda", "AVOID", "Vegan")]) });
 ```
 
-`script` queues what the next pending episode is read into; `extractNow` applies the same
-reconciliation plan the service applies, with the same attribution rules, so a client test can
-walk from a note to the page. The queue is one for the whole fake, across scopes and entities: each
-episode an `extractNow` reads takes the next turn, earliest said first, and an episode with no turn
-left stays pending. Script one turn per episode, just before the call that reads it. A scripted `reconcile` returns the decisions when the test is
-about a correction or a retelling.
+`script` queues what the next `extractNow` reads an episode into. The queue is shared across
+scopes: each episode read takes the next turn, earliest said first, and an episode with no turn
+left stays pending.
 
-## 11. Proving a driver
-
-A client that wraps its own store in the contract (an in-process driver) proves it with the same
-suite the service runs:
+**Proving a driver.** An in-process driver passes the same suite the service runs:
 
 ```ts
 import { test } from "node:test";
@@ -313,9 +177,9 @@ import { contractSuite } from "@popjoker/knew/testing";
 
 contractSuite({
   test,
-  scripted: true,                       // false withholds the cases that need facts
+  scripted: true,
   open: async () => ({
-    intelligence: myDriver,             // a fresh store with the fixture vocabulary and both fixture lenses
+    intelligence: myDriver, // a fresh store with the fixture vocabulary and both fixture lenses
     scope: { clientId: "c", subjectId: fresh() },
     otherScope: { clientId: "c", subjectId: fresh() },
     script: (turn) => myScriptedModel.queue(turn),
@@ -324,16 +188,21 @@ contractSuite({
 });
 ```
 
-The cases are the contract: the roster and the asks, episodes once per ref, hints, scopes that
-never cross, deletion, replies that keep their question, readiness by name and over time,
-extraction into the page, supersession and retelling with as-of reads, two lenses over one ledger,
-holds, and attribution. A driver that passes them behaves like the service for every client
-feature built on the contract.
+## 8. Running the service
 
-## 12. Versions
+The service is `heymichaelp/knew-service`:
 
-The package follows semver from 1.0.0: a change to a definition schema that keeps every
-registered vocabulary and lens valid is a minor; a change to `Intelligence`, the wire types or
-what the contract suite demands is a major. A preset is reviewed like API: an addition to it is a
-minor, and a change to what an existing preset type means bumps the preset's version and is a
-major.
+```sh
+git clone https://github.com/heymichaelp/knew-service
+cd knew-service
+npm install
+cp .env.example .env
+npm run db:start && npm run db:migrate
+npm run cli -- client add my-app --name "My app"
+npm run cli -- vocabulary set my-app vocabulary.json
+npm run cli -- lens set my-app lens.json
+npm run dev       # http on 8080
+npm run worker    # the extraction sweep
+```
+
+Without `OPENROUTER_API_KEY`, everything but extraction works; episodes stay pending.
