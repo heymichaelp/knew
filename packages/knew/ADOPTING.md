@@ -5,8 +5,9 @@ follows it without reading anybody else's code.
 
 The words: the **knower** is the client's own user, whose notebook this is — the scope's
 `subjectId`. What they know about is an **entity** on their roster, of the vocabulary's **kind**: a
-person, a place, a thing. A **vocabulary** is what extraction writes in; a **lens** is a direction
-over it for one objective.
+person, a place, a thing. An entity's `kind`, when the client gives one, must be the vocabulary's; a
+fact type or a dimension the client happens to call "kind" is only a name. A **vocabulary** is what
+extraction writes in; a **lens** is a direction over it for one objective.
 
 ## 1. Install, and bind once per process
 
