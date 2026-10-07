@@ -91,7 +91,8 @@ a version that was never shipped.
   timeouts, deletion, usage, running the service, testing against the fake, and proving a driver.
   Also `ADOPTING.md` in this tarball.
 - [Vocabularies and lenses](https://knew.dev/lenses) — every field of both, generated from the
-  schemas, with the defaults.
+  schemas, with the defaults. Offline, the same fields are documented where they are declared, in
+  `dist/vocabulary.d.ts` and `dist/lens.d.ts`.
 - [Presets](https://knew.dev/presets) — where a client starts: each preset's dimensions, types and
   starter lens.
 - [The API](https://knew.dev/api) — the routes, the envelope, the two headers, the timeouts.
