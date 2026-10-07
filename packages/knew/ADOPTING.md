@@ -134,6 +134,13 @@ reads `askedIngested` to know whether its own episode made it. `outcome` says wh
 stopped: `extracted`, `busy` (another worker holds this knower), `budget` (the deadline),
 `failed`, `none`.
 
+Don't loop on it. `busy` means another worker holds this knower and is reading the same pending
+episodes; `budget` means the deadline came first, and what was read is kept. Either way, when
+`askedIngested` is false the turn answers from what the client already holds, and
+`requestExtract(scope)` hands the episode to the background sweep, which an `inline` episode does
+not trigger by itself. Once `askedIngested` is true its facts are committed: the next read
+includes them.
+
 ## 4. Reading
 
 Every read that renders takes `lens`; without one it reads through the client's default.
