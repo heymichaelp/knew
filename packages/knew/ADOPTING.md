@@ -120,6 +120,10 @@ follows it; nothing the client stores waits on the engine.
 3. After that, `requestExtract(scope)`. Never inside `addEpisode`'s caller's transaction, never
    before the commit: a sweep that starts before the row exists finds nothing to cite.
 
+A hint points into the roster; it never puts anything on it. `upsertEntity` an entity before an
+episode hints it: a fact the model pins on an id that is not on the roster is dropped, and counted
+as `offRoster` in the extraction's outcome.
+
 An outbox table in the client's store makes step 2 and 3 survive a crash between the commit and
 the call: write the intent in the same transaction, drain it after, delete on success. The
 idempotent ref makes a drain that runs twice harmless.
