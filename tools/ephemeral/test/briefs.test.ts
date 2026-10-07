@@ -3,10 +3,10 @@ import { cpSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
 import type { CheckResult } from "../kit/check-kit.ts";
-import { briefLeaks, briefNames, loadBrief } from "../src/brief.ts";
+import { briefLeaks, briefNames, loadBrief, referenceOf } from "../src/brief.ts";
 import { checkInProcess } from "../src/check.ts";
 import { packageNames } from "../src/names.ts";
-import { WORKSPACE } from "../src/prep.ts";
+import { WORKSPACE, type Arm } from "../src/prep.ts";
 
 /**
  * The briefs, held to what makes a run mean something: each names no API, each
@@ -62,16 +62,27 @@ for (const name of briefNames()) {
       }
     });
 
-    it("passes its own checker with its reference", async () => {
-      const result = await checkInProcess(join(brief.dir, "reference"), name, { typecheck: false });
-      assert.ok(result.passed, failures(result));
-    });
+    for (const arm of brief.arms) {
+      it(`passes its own checker with its ${arm} reference`, async () => {
+        const result = await checkInProcess(referenceOf(brief, arm), name, { typecheck: false, arm });
+        assert.ok(result.passed, failures(result));
+      });
+    }
+
+    if (brief.arms.includes("baseline")) {
+      const baseline = readFileSync(join(brief.dir, "BASELINE.md"), "utf8");
+      it("hands the baseline the same product, with no knew in it", () => {
+        assert.doesNotMatch(baseline, /knew|@popjoker/i, "BASELINE.md is the product built without knew, so it must not mention it");
+        assert.deepEqual(briefLeaks(baseline, API, new Set(brief.allow)), [], "BASELINE.md says the package's names");
+      });
+    }
   });
 }
 
-/** A reference, broken one way: which file, how, and the check that must fail. */
+/** A reference, broken one way: which arm's reference (knew by default), which file, how, and the check that must fail. */
 interface Mutation {
   what: string;
+  arm?: Arm;
   file: string;
   edit: (text: string) => string;
   fails: string;
@@ -89,7 +100,137 @@ const json =
     return `${JSON.stringify(value, null, 2)}\n`;
   };
 
+const ENDED = "a statement that has ended is no longer known";
+const CORRECTED = "a correction replaces what it corrected, and the earlier word is still known as of before it";
+const REPEATED = "a repeated statement is known once, and counts as heard again";
+const STALE = "hours not heard for 45 days come back to be re-checked, and hours from 10 days ago are fine";
+const ORDERED = "with the kind and hours known, what it is like comes next, then what to order";
+const DROPPED = "a note about a place nobody added is dropped, and stays dropped";
+const ALONE = "a notebook is its owner's alone";
+
 const MUTATIONS: Record<string, Mutation[]> = {
+  notebook: [
+    {
+      what: "an ended statement is still known",
+      file: "src/app.ts",
+      edit: swap("(view?.facts ?? []).filter((fact) => !endedByDate(fact, asOf)).map((fact) => fact.fact)", "(view?.facts ?? []).map((fact) => fact.fact)"),
+      fails: ENDED,
+    },
+    {
+      what: "a note's date is dropped",
+      file: "src/app.ts",
+      edit: swap("referenceAt: options.at ?? new Date(),", "referenceAt: new Date(),"),
+      fails: STALE,
+    },
+    {
+      what: "the next direction passes over a re-check",
+      file: "src/app.ts",
+      edit: swap("const direction = readiness?.next[0];", 'const direction = readiness?.next.find((candidate) => candidate.kind === "learn");'),
+      fails: STALE,
+    },
+    {
+      what: "hours never go stale",
+      file: "definitions/vocabulary.json",
+      edit: json((vocabulary) => delete vocabulary.factTypes.HOURS.revisitAfterDays),
+      fails: STALE,
+    },
+    {
+      what: "what to order outranks what it is like",
+      file: "definitions/lenses/visit.json",
+      edit: json((lens) => (lens.needs.find((need: { id: string }) => need.id === "order").weight = 2)),
+      fails: ORDERED,
+    },
+    {
+      what: "a note is left for the background sweep",
+      file: "src/app.ts",
+      edit: swap(
+        "const outcome = await engine.extractNow(scope(userId), { maxEpisodes: 5, askedSourceRef: sourceRef });\n      if (outcome.askedIngested !== true) await engine.requestExtract(scope(userId));",
+        "await engine.requestExtract(scope(userId));",
+      ),
+      fails: "a note is kept under its place, as it was said",
+    },
+    {
+      what: "a place never added reads as one with nothing known",
+      file: "src/app.ts",
+      edit: swap("if ((await engine.readiness(scope(userId), placeId, { lens: LENS })) === null) return null;", ""),
+      fails: "a place never added is unknown, and a new place starts with what kind of place it is",
+    },
+    {
+      what: "every user shares one notebook",
+      file: "src/app.ts",
+      edit: swap("subjectId: userId", 'subjectId: "everyone"'),
+      fails: ALONE,
+    },
+    {
+      what: "a correction is kept beside what it corrected",
+      arm: "baseline",
+      file: "src/app.ts",
+      edit: swap("if (replaced) replaced.replacedAt = at;", ""),
+      fails: CORRECTED,
+    },
+    {
+      what: "a correction forgets what came before it",
+      arm: "baseline",
+      file: "src/app.ts",
+      edit: swap("if (replaced) replaced.replacedAt = at;", "if (replaced) place.kept.splice(place.kept.indexOf(replaced), 1);"),
+      fails: CORRECTED,
+    },
+    {
+      what: "a repeat is kept twice",
+      arm: "baseline",
+      file: "src/app.ts",
+      edit: swap("            if (at > repeated.heardAt) repeated.heardAt = at;\n            continue;", "            if (at > repeated.heardAt) repeated.heardAt = at;"),
+      fails: REPEATED,
+    },
+    {
+      what: "an ended statement is still known",
+      arm: "baseline",
+      file: "src/app.ts",
+      edit: swap(" && (kept.until === null || kept.until > at)", ""),
+      fails: ENDED,
+    },
+    {
+      what: "a note about a place nobody added is kept for later",
+      arm: "baseline",
+      file: "src/app.ts",
+      edit: swap(
+        "const place = places.get(statement.placeId);\n        if (!place) continue;",
+        "const place = places.get(statement.placeId) ?? places.set(statement.placeId, { name: statement.placeId, kept: [] }).get(statement.placeId)!;",
+      ),
+      fails: DROPPED,
+    },
+    {
+      what: "hours never go stale",
+      arm: "baseline",
+      file: "src/app.ts",
+      edit: swap("const STALE_AFTER_DAYS = 30;", "const STALE_AFTER_DAYS = Number.POSITIVE_INFINITY;"),
+      fails: STALE,
+    },
+    {
+      what: "a note's date is dropped",
+      arm: "baseline",
+      file: "src/app.ts",
+      edit: swap("const at = options.at ?? new Date();", "const at = new Date();"),
+      fails: STALE,
+    },
+    {
+      what: "what to order comes before what it is like",
+      arm: "baseline",
+      file: "src/app.ts",
+      edit: swap(
+        '      if (of("VIBE").length === 0) return { about: LABEL.VIBE, recheck: [] };\n      if (of("ORDER").length === 0) return { about: LABEL.ORDER, recheck: [] };',
+        '      if (of("ORDER").length === 0) return { about: LABEL.ORDER, recheck: [] };\n      if (of("VIBE").length === 0) return { about: LABEL.VIBE, recheck: [] };',
+      ),
+      fails: ORDERED,
+    },
+    {
+      what: "every user shares one notebook",
+      arm: "baseline",
+      file: "src/app.ts",
+      edit: swap("let places = notebooks.get(userId);\n    if (!places) notebooks.set(userId, (places = new Map()));", 'let places = notebooks.get("everyone");\n    if (!places) notebooks.set("everyone", (places = new Map()));'),
+      fails: ALONE,
+    },
+  ],
   gifting: [
     {
       what: "the vocabulary is written from scratch",
@@ -211,21 +352,27 @@ describe("Scenario: Each checker fails its reference broken the ways it claims t
   before(() => rmSync(MUTANTS, { recursive: true, force: true }));
   after(() => rmSync(MUTANTS, { recursive: true, force: true }));
 
-  it("has mutations for every brief", () => {
-    for (const name of briefNames()) assert.ok((MUTATIONS[name]?.length ?? 0) > 0, `${name} has no mutations, so nothing shows its checker can fail`);
+  it("has mutations for every brief, in every arm", () => {
+    for (const name of briefNames()) {
+      for (const arm of loadBrief(name).arms) {
+        const count = (MUTATIONS[name] ?? []).filter((mutation) => (mutation.arm ?? "knew") === arm).length;
+        assert.ok(count > 0, `${name} has no ${arm} mutations, so nothing shows its checker can fail there`);
+      }
+    }
   });
 
   for (const [name, mutations] of Object.entries(MUTATIONS)) {
     mutations.forEach((mutation, index) => {
-      it(`${name}: ${mutation.what}`, async () => {
+      it(`${name}${mutation.arm === "baseline" ? " (baseline)" : ""}: ${mutation.what}`, async () => {
+        const arm = mutation.arm ?? "knew";
         const dir = join(MUTANTS, `${name}-${index}`);
-        cpSync(join(loadBrief(name).dir, "reference"), dir, { recursive: true });
+        cpSync(referenceOf(loadBrief(name), arm), dir, { recursive: true });
         const path = join(dir, mutation.file);
         const before = readFileSync(path, "utf8");
         const after = mutation.edit(before);
         assert.notEqual(after, before, "the mutation changed nothing");
         writeFileSync(path, after);
-        const result = await checkInProcess(dir, name, { typecheck: false, appTests: false });
+        const result = await checkInProcess(dir, name, { typecheck: false, appTests: false, arm });
         const item = result.checks.find((check) => check.name === mutation.fails);
         assert.ok(item, `the ${name} checker has no check named "${mutation.fails}"; it ran: ${result.checks.map((check) => check.name).join("; ")}`);
         assert.equal(item.passed, false, `"${mutation.fails}" passed with ${mutation.what}`);

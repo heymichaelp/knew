@@ -3,7 +3,7 @@ import { cpSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import type { CheckResult } from "../kit/check-kit.ts";
-import { BRIEFS, SCAFFOLD_COMPILER_OPTIONS, WORKSPACE } from "./prep.ts";
+import { BRIEFS, SCAFFOLD_COMPILER_OPTIONS, WORKSPACE, type Arm } from "./prep.ts";
 
 /**
  * Running a brief's hidden checker. It goes into the app only once the agent
@@ -33,11 +33,11 @@ function checkerEnv(): NodeJS.ProcessEnv {
 }
 
 /** Run a brief's checker against an app directory in a child process, and read back its JSON. */
-export function runChecker(dir: string, brief: string, options: { typecheck: boolean; timeoutMs?: number }): CheckResult {
+export function runChecker(dir: string, brief: string, options: { typecheck: boolean; arm?: Arm; timeoutMs?: number }): CheckResult {
   layChecker(dir, brief);
   const result = spawnSync(
     process.execPath,
-    ["--import", "tsx", join(".check", "kit", "run-check.ts"), join(".check", "briefs", brief, "check.ts"), dir, options.typecheck ? "1" : "0"],
+    ["--import", "tsx", join(".check", "kit", "run-check.ts"), join(".check", "briefs", brief, "check.ts"), dir, options.typecheck ? "1" : "0", options.arm ?? "knew"],
     { cwd: dir, encoding: "utf8", timeout: options.timeoutMs ?? 600_000, env: checkerEnv() },
   );
   const line = (result.stdout ?? "").trim().split("\n").filter(Boolean).pop();
@@ -51,9 +51,9 @@ export function runChecker(dir: string, brief: string, options: { typecheck: boo
 }
 
 /** Run a brief's checker in this process, against a directory whose `@popjoker/knew` resolves to the same copy this process sees. */
-export async function checkInProcess(dir: string, brief: string, options: { typecheck: boolean; appTests?: boolean }): Promise<CheckResult> {
+export async function checkInProcess(dir: string, brief: string, options: { typecheck: boolean; appTests?: boolean; arm?: Arm }): Promise<CheckResult> {
   const module = (await import(pathToFileURL(join(BRIEFS, brief, "check.ts")).href)) as {
-    check: (dir: string, options: { typecheck: boolean; appTests?: boolean }) => Promise<CheckResult>;
+    check: (dir: string, options: { typecheck: boolean; appTests?: boolean; arm?: Arm }) => Promise<CheckResult>;
   };
   return module.check(dir, options);
 }

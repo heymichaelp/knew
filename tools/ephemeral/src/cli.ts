@@ -4,7 +4,7 @@ import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, 
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
-import { briefHash, briefNames, loadBrief } from "./brief.ts";
+import { briefHash, briefNames, loadBrief, referenceOf, type Brief } from "./brief.ts";
 import { runChecker } from "./check.ts";
 import {
   DEBRIEF_SCHEMA,
@@ -23,7 +23,7 @@ import { findingsOf } from "./findings.ts";
 import { classify, contaminationOf, isolationProblems, measure, sourceMetrics } from "./metrics.ts";
 import { forInterview, momentsOf, notesOf } from "./moments.ts";
 import { packageNames } from "./names.ts";
-import { BRIEFS, REPO, WORKSPACE, layBrief, packTarball, prepareDir, removeDir, tarballAt, type Tarball } from "./prep.ts";
+import { REPO, WORKSPACE, installForCheck, layBrief, packTarball, prepareDir, removeDir, tarballAt, type Arm, type Tarball } from "./prep.ts";
 import { archiveTree, printTable, summaryMarkdown, verifyDebrief, writeRun, type RunRecord } from "./report.ts";
 import { parseTranscript } from "./transcript.ts";
 
@@ -31,6 +31,7 @@ import { parseTranscript } from "./transcript.ts";
  * The harness's three commands:
  *
  *   agent      a model builds each brief's app; checked, debriefed, measured, reported
+ *              (with --arm baseline or both, a paired brief is also built with no knew)
  *   dry-run    each brief's reference solution stands in for the agent; no model is called
  *   preflight  two tiny real sessions proving the clean room and the budget cap work
  *
@@ -50,6 +51,7 @@ const { positionals, values } = parseArgs({
     tarball: { type: "string", multiple: true },
     keep: { type: "boolean" },
     "think-aloud": { type: "boolean" },
+    arm: { type: "string" },
     "save-fixture": { type: "boolean" },
     help: { type: "boolean", short: "h" },
   },
@@ -71,13 +73,22 @@ const USAGE = [
   "  --tarball <path>   test this tarball instead of packing (repeatable, for A/B)",
   "  --keep             keep the throwaway directories",
   "  --think-aloud      the agent keeps NOTES.md as it works (changes its effort; off by default)",
+  "  --arm <arm>        knew (default), baseline, or both: a paired brief built with no knew too",
   "  --save-fixture     preflight: save its transcript, redacted, as the test fixture",
 ].join("\n");
 
 const log = (line: string) => process.stdout.write(`${line}\n`);
 const hash = (text: string) => createHash("sha256").update(text).digest("hex").slice(0, 16);
 /** The prompts a pass used, as a hash: the build prompt in its mode, and the debrief's template and schema. */
-const promptHash = (thinkAloud: boolean) => hash(`${buildPrompt(thinkAloud)}\n${debriefPrompt([])}\n${JSON.stringify(DEBRIEF_SCHEMA)}`);
+const promptHash = (thinkAloud: boolean, arm: Arm) => hash(`${buildPrompt(thinkAloud, arm)}\n${debriefPrompt([])}\n${JSON.stringify(DEBRIEF_SCHEMA)}`);
+
+/** The arms to build a brief in: those asked for that it has. A brief with no `BASELINE.md` is built on knew only. */
+function armsFor(brief: Brief): Arm[] {
+  const asked = values.arm ?? "knew";
+  if (!["knew", "baseline", "both"].includes(asked)) throw new Error(`--arm is knew, baseline or both, not ${asked}`);
+  const wanted: Arm[] = asked === "both" ? ["knew", "baseline"] : [asked as Arm];
+  return wanted.filter((arm) => brief.arms.includes(arm));
+}
 
 function gitState(): { sha: string; dirty: boolean } {
   const sha = execFileSync("git", ["rev-parse", "HEAD"], { cwd: REPO, encoding: "utf8" }).trim();
@@ -135,22 +146,22 @@ async function agent(): Promise<void> {
   // Interleaved — run by run, tarball by tarball — so an A/B comparison shares its conditions.
   for (let run = 1; run <= runs; run += 1) {
     for (const tarball of packed) {
-      for (const name of names) {
+      for (const [name, arm] of names.flatMap((briefName) => armsFor(loadBrief(briefName)).map((each) => [briefName, each] as const))) {
         if (spent >= passBudget) {
           log(`the pass budget of $${passBudget} is spent; no more runs start`);
           break;
         }
         const brief = loadBrief(name);
-        const label = packed.length > 1 ? `${name}-${tarball.sha256.slice(0, 8)}` : name;
+        const label = `${name}${arm === "baseline" ? "-baseline" : ""}${packed.length > 1 ? `-${tarball.sha256.slice(0, 8)}` : ""}`;
         const out = join(reportRoot, label, String(run));
         mkdirSync(out, { recursive: true });
         log(`→ ${label} #${run}: preparing`);
-        const prepared = prepareDir(name, tarball);
-        layBrief(prepared.dir, name, brief.inputs);
+        const prepared = prepareDir(arm === "knew" ? name : `${name}-baseline`, tarball, arm);
+        layBrief(prepared.dir, name, brief.inputs, arm);
         const sessionId = randomUUID();
         const budgetUsd = Math.min(brief.budgetUsd, passBudget - spent);
         log(`  building (cap $${budgetUsd.toFixed(2)}, ${brief.timeoutMin} min)`);
-        const build = await runClaude(buildArgs({ sessionId, model, effort: values.effort, budgetUsd }, buildPrompt(thinkAloud)), {
+        const build = await runClaude(buildArgs({ sessionId, model, effort: values.effort, budgetUsd }, buildPrompt(thinkAloud, arm)), {
           cwd: prepared.dir,
           transcriptPath: join(out, "transcript.jsonl"),
           timeoutMs: Number(values["timeout-min"] ?? brief.timeoutMin) * 60_000,
@@ -165,19 +176,24 @@ async function agent(): Promise<void> {
         const notesFile = join(prepared.dir, "NOTES.md");
         const notes = thinkAloud ? notesOf(existsSync(notesFile) ? readFileSync(notesFile, "utf8") : null, transcript) : null;
 
-        log(`  debriefing (${asked.length} moment${asked.length === 1 ? "" : "s"} to ask about)`);
-        const debrief = await runClaude(debriefArgs({ sessionId, model, budgetUsd: 1 }, debriefPrompt(asked)), {
-          cwd: prepared.dir,
-          transcriptPath: join(out, "debrief.jsonl"),
-          timeoutMs: 5 * 60_000,
-          idleMs: 3 * 60_000,
-        });
-        killStragglers(prepared.dir);
-        const debriefResult = parseTranscript(debrief.events).result;
-        spent += debriefResult?.costUsd ?? 0;
+        // A baseline run is measured, not interviewed: its questions are about knew, which it never had.
+        let debriefResult: ReturnType<typeof parseTranscript>["result"] = null;
+        if (arm === "knew") {
+          log(`  debriefing (${asked.length} moment${asked.length === 1 ? "" : "s"} to ask about)`);
+          const debrief = await runClaude(debriefArgs({ sessionId, model, budgetUsd: 1 }, debriefPrompt(asked)), {
+            cwd: prepared.dir,
+            transcriptPath: join(out, "debrief.jsonl"),
+            timeoutMs: 5 * 60_000,
+            idleMs: 3 * 60_000,
+          });
+          killStragglers(prepared.dir);
+          debriefResult = parseTranscript(debrief.events).result;
+          spent += debriefResult?.costUsd ?? 0;
+        }
 
         log("  checking");
-        const check = runChecker(prepared.dir, name, { typecheck: true });
+        if (arm === "baseline") installForCheck(prepared.dir, tarball);
+        const check = runChecker(prepared.dir, name, { typecheck: true, arm });
         const metrics = measure(transcript);
         const isolation = isolationProblems(transcript, { tools: TOOLS, model, cwd: prepared.dir, personalSkills: skills });
         const contamination = contaminationOf(transcript, { runDir: prepared.dir, repo: REPO, home: homedir() });
@@ -202,9 +218,10 @@ async function agent(): Promise<void> {
             tarballSha256: tarball.sha256,
             gitSha: git.sha,
             dirty: git.dirty,
-            promptHash: promptHash(thinkAloud),
-            zodVersion: zodVersion(prepared.dir),
+            promptHash: promptHash(thinkAloud, arm),
+            zodVersion: arm === "knew" ? zodVersion(prepared.dir) : null,
             thinkAloud,
+            arm,
           },
           ...verdict,
           timedOut: build.timedOut || build.idledOut,
@@ -218,7 +235,7 @@ async function agent(): Promise<void> {
           moments,
           asked,
           notes,
-          debrief: verifyDebrief(structured(debriefResult), transcript, asked),
+          debrief: arm === "knew" ? verifyDebrief(structured(debriefResult), transcript, asked) : null,
         };
         writeRun(out, record);
         archiveTree(prepared.dir, out);
@@ -252,13 +269,17 @@ function dryRun(): void {
   try {
     for (const name of names) {
       const brief = loadBrief(name);
-      const dir = join(install.dir, name);
-      cpSync(join(BRIEFS, name, "reference"), dir, { recursive: true });
-      layBrief(dir, name, brief.inputs);
-      const result = runChecker(dir, name, { typecheck: true });
-      log(`${result.passed ? "✓" : "✗"} ${name} (v${brief.version}): ${result.checks.filter((c) => c.passed).length}/${result.checks.length} checks`);
-      for (const check of result.checks.filter((c) => !c.passed)) log(`    ✗ ${check.name}: ${check.detail.split("\n").slice(0, 6).join("\n      ")}`);
-      if (!result.passed) failed += 1;
+      // Every arm's reference: a paired brief's baseline must be passable too, or the comparison means nothing.
+      for (const arm of brief.arms) {
+        const label = arm === "knew" ? name : `${name}-baseline`;
+        const dir = join(install.dir, label);
+        cpSync(referenceOf(brief, arm), dir, { recursive: true });
+        layBrief(dir, name, brief.inputs, arm);
+        const result = runChecker(dir, name, { typecheck: true, arm });
+        log(`${result.passed ? "✓" : "✗"} ${label} (v${brief.version}): ${result.checks.filter((c) => c.passed).length}/${result.checks.length} checks`);
+        for (const check of result.checks.filter((c) => !c.passed)) log(`    ✗ ${check.name}: ${check.detail.split("\n").slice(0, 6).join("\n      ")}`);
+        if (!result.passed) failed += 1;
+      }
     }
   } finally {
     if (!values.keep) removeDir(install.dir);

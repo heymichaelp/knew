@@ -26,6 +26,7 @@ Private workspace, never published.
 - `--tarball <path>`: repeatable. Two tarballs run interleaved, as an A/B comparison under the
   same conditions.
 - `--keep`: keeps the throwaway directories.
+- `--arm <arm>`: `knew` (the default), `baseline`, or `both`. See "Baseline mode".
 - `--think-aloud`: the agent keeps a `NOTES.md` as it works, one line per guess, confusion or
   workaround, as a participant in a usability study would. Off by default, because reflecting
   changes the work: a think-aloud pass's cost and turns aren't comparable with a plain one's.
@@ -65,6 +66,29 @@ never run in CI.
 4. **Check.** The brief's `check.ts` goes in only now, so the agent never sees it. It runs with the
    app's own tsx against the tarball the app installed.
 5. **Report, then clean up.** `claude purge` the run directory, then remove it.
+
+## Baseline mode
+
+A paired brief is one product built two ways and judged by one checker:
+- on knew, from its `BRIEF.md`;
+- with no knew at all, from its `BASELINE.md`, as an agent asked to build the product directly would.
+
+Its probes target what goes wrong once an app is a year old: corrections that keep their history,
+as-of reads, statements that end, repeats, stale information, notes about things nobody added,
+and users who never see each other's data. Where the baseline fails and knew passes, that is
+what knew adds. Where both pass, knew adds little there.
+
+- **Same statements in both arms.** Neither arm does a model's job. The checker scripts what each
+  note says. The knew arm receives it as the package's fake extraction and reconciliation; the
+  baseline gets a `read` function returning the same statements.
+- **No knew in the baseline.** The baseline is scaffolded with no dependency and no tarball, its
+  prompt names no package, and it is not debriefed. Its checker gets the package installed only
+  after the build, with `--no-save`.
+- **Both references pass.** `baseline-reference/` is a plain app that passes the same checker,
+  so a baseline failure is the agent's, not the brief's.
+- **The summary compares them.** A probe-by-probe table gives each arm's passes.
+
+`npm run agent -w @knew/ephemeral -- --brief notebook --arm both` runs one pair.
 
 ## Reading a report
 
@@ -107,6 +131,7 @@ brief version.
 | Brief | The product | What it exercises |
 |---|---|---|
 | `places` | Notes on cafés and venues, for planning a visit | A vocabulary written from scratch; hours that go stale after about a month; what kind of place before what it's like |
+| `notebook` | A notebook of places, built on knew and without it | Paired. What an app must get right a year in: corrections, as-of reads, ended statements, repeats, stale hours, unknown places, separate notebooks |
 | `gifting` | A gift guide that learns more before it shows picks | The person preset extended with its types unchanged; five facts in any mix before picks; what to steer clear of and what they have, handed over as rules |
 
 Each brief holds:
@@ -118,6 +143,7 @@ Each brief holds:
   fake behind a recorder, built from the agent's own lenses.
 - `reference/`: a known-good app. It proves the brief can be solved and that the checker passes
   a good solution.
+- For a paired brief, `BASELINE.md` and `baseline-reference/`: the same product without knew.
 
 `test/briefs.test.ts` holds every brief to four rules:
 - it names no API;

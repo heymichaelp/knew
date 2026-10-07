@@ -11,7 +11,7 @@ describe("Scenario: The references face the rules every agent faces", () => {
   it("holds the references to exactly the scaffold's compiler options", () => {
     const references = JSON.parse(readFileSync(join(BRIEFS, "tsconfig.json"), "utf8")) as { compilerOptions: unknown; include: string[] };
     assert.deepEqual(references.compilerOptions, SCAFFOLD_COMPILER_OPTIONS, "briefs/tsconfig.json drifted from SCAFFOLD_COMPILER_OPTIONS");
-    assert.deepEqual(references.include, ["*/reference/src", "*/reference/test"]);
+    assert.deepEqual(references.include, ["*/reference/src", "*/reference/test", "*/baseline-reference/src", "*/baseline-reference/test"]);
     assert.ok(briefNames().length > 0, "there is no brief for it to cover");
   });
 
@@ -30,6 +30,12 @@ describe("Scenario: A throwaway app is scaffolded from the repo's own lockfile",
     assert.deepEqual(manifest.devDependencies, { "@types/node": versions.typesNode, tsx: versions.tsx, typescript: versions.typescript });
     assert.deepEqual(manifest.scripts, { test: "node --import tsx --test test/*.test.ts", typecheck: "tsc --noEmit -p ." });
     assert.deepEqual(JSON.parse(scaffold.tsconfig), { compilerOptions: SCAFFOLD_COMPILER_OPTIONS, include: ["src", "test"] });
+  });
+
+  it("gives a baseline run no trace of the package", () => {
+    const manifest = JSON.parse(scaffoldFiles(null, "ephemeral-notebook-baseline").packageJson) as Record<string, unknown>;
+    assert.equal(manifest.dependencies, undefined);
+    assert.doesNotMatch(JSON.stringify(manifest), /popjoker/);
   });
 
   it("refuses a run directory that a package.json or node_modules above it would lend modules to", () => {
