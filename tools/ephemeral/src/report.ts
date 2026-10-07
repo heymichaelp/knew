@@ -2,13 +2,16 @@ import { spawnSync } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { CheckResult } from "../kit/check-kit.ts";
+import { findingsMarkdown, type Finding } from "./findings.ts";
 import type { Outcome, RunMetrics, SourceMetrics } from "./metrics.ts";
+import type { Moment, Note } from "./moments.ts";
 import type { Transcript } from "./transcript.ts";
 
 /**
  * What a run leaves behind: `result.json` (identity, outcome, effort,
- * friction), `check.json`, `debrief.json`, `transcript.jsonl` and `tree.tgz`
- * (the app, minus node_modules), per run; and one `summary.md` per pass.
+ * friction, the moments found and the think-aloud notes), `check.json`,
+ * `debrief.json`, `transcript.jsonl` and `tree.tgz` (the app, minus
+ * node_modules), per run; and one `summary.md` and `findings.json` per pass.
  */
 
 export interface Identity {
@@ -24,6 +27,19 @@ export interface Identity {
   dirty: boolean;
   promptHash: string;
   zodVersion: string | null;
+  /** Whether the agent kept a think-aloud log, which changes how it works and so what its effort means. */
+  thinkAloud: boolean;
+}
+
+/** The debrief's answer about one numbered moment of the session, with the moment it was asked about. */
+export interface MomentAnswer {
+  moment: number;
+  step: number;
+  asked: string;
+  evidence: string[];
+  wasDoing: string;
+  confusion: string;
+  wouldHaveHelped: string;
 }
 
 export interface Debrief {
@@ -32,8 +48,11 @@ export interface Debrief {
   missingFromDocs: string[];
   apiFriction: string[];
   wouldChange: string;
+  moments: MomentAnswer[];
   /** Quoted errors dropped because their text appears in no tool result. */
   unverifiedQuotes: number;
+  /** Answers about a moment that was never asked about, dropped. */
+  unaskedAnswers: number;
 }
 
 export interface RunRecord {
@@ -48,24 +67,52 @@ export interface RunRecord {
   isolation: string[];
   contamination: string[];
   check: CheckResult;
+  /** Every moment found in the session; the debrief asked about `asked` of them. */
+  moments: Moment[];
+  asked: Moment[];
+  /** The think-aloud log, in think-aloud mode. */
+  notes: Note[] | null;
   debrief: Debrief | null;
 }
 
-/** Keep a quoted error only if its text is in what the tools actually printed: self-reports get invented. */
-export function verifyDebrief(raw: unknown, transcript: Transcript): Debrief | null {
+/**
+ * Keep a quoted error only if its text is in what the tools actually printed,
+ * and an answer about a moment only if that moment was asked about:
+ * self-reports get invented.
+ */
+export function verifyDebrief(raw: unknown, transcript: Transcript, asked: readonly Moment[] = []): Debrief | null {
   if (typeof raw !== "object" || raw === null) return null;
-  const value = raw as Partial<Omit<Debrief, "unverifiedQuotes">>;
+  const value = raw as Partial<Omit<Debrief, "unverifiedQuotes" | "unaskedAnswers" | "moments">> & { moments?: unknown };
   const printed = transcript.toolResults.map((result) => result.text).join("\n");
   const quotes = Array.isArray(value.unhelpfulErrors) ? value.unhelpfulErrors : [];
   const kept = quotes.filter((quote) => typeof quote?.message === "string" && quote.message.trim() !== "" && printed.includes(quote.message.trim()));
   const list = (items: unknown) => (Array.isArray(items) ? items.filter((item): item is string => typeof item === "string") : []);
+  const answers = Array.isArray(value.moments) ? (value.moments as Array<Partial<Record<keyof MomentAnswer, unknown>>>) : [];
+  const text = (field: unknown) => (typeof field === "string" ? field : "");
+  const moments = answers.flatMap((answer): MomentAnswer[] => {
+    const moment = typeof answer?.moment === "number" ? asked[answer.moment - 1] : undefined;
+    if (!moment) return [];
+    return [
+      {
+        moment: answer.moment as number,
+        step: moment.step,
+        asked: moment.what,
+        evidence: moment.evidence,
+        wasDoing: text(answer.wasDoing),
+        confusion: text(answer.confusion),
+        wouldHaveHelped: text(answer.wouldHaveHelped),
+      },
+    ];
+  });
   return {
     guessed: list(value.guessed),
     unhelpfulErrors: kept,
     missingFromDocs: list(value.missingFromDocs),
     apiFriction: list(value.apiFriction),
     wouldChange: typeof value.wouldChange === "string" ? value.wouldChange : "",
+    moments,
     unverifiedQuotes: quotes.length - kept.length,
+    unaskedAnswers: answers.length - moments.length,
   };
 }
 
@@ -126,27 +173,11 @@ export function summarize(records: readonly RunRecord[]): BriefSummary[] {
   });
 }
 
-/** Friction across runs: each package error and each debrief line, with how many runs met it. */
-function frictionLines(records: readonly RunRecord[]): string[] {
-  const tally = new Map<string, Set<string>>();
-  const note = (kind: string, text: string, record: RunRecord) => {
-    const key = `${kind}: ${text}`;
-    tally.set(key, (tally.get(key) ?? new Set()).add(`${record.identity.brief}#${record.identity.run}`));
-  };
-  for (const record of records) {
-    for (const error of record.metrics.packageErrors) note("error from the package", error.message, record);
-    if (record.metrics.readImplementation) note("read the compiled implementation", "dist/*.js", record);
-    for (const line of record.debrief?.missingFromDocs ?? []) note("missing from the docs", line, record);
-    for (const line of record.debrief?.guessed ?? []) note("had to guess", line, record);
-    for (const line of record.debrief?.apiFriction ?? []) note("API friction", line, record);
-    for (const quote of record.debrief?.unhelpfulErrors ?? []) note("unhelpful error", `${quote.message} — ${quote.wouldHaveHelped}`, record);
-  }
-  return [...tally.entries()]
-    .sort((a, b) => b[1].size - a[1].size || a[0].localeCompare(b[0]))
-    .map(([line, runs]) => `- (${runs.size} run${runs.size === 1 ? "" : "s"}: ${[...runs].join(", ")}) ${line}`);
-}
-
-export function summaryMarkdown(records: readonly RunRecord[], header: { stamp: string; gitSha: string; dirty: boolean; model: string }): string {
+export function summaryMarkdown(
+  records: readonly RunRecord[],
+  header: { stamp: string; gitSha: string; dirty: boolean; model: string; thinkAloud: boolean },
+  findings: readonly Finding[],
+): string {
   const rows = summarize(records).map(
     (s) =>
       `| ${s.brief} | v${s.version} | ${s.passed}/${s.scored} | ${Object.entries(s.outcomes).map(([o, n]) => `${o} ${n}`).join(", ")} | ${money(s.medianCost)} | ${s.medianTurns ?? "—"} | ${minutes(s.medianDuration)} |`,
@@ -155,15 +186,20 @@ export function summaryMarkdown(records: readonly RunRecord[], header: { stamp: 
   return [
     `# Ephemeral testing — ${header.stamp}`,
     "",
-    `Commit \`${header.gitSha.slice(0, 8)}\`${header.dirty ? " (with uncommitted changes)" : ""}, builder \`${header.model}\`. Cost is the CLI's API-rate estimate.`,
+    `Commit \`${header.gitSha.slice(0, 8)}\`${header.dirty ? " (with uncommitted changes)" : ""}, builder \`${header.model}\`. Cost is the CLI's API-rate estimate.` +
+      (header.thinkAloud ? " Think-aloud was on: the agents kept notes as they worked, so effort is not comparable with a plain pass." : ""),
     "",
     "| Brief | Version | Passed | Outcomes | Median cost | Median turns | Median time |",
     "|---|---|---|---|---|---|---|",
     ...rows,
     "",
-    "## Friction",
+    "## Findings",
     "",
-    ...(frictionLines(records).length > 0 ? frictionLines(records) : ["None recorded."]),
+    "Grouped by what they are about, the most widely raised first. Each item says what backs it: behaviour (what the agent did),",
+    "an aside (what it said mid-task), an interview answer about a numbered moment, a think-aloud note, or recall and suggestions",
+    "from the debrief, strongest first.",
+    "",
+    ...findingsMarkdown(findings),
     "",
     "## Runs that measured something else",
     "",

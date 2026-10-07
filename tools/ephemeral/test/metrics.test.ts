@@ -9,9 +9,9 @@ import { eventsFromFile, parseTranscript, type Transcript } from "../src/transcr
 
 const preflight = parseTranscript(eventsFromFile(readFileSync(join(dirname(fileURLToPath(import.meta.url)), "fixtures", "preflight.jsonl"), "utf8")));
 
-/** A transcript of hand-written tool calls and results, for the cases a quiet session never shows. */
-function session(calls: Array<{ name: string; input: Record<string, unknown>; result?: string; isError?: boolean }>): Transcript {
-  const events: unknown[] = [];
+/** A transcript of hand-written tool calls and results, for the cases a quiet session never shows; run in `cwd` when given. */
+function session(calls: Array<{ name: string; input: Record<string, unknown>; result?: string; isError?: boolean }>, cwd?: string): Transcript {
+  const events: unknown[] = cwd ? [{ type: "system", subtype: "init", cwd, tools: [] }] : [];
   calls.forEach((call, index) => {
     events.push({ type: "assistant", message: { content: [{ type: "tool_use", id: `t${index}`, name: call.name, input: call.input }] } });
     events.push({ type: "user", message: { content: [{ type: "tool_result", tool_use_id: `t${index}`, is_error: call.isError === true, content: call.result ?? "" }] } });
@@ -60,6 +60,21 @@ describe("Scenario: What an agent did to the package, and where it reached, is r
     assert.deepEqual([metrics.testRuns, metrics.typecheckRuns], [1, 1]);
   });
 
+  it("follows the shell's directory across calls, so docs read by bare name inside the package count", () => {
+    const inRun = session(
+      [
+        { name: "Bash", input: { command: "cd /RUN/node_modules/@popjoker/knew && cat README.md ADOPTING.md; cat ../../../tsconfig.json; ls -R dist prompts" } },
+        { name: "Bash", input: { command: "cd dist && cat index.d.ts" } },
+        { name: "Bash", input: { command: 'sed -n 1,80p readiness.js; grep -n "async extractNow" testing.js' } },
+        { name: "Bash", input: { command: "cd /RUN && cat > notes.txt <<'EOF'\nsee CHANGELOG.md\nEOF" } },
+      ],
+      "/RUN",
+    );
+    const metrics = measure(inRun);
+    assert.deepEqual(metrics.docsOpened, ["ADOPTING.md", "README.md", "dist/index.d.ts", "dist/readiness.js", "dist/testing.js"]);
+    assert.equal(metrics.readImplementation, true);
+  });
+
   it("catches errors raised from the package by its stack, and the lens compiler's problems by their shape", () => {
     const errors = packageErrorsOf(
       session([
@@ -85,6 +100,19 @@ describe("Scenario: What an agent did to the package, and where it reached, is r
       { message: "lens visit@1: pinned names NOPE, which is not a fact type", count: 1 },
       { message: "ZodError at []: dimension empty has no fact types, so nothing could ever be known about it", count: 1 },
     ], "each met once; the app's own TypeError is not the package's");
+  });
+
+  it("lets the agent read the file the CLI saved an over-long output to, and nothing else of the CLI's", () => {
+    const spill = "/HOME/.claude/projects/-RUN/e8d7/tool-results/bd3v.txt";
+    const reasons = contaminationOf(
+      session([
+        { name: "Bash", input: { command: "cat node_modules/@popjoker/knew/ADOPTING.md" }, result: `<persisted-output>\nOutput too large (31.7KB). Full output saved to: ${spill}\n` },
+        { name: "Read", input: { file_path: spill } },
+        { name: "Read", input: { file_path: "/HOME/.claude/projects/-RUN/e8d7/other.jsonl" } },
+      ]),
+      { runDir: "/RUN", repo: "/HOME/Development/knew", home: "/HOME" },
+    );
+    assert.deepEqual(reasons, ["touched the CLI's own state: /HOME/.claude/projects/-RUN/e8d7/other.jsonl"]);
   });
 
   it("marks a run contaminated for naming the repo, the CLI's state, a path outside its directory, or the network", () => {

@@ -1,5 +1,6 @@
 import { execFileSync, spawn, spawnSync } from "node:child_process";
 import { createWriteStream, readdirSync, readlinkSync } from "node:fs";
+import type { Moment } from "./moments.ts";
 
 /**
  * Driving `claude -p` in a clean room: every flag below is in `claude --help`
@@ -23,8 +24,21 @@ export const BUILD_PROMPT =
   "You're adopting the npm package @popjoker/knew, which is installed in this project. BRIEF.md describes the app to " +
   "build on it. Work only inside this directory. You're done when `npm test` and `npm run typecheck` pass.";
 
-export const DEBRIEF_PROMPT = [
-  "This directory is about to be deleted. Before it is, answer five questions about building on @popjoker/knew,",
+/**
+ * Think-aloud mode: the agent keeps a log while it works, as a participant in
+ * a usability study is asked to. Off by default, because reflecting changes
+ * the work: a think-aloud run's cost and turns are not comparable with a
+ * plain one's, and its identity says which it was.
+ */
+export const THINK_ALOUD =
+  " As you work, keep a file named NOTES.md in this directory: add one line each time you have to guess how the package " +
+  "behaves, find its docs or an error message confusing, or work around something. Say what happened and what you did " +
+  "about it. It is read by the package's authors.";
+
+export const buildPrompt = (thinkAloud: boolean) => BUILD_PROMPT + (thinkAloud ? THINK_ALOUD : "");
+
+const DEBRIEF_QUESTIONS = [
+  "This directory is about to be deleted. Before it is, answer some questions about building on @popjoker/knew,",
   "from what actually happened in this session. Quote error messages exactly as they appeared, and leave a list empty",
   "rather than invent an entry.",
   "1. guessed: what about the package's behaviour did you have to guess, rather than read?",
@@ -32,14 +46,32 @@ export const DEBRIEF_PROMPT = [
   "3. missingFromDocs: what did you look for in the package's documentation and not find?",
   "4. apiFriction: which parts of the package's API fought you?",
   "5. wouldChange: the one change to the package that would have helped most.",
-].join("\n");
+];
+
+/**
+ * The debrief: five open questions, then one per moment found in the session
+ * (`momentsOf`), by number, the way a researcher replays the tape with a
+ * participant. Recall fades over a long session; a question about step 14 is
+ * answered about step 14, and an answer to a moment that was never asked
+ * about is dropped (`verifyDebrief`).
+ */
+export function debriefPrompt(moments: readonly Moment[]): string {
+  if (moments.length === 0) return [...DEBRIEF_QUESTIONS, "6. moments: leave this list empty."].join("\n");
+  return [
+    ...DEBRIEF_QUESTIONS,
+    "6. moments: these moments stood out in your session; steps count your tool calls from 1. For each, by its number, say",
+    "what you were trying to do, what about the package confused or slowed you (or \"nothing\" if it didn't), and what in the",
+    "package, its docs or its errors would have made it unnecessary.",
+    ...moments.map((moment, index) => `   M${index + 1}. ${moment.what}${moment.evidence.length ? ` (${moment.evidence.slice(0, 3).join("; ")})` : ""}`),
+  ].join("\n");
+}
 
 const strings = { type: "array", items: { type: "string" } } as const;
 
 export const DEBRIEF_SCHEMA = {
   type: "object",
   additionalProperties: false,
-  required: ["guessed", "unhelpfulErrors", "missingFromDocs", "apiFriction", "wouldChange"],
+  required: ["guessed", "unhelpfulErrors", "missingFromDocs", "apiFriction", "wouldChange", "moments"],
   properties: {
     guessed: strings,
     unhelpfulErrors: {
@@ -54,6 +86,15 @@ export const DEBRIEF_SCHEMA = {
     missingFromDocs: strings,
     apiFriction: strings,
     wouldChange: { type: "string" },
+    moments: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["moment", "wasDoing", "confusion", "wouldHaveHelped"],
+        properties: { moment: { type: "integer" }, wasDoing: { type: "string" }, confusion: { type: "string" }, wouldHaveHelped: { type: "string" } },
+      },
+    },
   },
 } as const;
 
@@ -106,10 +147,10 @@ export function buildArgs(options: BuildOptions, prompt: string = BUILD_PROMPT):
   ];
 }
 
-export function debriefArgs(options: { sessionId: string; model: string; budgetUsd: number }): string[] {
+export function debriefArgs(options: { sessionId: string; model: string; budgetUsd: number }, prompt: string = debriefPrompt([])): string[] {
   return [
     "-p",
-    DEBRIEF_PROMPT,
+    prompt,
     "--resume",
     options.sessionId,
     "--model",

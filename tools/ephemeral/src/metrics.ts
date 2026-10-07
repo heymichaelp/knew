@@ -1,6 +1,6 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
-import { join, relative } from "node:path";
-import type { Transcript } from "./transcript.ts";
+import { join, posix, relative } from "node:path";
+import type { ToolUse, Transcript } from "./transcript.ts";
 
 /**
  * What a run is measured by — pure functions over a parsed transcript and the
@@ -31,38 +31,78 @@ export interface RunMetrics {
 
 const PACKAGE_DIR = "node_modules/@popjoker/knew/";
 
-const bashCommands = (t: Transcript) =>
-  t.toolUses.filter((use) => use.name === "Bash").map((use) => (typeof use.input.command === "string" ? use.input.command : ""));
+/** A shell command that runs the app's tests, or its typecheck. */
+export const isTestRun = (command: string) => /\bnpm (?:run )?test\b|node (?:--import tsx )?--test\b/.test(command);
+export const isTypecheckRun = (command: string) => /\btsc\b|npm run typecheck\b/.test(command);
+/** Package files that are implementation rather than docs or declarations. */
+export const isImplementation = (inside: string) => /^dist\/.*\.js$/.test(inside);
 
-/** Paths a tool call touched: a file tool's path, or every absolute or package path in a shell command. */
-function pathsTouched(t: Transcript): string[] {
+export const commandOf = (use: ToolUse): string | null => (use.name === "Bash" && typeof use.input.command === "string" ? use.input.command : null);
+
+const bashCommands = (t: Transcript) => t.toolUses.map(commandOf).filter((command) => command !== null);
+
+/** Paths one tool call touched: a file tool's path, or every absolute or package path in a shell command. */
+export function pathsOf(use: ToolUse): string[] {
   const paths: string[] = [];
-  for (const use of t.toolUses) {
-    for (const key of ["file_path", "path", "notebook_path"]) {
-      const value = use.input[key];
-      if (typeof value === "string") paths.push(value);
-    }
-    if (use.name === "Bash" && typeof use.input.command === "string") {
-      for (const match of use.input.command.matchAll(/(?:^|[\s'"=(])((?:\/|~\/|\.\.?\/)?[\w.@\-/]*node_modules\/@popjoker\/knew\/[\w.\-/]+|\/[\w.@\-/]+)/g)) {
-        if (match[1]) paths.push(match[1]);
-      }
+  for (const key of ["file_path", "path", "notebook_path"]) {
+    const value = use.input[key];
+    if (typeof value === "string") paths.push(value);
+  }
+  const command = commandOf(use);
+  if (command !== null) {
+    for (const match of command.matchAll(/(?:^|[\s'"=(])((?:\/|~\/|\.\.?\/)?[\w.@\-/]*node_modules\/@popjoker\/knew\/[\w.\-/]+|\/[\w.@\-/]+)/g)) {
+      if (match[1]) paths.push(match[1]);
     }
   }
   return paths;
 }
 
-function docsOf(t: Transcript): { docsOpened: string[]; readImplementation: boolean } {
-  const opened = new Set<string>();
-  let readImplementation = false;
-  for (const path of pathsTouched(t)) {
+const pathsTouched = (t: Transcript): string[] => t.toolUses.flatMap(pathsOf);
+
+/** Paths under the package, by path inside it. */
+function insidePackage(paths: readonly string[]): string[] {
+  const files: string[] = [];
+  for (const path of paths) {
     const at = path.indexOf(PACKAGE_DIR);
     if (at < 0) continue;
     const inside = path.slice(at + PACKAGE_DIR.length);
-    if (inside === "" || inside.endsWith("/")) continue;
-    opened.add(inside);
-    if (/^dist\/.*\.js$/.test(inside)) readImplementation = true;
+    // A file, not a directory listed: its last part has an extension.
+    if (/\.\w+$/.test(inside.split("/").at(-1) ?? "") && !files.includes(inside)) files.push(inside);
   }
-  return { docsOpened: [...opened].sort(), readImplementation };
+  return files;
+}
+
+/** A word of a shell command that names a file: a path, or a name with an extension. */
+const fileWord = (word: string) => /^[\w./@-]+$/.test(word) && !word.startsWith("-") && (word.includes("/") || /\.\w+$/.test(word));
+
+/**
+ * The package files each tool call opened, by step (index 0 is step 1). The
+ * Bash tool keeps its working directory from one call to the next, so an agent
+ * that `cd`s into the package and then runs `cat README.md` read the README:
+ * the directory is followed across calls, and a bare file name in a command is
+ * read against it. A heredoc's body is text being written, not files read.
+ */
+export function packageFilesByStep(t: Transcript): string[][] {
+  let cwd = t.init?.cwd ?? null;
+  return t.toolUses.map((use) => {
+    const paths = pathsOf(use);
+    const command = commandOf(use)?.replace(/<<-?\s*['"]?(\w+)['"]?[\s\S]*?\n\1\b/g, "");
+    for (const segment of command?.split(/&&|\|\||;|\||\n/) ?? []) {
+      const words = segment.trim().split(/\s+/).filter(Boolean).map((word) => word.replace(/^['"]|['"]$/g, ""));
+      if (words[0] === "cd") {
+        const target = words[1];
+        cwd = !target || target.startsWith("~") ? null : target.startsWith("/") ? posix.normalize(target) : cwd && posix.join(cwd, target);
+        continue;
+      }
+      if (cwd) for (const word of words.slice(1).filter(fileWord)) paths.push(word.startsWith("/") ? word : posix.join(cwd, word));
+    }
+    return insidePackage(paths);
+  });
+}
+
+function docsOf(t: Transcript): { docsOpened: string[]; readImplementation: boolean } {
+  const opened = new Set(packageFilesByStep(t).flat());
+  return { docsOpened: [...opened].sort(), readImplementation: [...opened].some(isImplementation) };
 }
 
 /**
@@ -73,41 +113,44 @@ function docsOf(t: Transcript): { docsOpened: string[]; readImplementation: bool
  */
 export function packageErrorsOf(t: Transcript): PackageError[] {
   const counts = new Map<string, number>();
-  const isFrame = (line: string) => /^\s+at /.test(line);
-  for (const result of t.toolResults) {
-    // Each message counts once per tool result — the number of times the agent met it — under one spelling:
-    // a plain `Error: ` prefix dropped, and a bare `ZodError: [` left to its issues, which are read below.
-    const seen = new Set<string>();
-    const add = (message: string) => {
-      const key = message.trim().replace(/^Error: /, "").slice(0, 400);
-      if (!key || /^ZodError:\s*\[?$/.test(key) || seen.has(key)) return;
-      seen.add(key);
-      counts.set(key, (counts.get(key) ?? 0) + 1);
-    };
-    const lines = result.text.split("\n");
-    for (let index = 0; index < lines.length; index += 1) {
-      if (!isFrame(lines[index]!)) {
-        const lens = lines[index]!.match(/(lens \S+@\d+: .+)$/);
-        if (lens?.[1]) add(lens[1]);
-        continue;
-      }
-      // A stack: the run of frames from here. It is the package's when any frame is under its dist/.
-      const first = index;
-      while (index + 1 < lines.length && isFrame(lines[index + 1]!)) index += 1;
-      // `index` now sits on the stack's last frame, so the loop's step lands on the line after it.
-      if (!lines.slice(first, index + 1).some((line) => line.includes("node_modules/@popjoker/knew/dist/"))) continue;
-      // Its message is the error header above it — `ZodError: [` heads a block of issues — or the nearest line with words.
-      let header: string | undefined;
-      for (let above = first - 1; above >= Math.max(0, first - 60) && header === undefined; above -= 1) {
-        if (/^\s*(?:[A-Z]\w*)?Error\b.*:/.test(lines[above]!)) header = lines[above]!;
-      }
-      add(header ?? lines.slice(0, first).reverse().find((line) => /[A-Za-z]{3}/.test(line)) ?? "an error with no message");
-    }
-    for (const match of result.text.matchAll(/"message":\s*"([^"]+)"[^}]*"path":\s*\[([^\]]*)\]/g)) {
-      add(`ZodError at [${match[2]?.replace(/\s+/g, "")}]: ${match[1]}`);
-    }
-  }
+  // Each message counts once per tool result: the number of times the agent met it.
+  for (const result of t.toolResults) for (const message of errorsIn(result.text)) counts.set(message, (counts.get(message) ?? 0) + 1);
   return [...counts.entries()].map(([message, count]) => ({ message, count })).sort((a, b) => b.count - a.count || a.message.localeCompare(b.message));
+}
+
+/** The package's errors in one tool result's text, each once, under one spelling. */
+export function errorsIn(text: string): string[] {
+  const isFrame = (line: string) => /^\s+at /.test(line);
+  // A plain `Error: ` prefix is dropped, and a bare `ZodError: [` is left to its issues, which are read below.
+  const seen: string[] = [];
+  const add = (message: string) => {
+    const key = message.trim().replace(/^Error: /, "").slice(0, 400);
+    if (!key || /^ZodError:\s*\[?$/.test(key) || seen.includes(key)) return;
+    seen.push(key);
+  };
+  const lines = text.split("\n");
+  for (let index = 0; index < lines.length; index += 1) {
+    if (!isFrame(lines[index]!)) {
+      const lens = lines[index]!.match(/(lens \S+@\d+: .+)$/);
+      if (lens?.[1]) add(lens[1]);
+      continue;
+    }
+    // A stack: the run of frames from here. It is the package's when any frame is under its dist/.
+    const first = index;
+    while (index + 1 < lines.length && isFrame(lines[index + 1]!)) index += 1;
+    // `index` now sits on the stack's last frame, so the loop's step lands on the line after it.
+    if (!lines.slice(first, index + 1).some((line) => line.includes("node_modules/@popjoker/knew/dist/"))) continue;
+    // Its message is the error header above it — `ZodError: [` heads a block of issues — or the nearest line with words.
+    let header: string | undefined;
+    for (let above = first - 1; above >= Math.max(0, first - 60) && header === undefined; above -= 1) {
+      if (/^\s*(?:[A-Z]\w*)?Error\b.*:/.test(lines[above]!)) header = lines[above]!;
+    }
+    add(header ?? lines.slice(0, first).reverse().find((line) => /[A-Za-z]{3}/.test(line)) ?? "an error with no message");
+  }
+  for (const match of text.matchAll(/"message":\s*"([^"]+)"[^}]*"path":\s*\[([^\]]*)\]/g)) {
+    add(`ZodError at [${match[2]?.replace(/\s+/g, "")}]: ${match[1]}`);
+  }
+  return seen;
 }
 
 export function measure(t: Transcript): RunMetrics {
@@ -118,8 +161,8 @@ export function measure(t: Transcript): RunMetrics {
     turns: t.result?.numTurns ?? null,
     costUsd: t.result?.costUsd ?? null,
     toolCalls,
-    testRuns: commands.filter((command) => /\bnpm (?:run )?test\b|node (?:--import tsx )?--test\b/.test(command)).length,
-    typecheckRuns: commands.filter((command) => /\btsc\b|npm run typecheck\b/.test(command)).length,
+    testRuns: commands.filter(isTestRun).length,
+    typecheckRuns: commands.filter(isTypecheckRun).length,
     ...docsOf(t),
     packageErrors: packageErrorsOf(t),
   };
@@ -164,7 +207,10 @@ const SYSTEM = ["/usr/", "/bin/", "/lib/", "/lib64/", "/etc/", "/dev/", "/proc/s
  */
 export function contaminationOf(t: Transcript, context: { runDir: string; repo: string; home: string }): string[] {
   const reasons = new Set<string>();
+  // A tool result too long to print is saved by the CLI to a file it tells the agent to read: its own mechanism, not a reach.
+  const spilled = new Set(t.toolResults.flatMap((result) => [...result.text.matchAll(/Full output saved to: (\S+?)[.,;)]?(?:\s|$)/g)].map((match) => match[1]!)));
   for (const path of pathsTouched(t)) {
+    if (spilled.has(path)) continue;
     if (path.includes(context.repo)) reasons.add(`named the repo: ${path}`);
     else if (path.startsWith("~/.claude") || path.startsWith(`${context.home}/.claude`)) reasons.add(`touched the CLI's own state: ${path}`);
     else if (path.startsWith("/") && !path.startsWith(context.runDir) && !SYSTEM.some((prefix) => path.startsWith(prefix)) && path !== "/") {

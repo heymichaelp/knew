@@ -44,12 +44,19 @@ export interface ResultEvent {
   sessionId: string | null;
 }
 
+/**
+ * The session in order: each tool call, numbered from 1 as a step, with what
+ * it printed; and each thing the agent said, at the step it said it after.
+ */
+export type Entry = { kind: "tool"; step: number; use: ToolUse; result: ToolResult | null } | { kind: "said"; step: number; text: string };
+
 export interface Transcript {
   init: InitEvent | null;
   result: ResultEvent | null;
   toolUses: ToolUse[];
   toolResults: ToolResult[];
   assistantText: string[];
+  timeline: Entry[];
   /** Lines that were not JSON, and events of a type this reader does not know. */
   unparsed: number;
   unknown: number;
@@ -108,7 +115,8 @@ function parseResult(event: Json): ResultEvent {
 
 /** Events as `runClaude` collected them, or as a transcript file stores them (`{ at, event }` per line). */
 export function parseTranscript(events: readonly unknown[]): Transcript {
-  const transcript: Transcript = { init: null, result: null, toolUses: [], toolResults: [], assistantText: [], unparsed: 0, unknown: 0 };
+  const transcript: Transcript = { init: null, result: null, toolUses: [], toolResults: [], assistantText: [], timeline: [], unparsed: 0, unknown: 0 };
+  const calls = new Map<string, Extract<Entry, { kind: "tool" }>>();
   for (const raw of events) {
     const event = isObject(raw) && "event" in raw && "at" in raw ? raw.event : raw;
     if (!isObject(event)) {
@@ -128,11 +136,19 @@ export function parseTranscript(events: readonly unknown[]): Transcript {
       for (const block of content) {
         if (!isObject(block)) continue;
         if (block.type === "tool_use") {
-          transcript.toolUses.push({ id: str(block.id) ?? "", name: str(block.name) ?? "", input: isObject(block.input) ? block.input : {} });
+          const use = { id: str(block.id) ?? "", name: str(block.name) ?? "", input: isObject(block.input) ? block.input : {} };
+          transcript.toolUses.push(use);
+          const entry = { kind: "tool" as const, step: transcript.toolUses.length, use, result: null };
+          transcript.timeline.push(entry);
+          calls.set(use.id, entry);
         } else if (block.type === "tool_result") {
-          transcript.toolResults.push({ toolUseId: str(block.tool_use_id) ?? "", isError: block.is_error === true, text: textOf(block.content) });
+          const result = { toolUseId: str(block.tool_use_id) ?? "", isError: block.is_error === true, text: textOf(block.content) };
+          transcript.toolResults.push(result);
+          const call = calls.get(result.toolUseId);
+          if (call) call.result = result;
         } else if (block.type === "text" && type === "assistant" && typeof block.text === "string") {
           transcript.assistantText.push(block.text);
+          transcript.timeline.push({ kind: "said", step: transcript.toolUses.length, text: block.text });
         }
       }
     } else {
