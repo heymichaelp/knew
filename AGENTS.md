@@ -16,11 +16,11 @@ knew.dev site. The Postgres service is `heymichaelp/knew-service`.
 - **Nothing client-specific lives in the package.** The core ships no vocabulary and no lens: no
   fact type, no heading, no charter, no question. Vocabularies and lenses are data a client
   registers. The one exception is `@popjoker/knew/presets` — opt-in starter vocabularies and
-  lenses per kind (`person` today), generic on purpose and reviewed like API: an addition is a
-  minor, a change to what an existing preset type means is a major. A product's own content —
-  knewpeople's `relationships` lens, Sweeket's gifting charter — stays in its repo, and
-  `test/presets.test.ts` fails if a preset's type key appears in the core's code. The site's
-  worked example is the person preset; the fixture vocabulary and its two lenses in
+  lenses per kind (`person`, `place` and `product` today), generic on purpose and reviewed like
+  API: an addition is a minor, a change to what an existing preset type means is a major. A
+  product's own content — knewpeople's `relationships` lens, Sweeket's gifting charter — stays in
+  its repo, and `test/presets.test.ts` fails if any preset's type key appears in the core's code.
+  The site's worked example is the person preset; the fixture vocabulary and its two lenses in
   `@popjoker/knew/testing` back the contract suite.
 - **Weights order what to learn; they never weigh what is believed.** Readiness ranks asks and
   revisits; it never reorders, filters or annotates a page, and a fact due for a revisit is still

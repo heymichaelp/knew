@@ -11,3 +11,5 @@
  *     const vocabulary = extendVocabulary(person.vocabulary(), { id: "mine", version: 1, … });
  */
 export * as person from "./presets/person.ts";
+export * as place from "./presets/place.ts";
+export * as product from "./presets/product.ts";
