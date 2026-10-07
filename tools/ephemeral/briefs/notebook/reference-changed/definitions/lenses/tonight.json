@@ -1,0 +1,13 @@
+{
+  "id": "tonight",
+  "version": 1,
+  "objective": "Decide whether to go tonight.",
+  "vocabulary": "notebook",
+  "header": "Tonight at {who}:",
+  "overHeading": "No longer the case",
+  "needs": [
+    { "id": "hours", "dimension": "hours", "weight": 3 },
+    { "id": "vibe", "dimension": "vibe" },
+    { "id": "price", "dimension": "price", "weight": 0.5 }
+  ]
+}

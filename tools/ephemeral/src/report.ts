@@ -57,8 +57,20 @@ export interface Debrief {
   unaskedAnswers: number;
 }
 
+/** What a brief's change cost, in the same session after the build, and how the build stood before it. */
+export interface ChangeRecord {
+  metrics: RunMetrics;
+  durationMs: number;
+  timedOut: boolean;
+  checkBefore: CheckResult;
+  isolation: string[];
+  contamination: string[];
+}
+
 export interface RunRecord {
   identity: Identity;
+  /** For a brief that changes; the run's `check` is then the one after the change. */
+  change: ChangeRecord | null;
   outcome: Outcome;
   reason: string;
   timedOut: boolean;
@@ -196,10 +208,38 @@ export function comparisonLines(records: readonly RunRecord[]): string[] {
     const baseline = arm("baseline");
     if (knew.length === 0 || baseline.length === 0) continue;
     const probes = [...new Set([...knew, ...baseline].flatMap((run) => run.check.checks.map((check) => check.name)))];
-    const passed = (runs: RunRecord[], probe: string) => `${runs.filter((run) => run.check.checks.some((check) => check.name === probe && check.passed)).length}/${runs.length}`;
+    // A probe one arm never runs (the knew arm's definitions, say) is not a failure of the other.
+    const passed = (runs: RunRecord[], probe: string) =>
+      runs.some((run) => run.check.checks.some((check) => check.name === probe))
+        ? `${runs.filter((run) => run.check.checks.some((check) => check.name === probe && check.passed)).length}/${runs.length}`
+        : "—";
     lines.push(`### ${brief}`, "", "| Probe | On knew | Baseline |", "|---|---|---|", ...probes.map((probe) => `| ${probe} | ${passed(knew, probe)} | ${passed(baseline, probe)} |`), "");
   }
   return lines;
+}
+
+/** For briefs that change: what the change cost each arm, and whether the app passed before and after it. */
+export function changeLines(records: readonly RunRecord[]): string[] {
+  const changed = scoredOf(records).filter((record) => record.change !== null);
+  if (changed.length === 0) return [];
+  const groups = new Map<string, RunRecord[]>();
+  for (const record of changed) {
+    const key = `${record.identity.brief}\u0000${record.identity.arm}`;
+    groups.set(key, [...(groups.get(key) ?? []), record]);
+  }
+  return [
+    "| Brief | Arm | Passed before | Change cost | Change turns | Change time | Passed after |",
+    "|---|---|---|---|---|---|---|",
+    ...[...groups.values()].map((runs) => {
+      const changes = runs.map((run) => run.change!);
+      const cost = median(changes.map((change) => change.metrics.costUsd).filter((value): value is number => value !== null));
+      const turns = median(changes.map((change) => change.metrics.turns).filter((value): value is number => value !== null));
+      const before = changes.filter((change) => change.checkBefore.passed).length;
+      const after = runs.filter((run) => run.check.passed).length;
+      return `| ${runs[0]!.identity.brief} | ${runs[0]!.identity.arm} | ${before}/${runs.length} | ${money(cost)} | ${turns ?? "—"} | ${minutes(median(changes.map((change) => change.durationMs)))} | ${after}/${runs.length} |`;
+    }),
+    "",
+  ];
 }
 
 export function summaryMarkdown(
@@ -222,6 +262,7 @@ export function summaryMarkdown(
     "|---|---|---|---|---|---|---|---|",
     ...rows,
     "",
+    ...(changeLines(records).length > 0 ? ["## What the change cost", "", ...changeLines(records)] : []),
     ...(comparisonLines(records).length > 0 ? ["## On knew against the baseline", "", ...comparisonLines(records)] : []),
     "## Findings",
     "",

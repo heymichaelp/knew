@@ -1,17 +1,18 @@
 import { execFileSync } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
+import { copyFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
-import { briefHash, briefNames, loadBrief, referenceOf, type Brief } from "./brief.ts";
-import { runChecker } from "./check.ts";
+import { briefHash, briefNames, changeFileOf, loadBrief, referenceOf, type Brief } from "./brief.ts";
+import { checkInCopy, runChecker, type Phase } from "./check.ts";
 import {
   DEBRIEF_SCHEMA,
   DEFAULT_MODEL,
   TOOLS,
   buildArgs,
   buildPrompt,
+  changeArgs,
   cliVersion,
   debriefArgs,
   debriefPrompt,
@@ -23,7 +24,7 @@ import { findingsOf } from "./findings.ts";
 import { classify, contaminationOf, isolationProblems, measure, sourceMetrics } from "./metrics.ts";
 import { forInterview, momentsOf, notesOf } from "./moments.ts";
 import { packageNames } from "./names.ts";
-import { REPO, WORKSPACE, installForCheck, layBrief, packTarball, prepareDir, removeDir, tarballAt, type Arm, type Tarball } from "./prep.ts";
+import { BRIEFS, REPO, WORKSPACE, installForCheck, layBrief, packTarball, prepareDir, removeDir, tarballAt, type Arm, type Tarball } from "./prep.ts";
 import { archiveTree, printTable, summaryMarkdown, verifyDebrief, writeRun, type RunRecord } from "./report.ts";
 import { parseTranscript } from "./transcript.ts";
 
@@ -31,7 +32,8 @@ import { parseTranscript } from "./transcript.ts";
  * The harness's three commands:
  *
  *   agent      a model builds each brief's app; checked, debriefed, measured, reported
- *              (with --arm baseline or both, a paired brief is also built with no knew)
+ *              (with --arm baseline or both, a paired brief is also built with no knew;
+ *              a brief with a CHANGE.md is then changed in the same session, and checked again)
  *   dry-run    each brief's reference solution stands in for the agent; no model is called
  *   preflight  two tiny real sessions proving the clean room and the budget cap work
  *
@@ -176,6 +178,33 @@ async function agent(): Promise<void> {
         const notesFile = join(prepared.dir, "NOTES.md");
         const notes = thinkAloud ? notesOf(existsSync(notesFile) ? readFileSync(notesFile, "utf8") : null, transcript) : null;
 
+        // A brief that changes: check the build as it stands, then hand the same session the change.
+        let change: RunRecord["change"] = null;
+        if (brief.changes) {
+          log("  checking the build");
+          const checkBefore = checkInCopy(prepared.dir, name, { arm, phase: 1, tarball });
+          copyFileSync(join(BRIEFS, name, changeFileOf(arm)), join(prepared.dir, "CHANGE.md"));
+          const changeBudget = Math.min(brief.budgetUsd, passBudget - spent);
+          log(`  changing (${checkBefore.passed ? "the build passed" : "the build did not pass"}; cap $${changeBudget.toFixed(2)})`);
+          const changed = await runClaude(changeArgs({ sessionId, model, effort: values.effort, budgetUsd: changeBudget }), {
+            cwd: prepared.dir,
+            transcriptPath: join(out, "change.jsonl"),
+            timeoutMs: Number(values["timeout-min"] ?? brief.timeoutMin) * 60_000,
+            idleMs: 10 * 60_000,
+          });
+          killStragglers(prepared.dir);
+          const changeTranscript = parseTranscript(changed.events);
+          spent += changeTranscript.result?.costUsd ?? 0;
+          change = {
+            metrics: measure(changeTranscript),
+            durationMs: changed.durationMs,
+            timedOut: changed.timedOut || changed.idledOut,
+            checkBefore,
+            isolation: isolationProblems(changeTranscript, { tools: TOOLS, model, cwd: prepared.dir, personalSkills: skills }),
+            contamination: contaminationOf(changeTranscript, { runDir: prepared.dir, repo: REPO, home: homedir() }),
+          };
+        }
+
         // A baseline run is measured, not interviewed: its questions are about knew, which it never had.
         let debriefResult: ReturnType<typeof parseTranscript>["result"] = null;
         if (arm === "knew") {
@@ -193,20 +222,21 @@ async function agent(): Promise<void> {
 
         log("  checking");
         if (arm === "baseline") installForCheck(prepared.dir, tarball);
-        const check = runChecker(prepared.dir, name, { typecheck: true, arm });
+        const check = runChecker(prepared.dir, name, { typecheck: true, arm, phase: brief.changes ? 2 : 1 });
         const metrics = measure(transcript);
-        const isolation = isolationProblems(transcript, { tools: TOOLS, model, cwd: prepared.dir, personalSkills: skills });
-        const contamination = contaminationOf(transcript, { runDir: prepared.dir, repo: REPO, home: homedir() });
+        const isolation = [...isolationProblems(transcript, { tools: TOOLS, model, cwd: prepared.dir, personalSkills: skills }), ...(change?.isolation ?? [])];
+        const contamination = [...contaminationOf(transcript, { runDir: prepared.dir, repo: REPO, home: homedir() }), ...(change?.contamination ?? [])];
         const verdict = classify({
           contamination,
           isolation,
-          timedOut: build.timedOut || build.idledOut,
+          timedOut: build.timedOut || build.idledOut || (change?.timedOut ?? false),
           resultSubtype: transcript.result?.subtype ?? null,
           resultIsError: transcript.result?.isError ?? false,
           hasResult: transcript.result !== null,
           checkPassed: check.passed,
         });
         const record: RunRecord = {
+          change,
           identity: {
             brief: name,
             briefVersion: brief.version,
@@ -243,6 +273,7 @@ async function agent(): Promise<void> {
         if (!values.keep) removeDir(prepared.dir);
         records.push(record);
         log(`  ${record.outcome}: ${record.reason} — $${(metrics.costUsd ?? 0).toFixed(2)}, ${metrics.turns ?? "?"} turns, ${(build.durationMs / 60_000).toFixed(1)} min`);
+        if (change) log(`  the change: $${(change.metrics.costUsd ?? 0).toFixed(2)}, ${change.metrics.turns ?? "?"} turns, ${(change.durationMs / 60_000).toFixed(1)} min`);
       }
     }
   }
@@ -270,12 +301,12 @@ function dryRun(): void {
     for (const name of names) {
       const brief = loadBrief(name);
       // Every arm's reference: a paired brief's baseline must be passable too, or the comparison means nothing.
-      for (const arm of brief.arms) {
-        const label = arm === "knew" ? name : `${name}-baseline`;
+      for (const [arm, phase] of brief.arms.flatMap((each) => (brief.changes ? [[each, 1], [each, 2]] : [[each, 1]]) as Array<[Arm, Phase]>)) {
+        const label = `${name}${arm === "knew" ? "" : "-baseline"}${phase === 2 ? "-changed" : ""}`;
         const dir = join(install.dir, label);
-        cpSync(referenceOf(brief, arm), dir, { recursive: true });
+        cpSync(referenceOf(brief, arm, phase), dir, { recursive: true });
         layBrief(dir, name, brief.inputs, arm);
-        const result = runChecker(dir, name, { typecheck: true, arm });
+        const result = runChecker(dir, name, { typecheck: true, arm, phase });
         log(`${result.passed ? "✓" : "✗"} ${label} (v${brief.version}): ${result.checks.filter((c) => c.passed).length}/${result.checks.length} checks`);
         for (const check of result.checks.filter((c) => !c.passed)) log(`    ✗ ${check.name}: ${check.detail.split("\n").slice(0, 6).join("\n      ")}`);
         if (!result.passed) failed += 1;

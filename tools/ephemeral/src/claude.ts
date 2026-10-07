@@ -39,6 +39,10 @@ export const THINK_ALOUD =
 export const BASELINE_PROMPT =
   "BRIEF.md describes the app to build. Work only inside this directory. You're done when `npm test` and `npm run typecheck` pass.";
 
+/** The change, handed to the same session once the build is done. */
+export const CHANGE_PROMPT =
+  "The requirements have changed: CHANGE.md, now in this directory, says what's new. Change the app to meet it, and keep everything else working. You're done when `npm test` and `npm run typecheck` pass.";
+
 export const buildPrompt = (thinkAloud: boolean, arm: "knew" | "baseline" = "knew") =>
   (arm === "knew" ? BUILD_PROMPT : BASELINE_PROMPT) + (thinkAloud ? THINK_ALOUD : "");
 
@@ -139,6 +143,25 @@ export function buildArgs(options: BuildOptions, prompt: string = BUILD_PROMPT):
     "-p",
     prompt,
     "--session-id",
+    options.sessionId,
+    "--model",
+    options.model,
+    ...(options.effort ? ["--effort", options.effort] : []),
+    "--output-format",
+    "stream-json",
+    "--verbose",
+    "--max-budget-usd",
+    String(options.budgetUsd),
+    ...isolationArgs(TOOLS),
+  ];
+}
+
+/** The change prompt into the build's own session, with the build's own tools and isolation. */
+export function changeArgs(options: BuildOptions, prompt: string = CHANGE_PROMPT): string[] {
+  return [
+    "-p",
+    prompt,
+    "--resume",
     options.sessionId,
     "--model",
     options.model,

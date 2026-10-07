@@ -90,6 +90,28 @@ what knew adds. Where both pass, knew adds little there.
 
 `npm run agent -w @knew/ephemeral -- --brief notebook --arm both` runs one pair.
 
+## The change phase
+
+Requirements move after an app is built, and a design that made the first build easy can make
+the second change hard. A brief with a `CHANGE.md` (and `CHANGE-BASELINE.md`, if it is paired)
+measures that:
+
+1. The app is built as usual.
+2. It is checked as it stands, on a throwaway copy, so the hidden checker is never left where the
+   agent works.
+3. The same session is resumed with the change.
+4. The app is checked again: every earlier probe, adjusted for the change, and the new behaviour
+   besides.
+
+The summary's "What the change cost" table gives each arm's change cost, turns and time, and
+whether the app passed before and after. `reference-changed/` (and
+`baseline-reference-changed/`) are the known-good apps after the change, and the change has
+mutations of its own.
+
+For `notebook`, the change adds a fifth kind of statement, `PRICE`, a second planning view for
+tonight, and a last step on the visit view. On knew, that is a vocabulary addition and a new
+lens; from scratch, it is whatever the app's design makes it.
+
 ## Reading a report
 
 `reports/<stamp>-<sha8>[-dirty]/<brief>/<run>/` is gitignored. Each run directory holds:

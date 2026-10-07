@@ -20,6 +20,12 @@ import {
  * counts as heard again; stale hours come back to be re-checked; notes about
  * places nobody added are dropped; one user's notebook never reaches another.
  *
+ * It changes, too. After the build, the same session is handed `CHANGE.md`: a
+ * fifth kind of statement, `PRICE`, a second planning view for tonight, and a
+ * last step on the visit view. Phase 2 probes everything again, adjusted for
+ * the change, and the new behaviour besides, so what the change cost and
+ * whether it broke anything are both measured.
+ *
  * Neither arm does a model's job. The probes script what each note says, as
  * statements, and each arm receives the same statements its own way: on knew,
  * as the package's fake extraction and reconciliation; in the baseline, from
@@ -27,7 +33,8 @@ import {
  * with them over time.
  */
 
-type Topic = "KIND" | "HOURS" | "VIBE" | "ORDER";
+type Topic = "KIND" | "HOURS" | "VIBE" | "ORDER" | "PRICE";
+type Phase = 1 | 2;
 
 /** One thing a note says about one place: a correction or a repeat names the earlier statement's exact text. */
 interface Statement {
@@ -49,6 +56,8 @@ interface Haunts {
   addNote(userId: string, placeId: string, text: string, options?: { at?: Date }): Promise<void>;
   known(userId: string, placeId: string, options?: { asOf?: Date }): Promise<string[] | null>;
   nextToLearn(userId: string, placeId: string): Promise<NextToLearn | null>;
+  /** From the change on: the tonight view. */
+  nextTonight?(userId: string, placeId: string): Promise<NextToLearn | null>;
 }
 
 /** A fresh app, and how to tell it what the next note says. */
@@ -62,6 +71,7 @@ const LABEL: Record<Topic, string> = {
   HOURS: "When it is open",
   VIBE: "What it is like to be there",
   ORDER: "What to order",
+  PRICE: "How much it costs",
 };
 
 const DAY_MS = 86_400_000;
@@ -100,6 +110,7 @@ function knewBench(createApp: (engine: unknown) => unknown, lenses: Lens[]): () 
       addNote: (...args) => inner.addNote(...args),
       known: (...args) => inner.known(...args),
       nextToLearn: (...args) => inner.nextToLearn(...args),
+      ...(typeof inner.nextTonight === "function" ? { nextTonight: (...args: [string, string]) => inner.nextTonight!(...args) } : {}),
     };
     const tell = (statements: Statement[]) =>
       fake.script({
@@ -128,7 +139,15 @@ function baselineBench(createApp: (dependencies: unknown) => unknown): () => Ben
   };
 }
 
-async function probes(checks: Checks, open: () => Bench): Promise<void> {
+/** Everything but the hours, said now: after the change, that takes a price too. */
+const allButHours = (placeId: string, phase: Phase): Statement[] => [
+  say(placeId, "KIND", "A cocktail bar"),
+  say(placeId, "VIBE", "Loud after ten"),
+  say(placeId, "ORDER", "The smoked old fashioned"),
+  ...(phase === 2 ? [say(placeId, "PRICE", "Pricey")] : []),
+];
+
+async function probes(checks: Checks, open: () => Bench, phase: Phase): Promise<void> {
   await checks.run("a place never added is unknown, and a new place starts with what kind of place it is", async () => {
     const { app } = open();
     ensure((await app.known("ana", "luna")) === null, "known() answered for a place ana never added");
@@ -178,7 +197,7 @@ async function probes(checks: Checks, open: () => Bench): Promise<void> {
     await app.addPlace("ana", { id: "nine", name: "Bar Nine" });
     tell([say("nine", "HOURS", "Open 5pm to 1am")]);
     await app.addNote("ana", "nine", "Nine opens at five and shuts at one.", { at: daysAgo(45) });
-    tell([say("nine", "KIND", "A cocktail bar"), say("nine", "VIBE", "Loud after ten"), say("nine", "ORDER", "The smoked old fashioned"), say("nine", "HOURS", "Open 5pm to 1am", { repeats: "Open 5pm to 1am" })]);
+    tell([...allButHours("nine", phase), say("nine", "HOURS", "Open 5pm to 1am", { repeats: "Open 5pm to 1am" })]);
     await app.addNote("ana", "nine", "Nine: cocktail bar, loud after ten, get the smoked old fashioned. Still five till one.");
     const known = await app.known("ana", "nine");
     const hours = (known ?? []).filter((text) => text === "Open 5pm to 1am").length;
@@ -196,7 +215,7 @@ async function probes(checks: Checks, open: () => Bench): Promise<void> {
       await app.addPlace("ana", { id, name: `Bar ${id}` });
       tell([say(id, "HOURS", "Open 5pm to 1am")]);
       await app.addNote("ana", id, "Open five till one.", { at: daysAgo(days) });
-      tell([say(id, "KIND", "A cocktail bar"), say(id, "VIBE", "Loud after ten"), say(id, "ORDER", "The smoked old fashioned")]);
+      tell(allButHours(id, phase));
       await app.addNote("ana", id, "Cocktail bar, loud after ten, get the smoked old fashioned.");
     }
     const stale = await app.nextToLearn("ana", "stale");
@@ -240,20 +259,85 @@ async function probes(checks: Checks, open: () => Bench): Promise<void> {
     const known = await app.known("ben", "luna");
     ensure(shown(known) === "[]", `ben's luna should know nothing of ana's note, and knows ${shown(known)}`);
   });
+  if (phase === 2) await changeProbes(checks, open);
+}
+
+/** What the change asked for: a price kept like any statement, the visit view's new last step, and the tonight view. */
+async function changeProbes(checks: Checks, open: () => Bench): Promise<void> {
+  await checks.run("a price is kept like any other statement", async () => {
+    const { app, tell } = open();
+    await app.addPlace("ana", { id: "luna", name: "Café Luna" });
+    tell([say("luna", "PRICE", "Cheap")]);
+    await app.addNote("ana", "luna", "Luna's cheap.");
+    const known = await app.known("ana", "luna");
+    ensure(shown(known) === shown(["Cheap"]), `known() should hold the price, and holds ${shown(known)}`);
+  });
+
+  await checks.run("the visit view asks how much it costs last", async () => {
+    const { app, tell } = open();
+    await app.addPlace("ana", { id: "nine", name: "Bar Nine" });
+    tell([say("nine", "KIND", "A cocktail bar"), say("nine", "HOURS", "Open 5pm to 1am"), say("nine", "VIBE", "Loud after ten"), say("nine", "ORDER", "The smoked old fashioned")]);
+    await app.addNote("ana", "nine", "Cocktail bar, five till one, loud after ten, get the smoked old fashioned.");
+    const next = await app.nextToLearn("ana", "nine");
+    ensure(shown(next) === shown({ about: LABEL.PRICE, recheck: [] }), `with all but the price known, nextToLearn() should ask "${LABEL.PRICE}", and gave ${shown(next)}`);
+  });
+
+  await checks.run("tonight starts with when it is open, whatever else is unknown, and a place never added has none", async () => {
+    const { app } = open();
+    ensure(typeof app.nextTonight === "function", "createApp returned no nextTonight");
+    ensure((await app.nextTonight("ana", "luna")) === null, "nextTonight() answered for a place ana never added");
+    await app.addPlace("ana", { id: "luna", name: "Café Luna" });
+    const next = await app.nextTonight("ana", "luna");
+    ensure(shown(next) === shown({ about: LABEL.HOURS, recheck: [] }), `tonight should start with "${LABEL.HOURS}", and gave ${shown(next)}`);
+    ensure((await app.nextTonight("ben", "luna")) === null, "nextTonight() answered ben about ana's place");
+  });
+
+  await checks.run("tonight asks what it is like, then how much it costs, and never what kind of place it is or what to order", async () => {
+    const { app, tell } = open();
+    ensure(typeof app.nextTonight === "function", "createApp returned no nextTonight");
+    await app.addPlace("ana", { id: "luna", name: "Café Luna" });
+    tell([say("luna", "HOURS", "Open 8 to 6")]);
+    await app.addNote("ana", "luna", "Open eight till six.");
+    const first = await app.nextTonight("ana", "luna");
+    ensure(first?.about === LABEL.VIBE, `with the hours known, tonight should ask "${LABEL.VIBE}", and gave ${shown(first)}`);
+    tell([say("luna", "VIBE", "Quiet in the mornings")]);
+    await app.addNote("ana", "luna", "Quiet in the mornings.");
+    const second = await app.nextTonight("ana", "luna");
+    ensure(second?.about === LABEL.PRICE, `then "${LABEL.PRICE}", and gave ${shown(second)}`);
+    tell([say("luna", "PRICE", "Cheap")]);
+    await app.addNote("ana", "luna", "Cheap.");
+    const done = await app.nextTonight("ana", "luna");
+    ensure(done === null, `with the hours, what it's like and the price known, tonight needs nothing more, and gave ${shown(done)}`);
+  });
+
+  await checks.run("tonight re-checks hours not heard for 45 days", async () => {
+    const { app, tell } = open();
+    ensure(typeof app.nextTonight === "function", "createApp returned no nextTonight");
+    await app.addPlace("ana", { id: "nine", name: "Bar Nine" });
+    tell([say("nine", "HOURS", "Open 5pm to 1am")]);
+    await app.addNote("ana", "nine", "Open five till one.", { at: daysAgo(45) });
+    tell([say("nine", "VIBE", "Loud after ten"), say("nine", "PRICE", "Pricey")]);
+    await app.addNote("ana", "nine", "Loud after ten, and pricey.");
+    const next = await app.nextTonight("ana", "nine");
+    ensure(shown(next) === shown({ about: LABEL.HOURS, recheck: ["Open 5pm to 1am"] }), `tonight should re-check hours heard 45 days ago, and gave ${shown(next)}`);
+  });
 }
 
 export async function check(dir: string, options: CheckOptions): Promise<CheckResult> {
   const checks = new Checks();
   const arm = options.arm ?? "knew";
+  const phase: Phase = options.phase === 2 ? 2 : 1;
   const found: { lenses?: Lens[] } = {};
   if (arm === "knew") {
     await checks.run("the definitions compile, under the ids the brief names", () => {
       const definitions = loadDefinitions(dir);
       ensure(definitions.vocabulary.id === "notebook", `the vocabulary is ${definitions.vocabulary.id}, not notebook`);
-      const missing = (["KIND", "HOURS", "VIBE", "ORDER"] as const).filter((type) => !(type in definitions.vocabulary.factTypes));
+      const types = phase === 2 ? (["KIND", "HOURS", "VIBE", "ORDER", "PRICE"] as const) : (["KIND", "HOURS", "VIBE", "ORDER"] as const);
+      const missing = types.filter((type) => !(type in definitions.vocabulary.factTypes));
       ensure(missing.length === 0, `the vocabulary has no ${missing.join(" or ")} type`);
       const lens = definitions.lenses.visit;
       ensure(lens, `there is no visit lens; definitions/lenses holds ${Object.keys(definitions.lenses).join(", ") || "nothing"}`);
+      if (phase === 2) ensure(definitions.lenses.tonight, `there is no tonight lens; definitions/lenses holds ${Object.keys(definitions.lenses).join(", ")}`);
       found.lenses = [lens, ...Object.values(definitions.lenses).filter((other) => other.id !== "visit")];
     });
   }
@@ -268,7 +352,7 @@ export async function check(dir: string, options: CheckOptions): Promise<CheckRe
       loaded.createApp = createApp;
     });
   }
-  if (loaded.createApp) await probes(checks, arm === "knew" ? knewBench(loaded.createApp, found.lenses!) : baselineBench(loaded.createApp));
+  if (loaded.createApp) await probes(checks, arm === "knew" ? knewBench(loaded.createApp, found.lenses!) : baselineBench(loaded.createApp), phase);
   await standardChecks(checks, dir, options);
   return checks.result();
 }

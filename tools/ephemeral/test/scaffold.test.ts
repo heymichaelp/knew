@@ -11,7 +11,16 @@ describe("Scenario: The references face the rules every agent faces", () => {
   it("holds the references to exactly the scaffold's compiler options", () => {
     const references = JSON.parse(readFileSync(join(BRIEFS, "tsconfig.json"), "utf8")) as { compilerOptions: unknown; include: string[] };
     assert.deepEqual(references.compilerOptions, SCAFFOLD_COMPILER_OPTIONS, "briefs/tsconfig.json drifted from SCAFFOLD_COMPILER_OPTIONS");
-    assert.deepEqual(references.include, ["*/reference/src", "*/reference/test", "*/baseline-reference/src", "*/baseline-reference/test"]);
+    assert.deepEqual(references.include, [
+      "*/reference/src",
+      "*/reference/test",
+      "*/baseline-reference/src",
+      "*/baseline-reference/test",
+      "*/reference-changed/src",
+      "*/reference-changed/test",
+      "*/baseline-reference-changed/src",
+      "*/baseline-reference-changed/test",
+    ]);
     assert.ok(briefNames().length > 0, "there is no brief for it to cover");
   });
 

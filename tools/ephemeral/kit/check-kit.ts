@@ -43,6 +43,8 @@ export interface CheckOptions {
   appTests?: boolean;
   /** Which way the app was built: on knew (the default), or with no knew at all, for a paired brief. */
   arm?: "knew" | "baseline";
+  /** 1, as first built (the default); 2, after the brief's change. */
+  phase?: 1 | 2;
 }
 
 /** A collector of named checks. A check passes unless it throws; what it returns is its detail. */

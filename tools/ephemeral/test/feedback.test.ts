@@ -7,7 +7,7 @@ import { debriefPrompt } from "../src/claude.ts";
 import { anchorsOf, errorKey, findingsOf } from "../src/findings.ts";
 import type { RunMetrics } from "../src/metrics.ts";
 import { forInterview, momentsOf, notesOf, type Moment } from "../src/moments.ts";
-import { comparisonLines, summaryMarkdown, verifyDebrief, type Debrief, type RunRecord } from "../src/report.ts";
+import { changeLines, comparisonLines, summaryMarkdown, verifyDebrief, type Debrief, type RunRecord } from "../src/report.ts";
 import { eventsFromFile, parseTranscript, type Transcript } from "../src/transcript.ts";
 
 /**
@@ -179,6 +179,7 @@ const NO_DEBRIEF: Debrief = { guessed: [], unhelpfulErrors: [], missingFromDocs:
 function record(brief: string, run: number, changes: Partial<RunRecord> = {}): RunRecord {
   return {
     identity: { brief, briefVersion: 1, briefHash: "h", run, model: "m", effort: null, cliVersion: "c", tarballSha256: "t", gitSha: "0123456789", dirty: false, promptHash: "p", zodVersion: null, thinkAloud: false, arm: "knew" },
+    change: null,
     outcome: "pass",
     reason: "",
     timedOut: false,
@@ -250,7 +251,7 @@ describe("Scenario: A pass's findings rank what several runs raised above what o
 describe("Scenario: A paired brief's summary sets knew against the baseline, probe by probe", () => {
   it("counts each arm's passes per probe, and leaves out a brief built only one way", () => {
     const probe = (name: string, passed: boolean) => ({ name, passed, detail: "" });
-    const knew = record("notebook", 1, { check: { passed: true, checks: [probe("a correction keeps its history", true), probe("a notebook is its owner's alone", true)] } });
+    const knew = record("notebook", 1, { check: { passed: true, checks: [probe("the definitions compile", true), probe("a correction keeps its history", true), probe("a notebook is its owner's alone", true)] } });
     const baseline = record("notebook", 1, {
       identity: { ...knew.identity, arm: "baseline" },
       outcome: "fail",
@@ -261,9 +262,33 @@ describe("Scenario: A paired brief's summary sets knew against the baseline, pro
       "",
       "| Probe | On knew | Baseline |",
       "|---|---|---|",
+      "| the definitions compile | 1/1 | — |",
       "| a correction keeps its history | 1/1 | 0/1 |",
       "| a notebook is its owner's alone | 1/1 | 1/1 |",
       "",
     ]);
+  });
+});
+
+describe("Scenario: A brief that changes reports what the change cost each arm", () => {
+  it("gives each arm's change cost, turns and time, and whether it passed before and after", () => {
+    const change = (cost: number, turns: number, before: boolean) => ({
+      metrics: { ...NO_METRICS, costUsd: cost, turns },
+      durationMs: 120_000,
+      timedOut: false,
+      checkBefore: { passed: before, checks: [] },
+      isolation: [],
+      contamination: [],
+    });
+    const knew = record("notebook", 1, { change: change(0.4, 6, true) });
+    const baseline = record("notebook", 1, { identity: { ...knew.identity, arm: "baseline" }, outcome: "fail", check: { passed: false, checks: [] }, change: change(1.2, 15, true) });
+    assert.deepEqual(changeLines([knew, baseline, record("places", 1)]), [
+      "| Brief | Arm | Passed before | Change cost | Change turns | Change time | Passed after |",
+      "|---|---|---|---|---|---|---|",
+      "| notebook | knew | 1/1 | $0.40 | 6 | 2.0 min | 1/1 |",
+      "| notebook | baseline | 1/1 | $1.20 | 15 | 2.0 min | 0/1 |",
+      "",
+    ]);
+    assert.deepEqual(changeLines([record("places", 1)]), [], "nothing to report for a brief that never changed");
   });
 });
