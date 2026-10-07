@@ -189,6 +189,12 @@ const MUTATIONS: Record<string, Mutation[]> = {
   ],
   places: [
     {
+      what: "the vocabulary starts from knew's place preset",
+      file: "definitions/vocabulary.json",
+      edit: json((vocabulary) => (vocabulary.basedOn = { preset: "place", version: 1, changed: [], added: [] })),
+      fails: "the vocabulary is Haunts' own, written from scratch",
+    },
+    {
       what: "hours never go stale",
       file: "definitions/vocabulary.json",
       edit: json((vocabulary) => delete vocabulary.factTypes.HOURS.revisitAfterDays),

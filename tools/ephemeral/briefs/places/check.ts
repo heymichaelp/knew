@@ -233,6 +233,10 @@ export async function check(dir: string, options: CheckOptions): Promise<CheckRe
     found.definitions = definitions;
   });
   if (found.definitions) {
+    const own = found.definitions.vocabularyDefinition;
+    await checks.run("the vocabulary is Haunts' own, written from scratch", () => {
+      ensure(!own.basedOn, `the vocabulary is extended from knew's ${own.basedOn?.preset} preset, and Haunts' notes don't fit it`);
+    });
     await definitionProbes(checks, found.definitions.lenses[LENS]!);
     await appProbes(checks, dir, found.definitions);
   }
