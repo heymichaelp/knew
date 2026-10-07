@@ -188,7 +188,18 @@ alone), `overall` is the weighted mean over the applicable asks, and `next` is w
 order — the highest `weight · (1 − strength)` first, ties in the lens's order. A step of kind
 `ask` puts the question, anchored on the facts already known so it can go one notch finer; a step
 of kind `revisit` puts facts that have gone unsaid past their window back to the knower. The gaps
-are the `ask` steps.
+are the `ask` steps. A step carries the ids of the facts it is about; their words are in
+`getEntity(scope, entityId).facts`, by id.
+
+**Revisit windows.** A fact is due for a revisit once `revisitAfterDays` days or more have passed
+since it was last said: its `lastSaidAt`, or, never retold, when it was recorded. On the day the
+window ends, it is due.
+
+**Choosing weights.** Weights are relative, and only order the steps. A fact due for a revisit
+counts for half, so with `enough: 1` a due ask of weight `w` ranks like an open ask of weight
+`w / 2`: for a stale answer to come before an open question of weight 1, give its ask a weight above
+2. An order that is coarse before fine belongs in `after`, not in weights; with every weight left
+at 1, the lens's order is the order of the gaps.
 
 Weights order what to learn; they never weigh what is believed. The page is unchanged by any of
 it — dated, not weighted — and a revisit is a question, never a judgment that a fact stopped being
