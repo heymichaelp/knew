@@ -2,13 +2,10 @@ import assert from "node:assert/strict";
 import { cpSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
-import * as core from "@popjoker/knew";
-import * as presets from "@popjoker/knew/presets";
-import * as testing from "@popjoker/knew/testing";
-import { z } from "zod";
 import type { CheckResult } from "../kit/check-kit.ts";
 import { briefLeaks, briefNames, loadBrief } from "../src/brief.ts";
 import { checkInProcess } from "../src/check.ts";
+import { packageNames } from "../src/names.ts";
 import { WORKSPACE } from "../src/prep.ts";
 
 /**
@@ -18,29 +15,8 @@ import { WORKSPACE } from "../src/prep.ts";
  * claims to catch. The site's drift guards, applied to the briefs.
  */
 
-/** Every key at any depth of a JSON schema's `properties`. */
-function propertyNames(node: unknown, into = new Set<string>()): Set<string> {
-  if (Array.isArray(node)) {
-    for (const item of node) propertyNames(item, into);
-  } else if (typeof node === "object" && node !== null) {
-    for (const [key, value] of Object.entries(node)) {
-      if (key === "properties" && typeof value === "object" && value !== null) for (const name of Object.keys(value)) into.add(name);
-      propertyNames(value, into);
-    }
-  }
-  return into;
-}
-
-const asJsonSchema = (schema: z.ZodType) => z.toJSONSchema(schema, { unrepresentable: "any", io: "input" });
-
 /** What a brief must not say: every runtime export of the package's three entry points, and every property of its two definition schemas. */
-const API = new Set([
-  ...Object.keys(core),
-  ...Object.keys(presets),
-  ...Object.keys(testing),
-  ...propertyNames(asJsonSchema(core.vocabularyDefinitionSchema)),
-  ...propertyNames(asJsonSchema(core.lensDefinitionSchema)),
-]);
+const API = packageNames();
 
 const failures = (result: CheckResult) =>
   result.checks

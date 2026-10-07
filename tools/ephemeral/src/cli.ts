@@ -7,19 +7,22 @@ import { parseArgs } from "node:util";
 import { briefHash, briefNames, loadBrief } from "./brief.ts";
 import { runChecker } from "./check.ts";
 import {
-  BUILD_PROMPT,
-  DEBRIEF_PROMPT,
   DEBRIEF_SCHEMA,
   DEFAULT_MODEL,
   TOOLS,
   buildArgs,
+  buildPrompt,
   cliVersion,
   debriefArgs,
+  debriefPrompt,
   killStragglers,
   purge,
   runClaude,
 } from "./claude.ts";
+import { findingsOf } from "./findings.ts";
 import { classify, contaminationOf, isolationProblems, measure, sourceMetrics } from "./metrics.ts";
+import { forInterview, momentsOf, notesOf } from "./moments.ts";
+import { packageNames } from "./names.ts";
 import { BRIEFS, REPO, WORKSPACE, layBrief, packTarball, prepareDir, removeDir, tarballAt, type Tarball } from "./prep.ts";
 import { archiveTree, printTable, summaryMarkdown, verifyDebrief, writeRun, type RunRecord } from "./report.ts";
 import { parseTranscript } from "./transcript.ts";
@@ -46,6 +49,7 @@ const { positionals, values } = parseArgs({
     "timeout-min": { type: "string" },
     tarball: { type: "string", multiple: true },
     keep: { type: "boolean" },
+    "think-aloud": { type: "boolean" },
     "save-fixture": { type: "boolean" },
     help: { type: "boolean", short: "h" },
   },
@@ -66,12 +70,14 @@ const USAGE = [
   "  --timeout-min <m>  wall clock per build (default the brief's)",
   "  --tarball <path>   test this tarball instead of packing (repeatable, for A/B)",
   "  --keep             keep the throwaway directories",
+  "  --think-aloud      the agent keeps NOTES.md as it works (changes its effort; off by default)",
   "  --save-fixture     preflight: save its transcript, redacted, as the test fixture",
 ].join("\n");
 
 const log = (line: string) => process.stdout.write(`${line}\n`);
 const hash = (text: string) => createHash("sha256").update(text).digest("hex").slice(0, 16);
-const PROMPT_HASH = hash(`${BUILD_PROMPT}\n${DEBRIEF_PROMPT}\n${JSON.stringify(DEBRIEF_SCHEMA)}`);
+/** The prompts a pass used, as a hash: the build prompt in its mode, and the debrief's template and schema. */
+const promptHash = (thinkAloud: boolean) => hash(`${buildPrompt(thinkAloud)}\n${debriefPrompt([])}\n${JSON.stringify(DEBRIEF_SCHEMA)}`);
 
 function gitState(): { sha: string; dirty: boolean } {
   const sha = execFileSync("git", ["rev-parse", "HEAD"], { cwd: REPO, encoding: "utf8" }).trim();
@@ -115,6 +121,7 @@ async function agent(): Promise<void> {
   const runs = Number(values.runs ?? 1);
   const model = values.model ?? DEFAULT_MODEL;
   const passBudget = Number(values.budget ?? 30);
+  const thinkAloud = values["think-aloud"] === true;
   const git = gitState();
   const stamp = new Date().toISOString().replace(/[:.]/g, "-");
   const reportRoot = join(WORKSPACE, "reports", `${stamp}-${git.sha.slice(0, 8)}${git.dirty ? "-dirty" : ""}`);
@@ -123,7 +130,7 @@ async function agent(): Promise<void> {
   const { packed, done } = tarballs();
   const records: RunRecord[] = [];
   let spent = 0;
-  log(`ephemeral: ${names.join(", ")} × ${runs} on ${model} (CLI ${cli}), pass budget $${passBudget}, reports in ${reportRoot}`);
+  log(`ephemeral: ${names.join(", ")} × ${runs} on ${model} (CLI ${cli})${thinkAloud ? ", thinking aloud" : ""}, pass budget $${passBudget}, reports in ${reportRoot}`);
 
   // Interleaved — run by run, tarball by tarball — so an A/B comparison shares its conditions.
   for (let run = 1; run <= runs; run += 1) {
@@ -143,7 +150,7 @@ async function agent(): Promise<void> {
         const sessionId = randomUUID();
         const budgetUsd = Math.min(brief.budgetUsd, passBudget - spent);
         log(`  building (cap $${budgetUsd.toFixed(2)}, ${brief.timeoutMin} min)`);
-        const build = await runClaude(buildArgs({ sessionId, model, effort: values.effort, budgetUsd }), {
+        const build = await runClaude(buildArgs({ sessionId, model, effort: values.effort, budgetUsd }, buildPrompt(thinkAloud)), {
           cwd: prepared.dir,
           transcriptPath: join(out, "transcript.jsonl"),
           timeoutMs: Number(values["timeout-min"] ?? brief.timeoutMin) * 60_000,
@@ -153,8 +160,13 @@ async function agent(): Promise<void> {
         const transcript = parseTranscript(build.events);
         spent += transcript.result?.costUsd ?? 0;
 
-        log("  debriefing");
-        const debrief = await runClaude(debriefArgs({ sessionId, model, budgetUsd: 1 }), {
+        const moments = momentsOf(transcript);
+        const asked = forInterview(moments);
+        const notesFile = join(prepared.dir, "NOTES.md");
+        const notes = thinkAloud ? notesOf(existsSync(notesFile) ? readFileSync(notesFile, "utf8") : null, transcript) : null;
+
+        log(`  debriefing (${asked.length} moment${asked.length === 1 ? "" : "s"} to ask about)`);
+        const debrief = await runClaude(debriefArgs({ sessionId, model, budgetUsd: 1 }, debriefPrompt(asked)), {
           cwd: prepared.dir,
           transcriptPath: join(out, "debrief.jsonl"),
           timeoutMs: 5 * 60_000,
@@ -190,8 +202,9 @@ async function agent(): Promise<void> {
             tarballSha256: tarball.sha256,
             gitSha: git.sha,
             dirty: git.dirty,
-            promptHash: PROMPT_HASH,
+            promptHash: promptHash(thinkAloud),
             zodVersion: zodVersion(prepared.dir),
+            thinkAloud,
           },
           ...verdict,
           timedOut: build.timedOut || build.idledOut,
@@ -202,7 +215,10 @@ async function agent(): Promise<void> {
           isolation,
           contamination,
           check,
-          debrief: verifyDebrief(structured(debriefResult), transcript),
+          moments,
+          asked,
+          notes,
+          debrief: verifyDebrief(structured(debriefResult), transcript, asked),
         };
         writeRun(out, record);
         archiveTree(prepared.dir, out);
@@ -215,9 +231,15 @@ async function agent(): Promise<void> {
   }
   done();
   mkdirSync(reportRoot, { recursive: true });
-  writeFileSync(join(reportRoot, "summary.md"), summaryMarkdown(records, { stamp, gitSha: git.sha, dirty: git.dirty, model }));
+  const findings = findingsOf(records, packageNames());
+  writeFileSync(join(reportRoot, "findings.json"), `${JSON.stringify(findings, null, 2)}\n`);
+  writeFileSync(join(reportRoot, "summary.md"), summaryMarkdown(records, { stamp, gitSha: git.sha, dirty: git.dirty, model, thinkAloud }, findings));
   log("");
   printTable(records);
+  if (findings.length > 0) {
+    log("\nmost raised:");
+    for (const finding of findings.slice(0, 5)) log(`  ${finding.about} (${finding.runs.length} run${finding.runs.length === 1 ? "" : "s"}, ${finding.items.length} item${finding.items.length === 1 ? "" : "s"})`);
+  }
   log(`\nsummary: ${join(reportRoot, "summary.md")} (spent about $${spent.toFixed(2)} at API rates)`);
 }
 

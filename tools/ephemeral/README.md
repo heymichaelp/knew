@@ -26,6 +26,9 @@ Private workspace, never published.
 - `--tarball <path>`: repeatable. Two tarballs run interleaved, as an A/B comparison under the
   same conditions.
 - `--keep`: keeps the throwaway directories.
+- `--think-aloud`: the agent keeps a `NOTES.md` as it works, one line per guess, confusion or
+  workaround, as a participant in a usability study would. Off by default, because reflecting
+  changes the work: a think-aloud pass's cost and turns aren't comparable with a plain one's.
 
 Model runs spend real money on your Claude login and run one at a time, sharing your limits. They
 never run in CI.
@@ -47,9 +50,18 @@ never run in CI.
 
    The session's init event is checked, not trusted. A mismatch, or any denied permission, makes
    the run `infra`.
-3. **Debrief.** The same session is resumed and answers five questions in a schema: what it
-   guessed, which errors didn't help, what the docs lacked, what fought it, and what it would
-   change. A quoted error is kept only if a tool actually printed it.
+3. **Find the moments, then debrief.** The transcript is replayed for the moments a usability
+   researcher would ask about, with no model involved:
+   - a test or typecheck that failed twice in a row before passing, or never passed;
+   - the compiled `dist/*.js` opened, because the docs fell short;
+   - a doc read a second time;
+   - the agent saying, mid-task, that it was unsure, guessing or working around something.
+
+   The same session is then resumed and answers in a schema: five open questions (what it
+   guessed, which errors didn't help, what the docs lacked, what fought it, what it would change),
+   then one question per moment, by number ("M3: you opened `dist/readiness.js` at step 14"):
+   what it was doing, what confused it, and what would have made it unnecessary. A quoted error
+   is kept only if a tool actually printed it, and an answer only if its moment was asked about.
 4. **Check.** The brief's `check.ts` goes in only now, so the agent never sees it. It runs with the
    app's own tsx against the tarball the app installed.
 5. **Report, then clean up.** `claude purge` the run directory, then remove it.
@@ -57,7 +69,8 @@ never run in CI.
 ## Reading a report
 
 `reports/<stamp>-<sha8>[-dirty]/<brief>/<run>/` is gitignored. Each run directory holds:
-- `result.json`: the whole record.
+- `result.json`: the whole record, with every moment found and, in think-aloud mode, the notes,
+  each at the step that wrote it.
 - `check.json` and `debrief.json`.
 - `transcript.jsonl`.
 - `tree.tgz`: the finished app, without `node_modules`.
@@ -65,8 +78,18 @@ never run in CI.
 `summary.md` beside them gives:
 - pass k/N per brief;
 - median cost, turns and time;
-- the friction list: errors raised from the package (verbatim, with counts), the docs opened, and
-  whether the agent read `dist/*.js`.
+- the findings, also in `findings.json`. Everything the pass heard about the package is grouped by
+  what it's about: an error by its message with the app-specific names blanked out, anything else
+  by the first package name or file it mentions, and the rest by overlapping words. Groups are
+  ranked by how many runs and briefs raised them. Each item says what backs it, strongest first:
+  - behaviour: what the agent did;
+  - an aside: what it said mid-task;
+  - an interview answer about a numbered moment;
+  - a think-aloud note;
+  - recall and suggestions from the debrief.
+
+  One run complaining is noise. The same thing from three runs, or two briefs, is a finding. A
+  suggestion is a lead, not a decision.
 
 Each run gets one outcome, in this order of precedence:
 - `contaminated`: it named the repo, `~/.claude`, a path outside its directory, or the network.
