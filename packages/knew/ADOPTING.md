@@ -84,6 +84,11 @@ knowledge requirements (§5), the `pinned` types to hold in view, and how the pa
 of dimensions, a `header`, an `overHeading`. A lens says only what differs: its sections default to
 one per dimension, its pinned types to the vocabulary's, its asks to each dimension's question.
 
+**Every field, offline.** Each field of both definitions is documented where it is declared, so the
+reference ships in the tarball: `VocabularyDefinition`, `FactTypeSpec` and `DimensionSpec` in
+`dist/vocabulary.d.ts`; `LensDefinition`, `AskSpec` and `SectionSpec` in `dist/lens.d.ts`.
+knew.dev/lenses renders the same fields as tables.
+
 `PUT /v1/vocabulary` with the vocabulary, then `PUT /v1/lens` with each lens, registers them (or
 the service's CLI: `vocabulary set` and `lens set`). A version already registered is immutable:
 re-sending it changed is 409, so a change is a new `version`. Facts carry type keys, so a type is
