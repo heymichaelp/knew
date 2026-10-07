@@ -107,8 +107,7 @@ brief version.
 | Brief | The product | What it exercises |
 |---|---|---|
 | `places` | Notes on cafés and venues, for planning a visit | A vocabulary written from scratch; hours that go stale after about a month; what kind of place before what it's like |
-| `gifting` | A gift guide that asks before it shows picks | The person preset extended with its types unchanged; five facts in any mix before picks; what to steer clear of and what they have, handed over as rules |
-| `migrate` | A florist's customer book on 0.2.1 | The move from 0.x, with every page, must-honor list and question unchanged from what 0.2.1 itself rendered |
+| `gifting` | A gift guide that learns more before it shows picks | The person preset extended with its types unchanged; five facts in any mix before picks; what to steer clear of and what they have, handed over as rules |
 
 Each brief holds:
 - `BRIEF.md`: a product story in a client developer's voice.
