@@ -34,6 +34,8 @@ export interface CheckItem {
 export interface CheckResult {
   passed: boolean;
   checks: CheckItem[];
+  /** For a brief whose notes are read for real: the reader model's calls, and their cost at API rates. */
+  reading?: { calls: number; costUsd: number };
 }
 
 export interface CheckOptions {

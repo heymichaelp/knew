@@ -28,7 +28,7 @@ describe("Scenario: The preflight session measures as the clean room it was", ()
     assert.deepEqual([metrics.testRuns, metrics.typecheckRuns, metrics.docsOpened, metrics.readImplementation], [0, 0, [], false]);
     assert.equal(metrics.turns, 3);
     assert.deepEqual(isolationProblems(preflight, clean), []);
-    assert.deepEqual(contaminationOf(preflight, { runDir: "/RUN", repo: "/HOME/Development/knew", home: "/HOME" }), []);
+    assert.deepEqual(contaminationOf(preflight, { runDir: "/RUN", repo: "/HOME/Development/knew", home: "/HOME", roots: ["RUN", "HOME", "usr", "etc"] }), []);
   });
 
   it("calls a session infra when it was not the clean room asked for", () => {
@@ -102,6 +102,27 @@ describe("Scenario: What an agent did to the package, and where it reached, is r
     ], "each met once; the app's own TypeError is not the package's");
   });
 
+  it("reads no path into a regex, whose first segment is no directory on the machine", () => {
+    const reasons = contaminationOf(session([{ name: "Bash", input: { command: "sed -n '/function plan/,$p' src/app.ts | grep -n '/export /'" } }]), {
+      runDir: "/RUN",
+      repo: "/HOME/Development/knew",
+      home: "/HOME",
+      roots: ["RUN", "HOME", "usr", "etc"],
+    });
+    assert.deepEqual(reasons, []);
+  });
+
+  it("reads no path into a comment, or into a file being written through a heredoc", () => {
+    const reasons = contaminationOf(
+      session([
+        { name: "Bash", input: { command: "cat > test/app.test.ts <<'EOF'\nimport { createApp } from '/HOME/other-project/app.ts';\n// Order comes before price.\nEOF" } },
+        { name: "Bash", input: { command: "node -e '// a comment' && echo done" } },
+      ]),
+      { runDir: "/RUN", repo: "/HOME/Development/knew", home: "/HOME", roots: ["RUN", "HOME", "usr", "etc"] },
+    );
+    assert.deepEqual(reasons, []);
+  });
+
   it("lets the agent read the file the CLI saved an over-long output to, and nothing else of the CLI's", () => {
     const spill = "/HOME/.claude/projects/-RUN/e8d7/tool-results/bd3v.txt";
     const reasons = contaminationOf(
@@ -110,13 +131,13 @@ describe("Scenario: What an agent did to the package, and where it reached, is r
         { name: "Read", input: { file_path: spill } },
         { name: "Read", input: { file_path: "/HOME/.claude/projects/-RUN/e8d7/other.jsonl" } },
       ]),
-      { runDir: "/RUN", repo: "/HOME/Development/knew", home: "/HOME" },
+      { runDir: "/RUN", repo: "/HOME/Development/knew", home: "/HOME", roots: ["RUN", "HOME", "usr", "etc"] },
     );
     assert.deepEqual(reasons, ["touched the CLI's own state: /HOME/.claude/projects/-RUN/e8d7/other.jsonl"]);
   });
 
   it("marks a run contaminated for naming the repo, the CLI's state, a path outside its directory, or the network", () => {
-    const context = { runDir: "/RUN", repo: "/HOME/Development/knew", home: "/HOME" };
+    const context = { runDir: "/RUN", repo: "/HOME/Development/knew", home: "/HOME", roots: ["RUN", "HOME", "usr", "etc"] };
     const reasons = contaminationOf(
       session([
         { name: "Bash", input: { command: "cat /HOME/Development/knew/packages/knew/src/lens.ts" } },

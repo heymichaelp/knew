@@ -26,22 +26,32 @@ export function layChecker(dir: string, brief: string): void {
   writeFileSync(join(into, "tsconfig.json"), untouchedTsconfig());
 }
 
+/** How a reading brief's checker reads notes: live, recording into `cache`, or replaying from it. */
+export interface Reading {
+  mode: "live" | "record" | "replay";
+  cache: string;
+}
+
 /** This process's environment for the checker, minus a test runner's context, which would turn the app's nested test run into a report to nobody. */
-function checkerEnv(): NodeJS.ProcessEnv {
+function checkerEnv(reading?: Reading): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = { ...process.env, NODE_OPTIONS: "" };
   delete env.NODE_TEST_CONTEXT;
+  if (reading) {
+    env.KNEW_READING = reading.mode;
+    env.KNEW_READING_CACHE = reading.cache;
+  }
   return env;
 }
 
 /** Run a brief's checker against an app directory in a child process, and read back its JSON. */
 export type Phase = 1 | 2;
 
-export function runChecker(dir: string, brief: string, options: { typecheck: boolean; arm?: Arm; phase?: Phase; timeoutMs?: number }): CheckResult {
+export function runChecker(dir: string, brief: string, options: { typecheck: boolean; arm?: Arm; phase?: Phase; reading?: Reading; timeoutMs?: number }): CheckResult {
   layChecker(dir, brief);
   const result = spawnSync(
     process.execPath,
     ["--import", "tsx", join(".check", "kit", "run-check.ts"), join(".check", "briefs", brief, "check.ts"), dir, options.typecheck ? "1" : "0", options.arm ?? "knew", String(options.phase ?? 1)],
-    { cwd: dir, encoding: "utf8", timeout: options.timeoutMs ?? 600_000, env: checkerEnv() },
+    { cwd: dir, encoding: "utf8", timeout: options.timeoutMs ?? (options.reading ? 1_800_000 : 600_000), env: checkerEnv(options.reading) },
   );
   const line = (result.stdout ?? "").trim().split("\n").filter(Boolean).pop();
   try {
@@ -66,12 +76,12 @@ export async function checkInProcess(dir: string, brief: string, options: { type
  * work next: a copy is checked, with the package installed into the copy for
  * a baseline app, and thrown away.
  */
-export function checkInCopy(dir: string, brief: string, options: { arm: Arm; phase: Phase; tarball: Tarball }): CheckResult {
+export function checkInCopy(dir: string, brief: string, options: { arm: Arm; phase: Phase; tarball: Tarball; reading?: Reading }): CheckResult {
   const copy = realpathSync(mkdtempSync(join(tmpdir(), "knew-ephemeral-snapshot-")));
   try {
     cpSync(dir, copy, { recursive: true, verbatimSymlinks: true });
     if (options.arm === "baseline") installForCheck(copy, options.tarball);
-    return runChecker(copy, brief, { typecheck: true, arm: options.arm, phase: options.phase });
+    return runChecker(copy, brief, { typecheck: true, arm: options.arm, phase: options.phase, ...(options.reading ? { reading: options.reading } : {}) });
   } finally {
     removeDir(copy);
   }

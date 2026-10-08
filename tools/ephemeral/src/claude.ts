@@ -13,8 +13,10 @@ import type { Moment } from "./moments.ts";
 export const TOOLS = ["Read", "Write", "Edit", "Glob", "Grep", "Bash"] as const;
 
 /** Bash cannot be confined by path on the host; these are refused outright,
- *  and anything else that strays is caught by the contamination audit. */
-export const DENIED = ["Bash(sudo *)", "Bash(git push*)", "Bash(git clone*)", "Bash(curl *)", "Bash(wget *)"] as const;
+ *  and anything else that strays is caught by the contamination audit. The
+ *  CLI itself is refused too: a reading brief's model is the checker's, and an
+ *  agent calling it would be measuring something else. */
+export const DENIED = ["Bash(sudo *)", "Bash(git push*)", "Bash(git clone*)", "Bash(curl *)", "Bash(wget *)", "Bash(claude *)"] as const;
 
 export const DEFAULT_MODEL = "claude-opus-5-5";
 

@@ -41,7 +41,14 @@ export const commandOf = (use: ToolUse): string | null => (use.name === "Bash" &
 
 const bashCommands = (t: Transcript) => t.toolUses.map(commandOf).filter((command) => command !== null);
 
-/** Paths one tool call touched: a file tool's path, or every absolute or package path in a shell command. */
+/** A shell command without its heredoc bodies: text being written, not paths being reached. */
+export const withoutHeredocs = (command: string) => command.replace(/<<-?\s*['"]?(\w+)['"]?[\s\S]*?\n\1\b/g, "");
+
+/**
+ * Paths one tool call touched: a file tool's path, or every absolute or
+ * package path in a shell command. An absolute path needs a name after its
+ * slash, so a `//` comment is not one.
+ */
 export function pathsOf(use: ToolUse): string[] {
   const paths: string[] = [];
   for (const key of ["file_path", "path", "notebook_path"]) {
@@ -50,7 +57,7 @@ export function pathsOf(use: ToolUse): string[] {
   }
   const command = commandOf(use);
   if (command !== null) {
-    for (const match of command.matchAll(/(?:^|[\s'"=(])((?:\/|~\/|\.\.?\/)?[\w.@\-/]*node_modules\/@popjoker\/knew\/[\w.\-/]+|\/[\w.@\-/]+)/g)) {
+    for (const match of withoutHeredocs(command).matchAll(/(?:^|[\s'"=(])((?:\/|~\/|\.\.?\/)?[\w.@\-/]*node_modules\/@popjoker\/knew\/[\w.\-/]+|\/[\w.@\-][\w.@\-/]*)/g)) {
       if (match[1]) paths.push(match[1]);
     }
   }
@@ -86,7 +93,10 @@ export function packageFilesByStep(t: Transcript): string[][] {
   let cwd = t.init?.cwd ?? null;
   return t.toolUses.map((use) => {
     const paths = pathsOf(use);
-    const command = commandOf(use)?.replace(/<<-?\s*['"]?(\w+)['"]?[\s\S]*?\n\1\b/g, "");
+    const command = (() => {
+      const raw = commandOf(use);
+      return raw === null ? undefined : withoutHeredocs(raw);
+    })();
     for (const segment of command?.split(/&&|\|\||;|\||\n/) ?? []) {
       const words = segment.trim().split(/\s+/).filter(Boolean).map((word) => word.replace(/^['"]|['"]$/g, ""));
       if (words[0] === "cd") {
@@ -196,6 +206,15 @@ export function isolationProblems(
   return problems;
 }
 
+/** The machine's top-level directories, the roots a real absolute path starts from. */
+function topLevel(): string[] {
+  try {
+    return readdirSync("/");
+  } catch {
+    return [];
+  }
+}
+
 /** System paths an app build may legitimately touch outside its own directory. */
 const SYSTEM = ["/usr/", "/bin/", "/lib/", "/lib64/", "/etc/", "/dev/", "/proc/self/", "/opt/", "/snap/"];
 
@@ -205,12 +224,15 @@ const SYSTEM = ["/usr/", "/bin/", "/lib/", "/lib64/", "/etc/", "/dev/", "/proc/s
  * absolute place outside the run directory that is not a system path, and any
  * attempt to fetch from the network.
  */
-export function contaminationOf(t: Transcript, context: { runDir: string; repo: string; home: string }): string[] {
+export function contaminationOf(t: Transcript, context: { runDir: string; repo: string; home: string; roots?: readonly string[] }): string[] {
   const reasons = new Set<string>();
+  // An absolute path counts only under a real top-level directory: a regex (`sed '/function/p'`) or a comment is not a reach.
+  const roots = new Set(context.roots ?? topLevel());
+  const real = (path: string) => path.startsWith("~") || roots.has(path.split("/")[1] ?? "");
   // A tool result too long to print is saved by the CLI to a file it tells the agent to read: its own mechanism, not a reach.
   const spilled = new Set(t.toolResults.flatMap((result) => [...result.text.matchAll(/Full output saved to: (\S+?)[.,;)]?(?:\s|$)/g)].map((match) => match[1]!)));
   for (const path of pathsTouched(t)) {
-    if (spilled.has(path)) continue;
+    if (spilled.has(path) || !real(path)) continue;
     if (path.includes(context.repo)) reasons.add(`named the repo: ${path}`);
     else if (path.startsWith("~/.claude") || path.startsWith(`${context.home}/.claude`)) reasons.add(`touched the CLI's own state: ${path}`);
     else if (path.startsWith("/") && !path.startsWith(context.runDir) && !SYSTEM.some((prefix) => path.startsWith(prefix)) && path !== "/") {

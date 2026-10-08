@@ -29,6 +29,8 @@ const briefSchema = z.object({
   inputs: z.array(z.string()),
   /** Package names this brief may say as code anyway: words its product needs that happen to be the package's too. */
   allow: z.array(z.string()),
+  /** Its notes are read by a real model (`kit/reader.ts`): readings replay from `readings.json` in tests and the dry run, and are live in an agent run. */
+  reading: z.boolean().optional(),
   /** For a brief with a `CHANGE.md`: the ids the change adds, which its checker relies on after it. */
   change: z.object({ lenses: z.array(z.string()), types: z.array(z.string()) }).optional(),
 });
@@ -57,6 +59,9 @@ export function loadBrief(name: string): Brief {
 /** Where an arm's known-good app lives, as first built or after the change. */
 export const referenceOf = (brief: Brief, arm: Arm, phase: 1 | 2 = 1) =>
   join(brief.dir, `${arm === "knew" ? "reference" : "baseline-reference"}${phase === 2 ? "-changed" : ""}`);
+
+/** Where a reading brief keeps its recorded readings, for the dry run and the tests to replay. */
+export const readingsOf = (brief: Brief) => join(brief.dir, "readings.json");
 
 /** The change as an arm's agent reads it. */
 export const changeFileOf = (arm: Arm) => (arm === "knew" ? "CHANGE.md" : "CHANGE-BASELINE.md");
