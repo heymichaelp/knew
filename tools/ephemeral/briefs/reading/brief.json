@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "exercises": "Notes read for real, on knew and without it: corrections, repeats in other words, two true things about one topic, end dates, places nobody added, news that must not replace what a place is, and notebooks that never cross.",
+  "pinned": {
+    "vocabulary": "places",
+    "lenses": [
+      "visit"
+    ],
+    "types": [
+      "HOURS",
+      "KIND",
+      "ORDER",
+      "VIBE"
+    ]
+  },
+  "budgetUsd": 6,
+  "timeoutMin": 30,
+  "inputs": [],
+  "allow": [
+    "id",
+    "name"
+  ],
+  "reading": true
+}

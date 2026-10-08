@@ -112,6 +112,31 @@ For `notebook`, the change adds a fifth kind of statement, `PRICE`, a second pla
 tonight, and a last step on the visit view. On knew, that is a vocabulary addition and a new
 lens; from scratch, it is whatever the app's design makes it.
 
+## Real reading
+
+In `notebook`, the checker scripts what each note says, so knew's own prompts never run. A
+reading brief (`"reading": true`, such as `reading`) has its notes read by a real model instead,
+the same one in both arms (`kit/reader.ts`, `claude -p` on your login, default
+`claude-sonnet-5-5`, `--reader-model` to change it):
+
+- **On knew**, each note goes through knew's own pipeline: its extraction and reconciliation
+  prompts over the agent's vocabulary, the package's input builders and schemas, and the planner
+  behind the fake, as the service would run it minus Postgres.
+- **In the baseline**, the app is handed `model({ system, prompt, schema })` and writes its own
+  prompts and its own rules for what a note corrects, repeats or adds.
+
+The probes use casual, sometimes ambiguous notes and judge meaning, not wording. Agents are denied
+the `claude` command, so only the checker reads.
+
+Readings are recorded by request:
+- **Dry run and brief tests:** replay `briefs/<brief>/readings.json` and never call a model.
+- **Agent runs:** read live, and keep what the reader answered beside the run, in
+  `readings.json`.
+- **Re-recording:** `npm run record-readings -w @knew/ephemeral -- --brief reading` re-records the
+  references' readings whenever the probes or references change what they ask. It spends money.
+
+The reader's cost is counted in the pass budget.
+
 ## Reading a report
 
 `reports/<stamp>-<sha8>[-dirty]/<brief>/<run>/` is gitignored. Each run directory holds:
@@ -153,6 +178,7 @@ brief version.
 | Brief | The product | What it exercises |
 |---|---|---|
 | `places` | Notes on cafés and venues, for planning a visit | A vocabulary written from scratch; hours that go stale after about a month; what kind of place before what it's like |
+| `reading` | A notebook of places whose notes are read by a real model, on knew and without it | Paired. Corrections, repeats in other words, two true things about one topic, end dates, unknown places, news that must not replace what a place is |
 | `notebook` | A notebook of places, built on knew and without it | Paired. What an app must get right a year in: corrections, as-of reads, ended statements, repeats, stale hours, unknown places, separate notebooks |
 | `gifting` | A gift guide that learns more before it shows picks | The person preset extended with its types unchanged; five facts in any mix before picks; what to steer clear of and what they have, handed over as rules |
 

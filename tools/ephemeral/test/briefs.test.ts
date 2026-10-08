@@ -3,7 +3,8 @@ import { cpSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
 import type { CheckResult } from "../kit/check-kit.ts";
-import { briefLeaks, briefNames, changeFileOf, loadBrief, referenceOf } from "../src/brief.ts";
+import { existsSync } from "node:fs";
+import { briefLeaks, briefNames, changeFileOf, loadBrief, readingsOf, referenceOf, type Brief } from "../src/brief.ts";
 import { checkInProcess, type Phase } from "../src/check.ts";
 import { packageNames } from "../src/names.ts";
 import { WORKSPACE, type Arm } from "../src/prep.ts";
@@ -17,6 +18,13 @@ import { WORKSPACE, type Arm } from "../src/prep.ts";
 
 /** What a brief must not say: every runtime export of the package's three entry points, and every property of its two definition schemas. */
 const API = packageNames();
+
+/** A reading brief's checks replay its recorded readings, in this process, and never call a model. */
+function replaying(brief: Brief): void {
+  if (!brief.reading) return;
+  process.env.KNEW_READING = "replay";
+  process.env.KNEW_READING_CACHE = readingsOf(brief);
+}
 
 const failures = (result: CheckResult) =>
   result.checks
@@ -65,6 +73,7 @@ for (const name of briefNames()) {
     for (const arm of brief.arms) {
       for (const phase of brief.changes ? ([1, 2] as const) : ([1] as const)) {
         it(`passes its own checker with its ${arm} reference${phase === 2 ? ", after the change" : ""}`, async () => {
+          replaying(brief);
           const result = await checkInProcess(referenceOf(brief, arm, phase), name, { typecheck: false, arm, phase });
           assert.ok(result.passed, failures(result));
         });
@@ -84,6 +93,12 @@ for (const name of briefNames()) {
         for (const id of [...(brief.change?.lenses ?? []), ...(brief.change?.types ?? [])]) {
           assert.ok(change.includes(`\`${id}\``), `the checker relies on ${id} after the change, and CHANGE.md never names it`);
         }
+      });
+    }
+
+    if (brief.reading) {
+      it("has its readings recorded, so its checks replay them and never call a model", () => {
+        assert.ok(existsSync(readingsOf(brief)), `${name} reads notes for real and has no readings.json; record them with npm run record-readings -w @knew/ephemeral -- --brief ${name}`);
       });
     }
 
@@ -133,6 +148,61 @@ const TONIGHT_ORDER = "tonight asks what it is like, then how much it costs, and
 const TONIGHT_STALE = "tonight re-checks hours not heard for 45 days";
 
 const MUTATIONS: Record<string, Mutation[]> = {
+  // Each reading mutation leaves every prompt the reader is shown as it was, so the recorded readings still answer.
+  // A note about a place nobody added has no mutation: in both arms the reader itself returns nothing about a place
+  // not on the list, so no app logic stands between that note and the probe to break.
+  reading: [
+    {
+      what: "a statement past its end date is still known",
+      file: "src/app.ts",
+      edit: swap("(view?.facts ?? []).filter((fact) => !endedByDate(fact, asOf)).map(", "(view?.facts ?? []).map("),
+      fails: "something with an end date stops being known after it",
+    },
+    {
+      what: "a place never added reads as one with nothing known",
+      file: "src/app.ts",
+      edit: swap("if ((await engine.readiness(scope(userId), placeId, { lens: LENS })) === null) return null;", ""),
+      fails: "a notebook is its owner's alone",
+    },
+    {
+      what: "a correction is kept beside what it corrected",
+      arm: "baseline",
+      file: "src/app.ts",
+      edit: swap("if (replaced) replaced.kept.replacedAt = at;", ""),
+      fails: "a correction replaces the hours it corrects, and the old hours are still known as of before it",
+    },
+    {
+      what: "a repeat is kept twice",
+      arm: "baseline",
+      file: "src/app.ts",
+      edit: swap("if (statement.repeats !== null && current[statement.repeats]) continue;", ""),
+      fails: "the same thing said again in other words is kept once",
+    },
+    {
+      what: "every new statement replaces the last one on its topic",
+      arm: "baseline",
+      file: "src/app.ts",
+      edit: swap(
+        "        if (replaced) replaced.kept.replacedAt = at;",
+        "        if (replaced) replaced.kept.replacedAt = at;\n        for (const kept of place.kept) if (kept.topic === statement.topic && holds(kept, at)) kept.replacedAt = at;",
+      ),
+      fails: "two different things about one topic are both kept",
+    },
+    {
+      what: "an end date is ignored",
+      arm: "baseline",
+      file: "src/app.ts",
+      edit: swap("until: statement.until ? new Date(statement.until) : null,", "until: null,"),
+      fails: "something with an end date stops being known after it",
+    },
+    {
+      what: "every user shares one notebook",
+      arm: "baseline",
+      file: "src/app.ts",
+      edit: swap("let places = notebooks.get(userId);\n    if (!places) notebooks.set(userId, (places = new Map()));", 'let places = notebooks.get("everyone");\n    if (!places) notebooks.set("everyone", (places = new Map()));'),
+      fails: "a notebook is its owner's alone",
+    },
+  ],
   notebook: [
     {
       what: "tonight asks what kind of place it is first",
@@ -467,6 +537,7 @@ describe("Scenario: Each checker fails its reference broken the ways it claims t
         const phase = mutation.phase ?? 1;
         const dir = join(MUTANTS, `${name}-${index}`);
         cpSync(referenceOf(loadBrief(name), arm, phase), dir, { recursive: true });
+        replaying(loadBrief(name));
         const path = join(dir, mutation.file);
         const before = readFileSync(path, "utf8");
         const after = mutation.edit(before);

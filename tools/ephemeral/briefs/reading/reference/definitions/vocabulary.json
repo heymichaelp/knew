@@ -1,0 +1,20 @@
+{
+  "id": "places",
+  "version": 1,
+  "kind": "place",
+  "factTypes": {
+    "KIND": { "description": "What kind of place it is: a café, a wine bar, a record shop. Who a place is, not what it serves this season.", "dimension": "kind-of-place", "enduring": true },
+    "HOURS": { "description": "When it is open: days and times. New hours replace old ones.", "dimension": "hours", "revisitAfterDays": 30 },
+    "VIBE": { "description": "What it is like to be there at some time: loud, quiet, cosy, crowded, good for working. Several can be true at once.", "dimension": "vibe" },
+    "ORDER": { "description": "Something worth ordering or doing there, including a pop-up or a special, with its end date when one was said.", "dimension": "order" }
+  },
+  "dimensions": {
+    "kind-of-place": { "label": "What kind of place it is" },
+    "hours": { "label": "When it is open" },
+    "vibe": { "label": "What it is like to be there" },
+    "order": { "label": "What to order" }
+  },
+  "fallbackType": "VIBE",
+  "fields": [],
+  "charter": "# What we keep about places\n\nKeep what changes the next visit: what kind of place it is, when it is open, what it is like, and what is worth ordering. Keep only what the note says about places on the list. A note that only mentions a visit keeps nothing.\n"
+}

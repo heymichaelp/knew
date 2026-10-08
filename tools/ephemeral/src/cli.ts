@@ -4,8 +4,8 @@ import { copyFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, 
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
-import { briefHash, briefNames, changeFileOf, loadBrief, referenceOf, type Brief } from "./brief.ts";
-import { checkInCopy, runChecker, type Phase } from "./check.ts";
+import { briefHash, briefNames, changeFileOf, loadBrief, readingsOf, referenceOf, type Brief } from "./brief.ts";
+import { checkInCopy, runChecker, type Phase, type Reading } from "./check.ts";
 import {
   DEBRIEF_SCHEMA,
   DEFAULT_MODEL,
@@ -35,6 +35,8 @@ import { parseTranscript } from "./transcript.ts";
  *              (with --arm baseline or both, a paired brief is also built with no knew;
  *              a brief with a CHANGE.md is then changed in the same session, and checked again)
  *   dry-run    each brief's reference solution stands in for the agent; no model is called
+ *              (a reading brief replays its recorded readings)
+ *   record-readings   a reading brief's references, read live, their readings recorded for replay
  *   preflight  two tiny real sessions proving the clean room and the budget cap work
  *
  * Model runs spend real money (on a Claude login, against its limits) and so
@@ -53,11 +55,15 @@ const { positionals, values } = parseArgs({
     tarball: { type: "string", multiple: true },
     keep: { type: "boolean" },
     "think-aloud": { type: "boolean" },
+    "reader-model": { type: "string" },
     arm: { type: "string" },
     "save-fixture": { type: "boolean" },
     help: { type: "boolean", short: "h" },
   },
 });
+
+// The reader model is read by the checker from its environment, which it inherits.
+if (values["reader-model"]) process.env.KNEW_READER_MODEL = values["reader-model"];
 
 const USAGE = [
   "usage: cli.ts <command> [options]",
@@ -65,6 +71,7 @@ const USAGE = [
   "  agent       a model builds each brief's app; it is checked, debriefed, measured and reported",
   "  dry-run     each brief's reference solution stands in for the agent; no model is called",
   "  preflight   two tiny real sessions prove the clean room and the budget cap",
+  "  record-readings   read a reading brief's references live and record the readings (spends money)",
   "",
   "  --brief <name>     one brief (repeatable; default every brief)",
   "  --runs <n>         runs per brief (default 1)",
@@ -76,6 +83,7 @@ const USAGE = [
   "  --keep             keep the throwaway directories",
   "  --think-aloud      the agent keeps NOTES.md as it works (changes its effort; off by default)",
   "  --arm <arm>        knew (default), baseline, or both: a paired brief built with no knew too",
+  "  --reader-model <id>  the model a reading brief's notes are read with (default claude-sonnet-5-5)",
   "  --save-fixture     preflight: save its transcript, redacted, as the test fixture",
 ].join("\n");
 
@@ -158,6 +166,8 @@ async function agent(): Promise<void> {
         const out = join(reportRoot, label, String(run));
         mkdirSync(out, { recursive: true });
         log(`→ ${label} #${run}: preparing`);
+        // A reading brief's checker reads its notes live; what the reader answered is kept beside the run.
+        const reading: Reading | undefined = brief.reading ? { mode: "record", cache: join(out, "readings.json") } : undefined;
         const prepared = prepareDir(arm === "knew" ? name : `${name}-baseline`, tarball, arm);
         layBrief(prepared.dir, name, brief.inputs, arm);
         const sessionId = randomUUID();
@@ -182,7 +192,7 @@ async function agent(): Promise<void> {
         let change: RunRecord["change"] = null;
         if (brief.changes) {
           log("  checking the build");
-          const checkBefore = checkInCopy(prepared.dir, name, { arm, phase: 1, tarball });
+          const checkBefore = checkInCopy(prepared.dir, name, { arm, phase: 1, tarball, ...(reading ? { reading } : {}) });
           copyFileSync(join(BRIEFS, name, changeFileOf(arm)), join(prepared.dir, "CHANGE.md"));
           const changeBudget = Math.min(brief.budgetUsd, passBudget - spent);
           log(`  changing (${checkBefore.passed ? "the build passed" : "the build did not pass"}; cap $${changeBudget.toFixed(2)})`);
@@ -222,7 +232,8 @@ async function agent(): Promise<void> {
 
         log("  checking");
         if (arm === "baseline") installForCheck(prepared.dir, tarball);
-        const check = runChecker(prepared.dir, name, { typecheck: true, arm, phase: brief.changes ? 2 : 1 });
+        const check = runChecker(prepared.dir, name, { typecheck: true, arm, phase: brief.changes ? 2 : 1, ...(reading ? { reading } : {}) });
+        spent += (check.reading?.costUsd ?? 0) + (change?.checkBefore.reading?.costUsd ?? 0);
         const metrics = measure(transcript);
         const isolation = [...isolationProblems(transcript, { tools: TOOLS, model, cwd: prepared.dir, personalSkills: skills }), ...(change?.isolation ?? [])];
         const contamination = [...contaminationOf(transcript, { runDir: prepared.dir, repo: REPO, home: homedir() }), ...(change?.contamination ?? [])];
@@ -274,6 +285,7 @@ async function agent(): Promise<void> {
         records.push(record);
         log(`  ${record.outcome}: ${record.reason} — $${(metrics.costUsd ?? 0).toFixed(2)}, ${metrics.turns ?? "?"} turns, ${(build.durationMs / 60_000).toFixed(1)} min`);
         if (change) log(`  the change: $${(change.metrics.costUsd ?? 0).toFixed(2)}, ${change.metrics.turns ?? "?"} turns, ${(change.durationMs / 60_000).toFixed(1)} min`);
+        if (check.reading) log(`  reading the probes' notes: ${check.reading.calls} model calls, $${check.reading.costUsd.toFixed(2)}`);
       }
     }
   }
@@ -306,7 +318,7 @@ function dryRun(): void {
         const dir = join(install.dir, label);
         cpSync(referenceOf(brief, arm, phase), dir, { recursive: true });
         layBrief(dir, name, brief.inputs, arm);
-        const result = runChecker(dir, name, { typecheck: true, arm, phase });
+        const result = runChecker(dir, name, { typecheck: true, arm, phase, ...(brief.reading ? { reading: { mode: "replay" as const, cache: readingsOf(brief) } } : {}) });
         log(`${result.passed ? "✓" : "✗"} ${label} (v${brief.version}): ${result.checks.filter((c) => c.passed).length}/${result.checks.length} checks`);
         for (const check of result.checks.filter((c) => !c.passed)) log(`    ✗ ${check.name}: ${check.detail.split("\n").slice(0, 6).join("\n      ")}`);
         if (!result.passed) failed += 1;
@@ -320,6 +332,38 @@ function dryRun(): void {
     log(`${failed} brief(s) failed against their own reference`);
     process.exit(1);
   }
+}
+
+/**
+ * Read a reading brief's references live, every arm and phase, and record what
+ * the reader answered into the brief's `readings.json`, which the dry run and
+ * the tests replay. Spends money: run it when the probes or the references
+ * change what they ask the reader.
+ */
+function recordReadings(): void {
+  const names = (values.brief ?? briefNames()).filter((name) => loadBrief(name).reading);
+  const { packed, done } = tarballs();
+  const install = prepareDir("record-readings", packed[0]!);
+  let failed = 0;
+  try {
+    for (const name of names) {
+      const brief = loadBrief(name);
+      for (const [arm, phase] of brief.arms.flatMap((each) => (brief.changes ? [[each, 1], [each, 2]] : [[each, 1]]) as Array<[Arm, Phase]>)) {
+        const label = `${name}${arm === "knew" ? "" : "-baseline"}${phase === 2 ? "-changed" : ""}`;
+        const dir = join(install.dir, label);
+        cpSync(referenceOf(brief, arm, phase), dir, { recursive: true });
+        layBrief(dir, name, brief.inputs, arm);
+        const result = runChecker(dir, name, { typecheck: true, arm, phase, reading: { mode: "record", cache: readingsOf(brief) } });
+        log(`${result.passed ? "✓" : "✗"} ${label}: ${result.checks.filter((c) => c.passed).length}/${result.checks.length} checks; ${result.reading?.calls ?? 0} readings, $${(result.reading?.costUsd ?? 0).toFixed(2)}`);
+        for (const check of result.checks.filter((c) => !c.passed)) log(`    ✗ ${check.name}: ${check.detail.split("\n").slice(0, 6).join("\n      ")}`);
+        if (!result.passed) failed += 1;
+      }
+    }
+  } finally {
+    if (!values.keep) removeDir(install.dir);
+    done();
+  }
+  if (failed > 0) process.exit(1);
 }
 
 const PREFLIGHT_PROMPT =
@@ -394,7 +438,7 @@ async function preflight(): Promise<void> {
   if (failed > 0) process.exit(1);
 }
 
-const commands: Record<string, () => unknown> = { agent, "dry-run": dryRun, preflight };
+const commands: Record<string, () => unknown> = { agent, "dry-run": dryRun, preflight, "record-readings": recordReadings };
 const command = positionals[0] ?? "";
 if (values.help) {
   log(USAGE);
