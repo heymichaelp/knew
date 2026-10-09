@@ -109,7 +109,7 @@ describe("Scenario: Enough counts fresh facts, and strength says how far along a
     assert.deepEqual([standing([one]).state, standing([one]).strength, standing([one]).facts], ["thin", 0.5, 1]);
     assert.deepEqual([standing([one, two]).state, standing([one, two]).strength], ["met", 1]);
     const thin = readinessFor(lens, mother, [one], now);
-    assert.deepEqual(thin.next, [{ kind: "learn", need: "love", label: "What do they love?", dimension: null, types: ["LIKES"], value: 0.5, factIds: [one.id] }], "a thin need builds on what is known");
+    assert.deepEqual(thin.next, [{ kind: "learn", need: "love", label: "What do they love?", about: "entity", dimension: null, types: ["LIKES"], value: 0.5, factIds: [one.id] }], "a thin need builds on what is known");
   });
 
   it("puts the heavier need first, keeps the lens's order on a tie, and rounds to three places", () => {
@@ -167,7 +167,7 @@ describe("Scenario: A fact goes due for a revisit when its window passes unsaid 
     assert.equal(before.needs.find((a) => a.id === "how-the-days-go")!.state, "met");
     const due = after.needs.find((a) => a.id === "how-the-days-go")!;
     assert.deepEqual([due.state, due.strength, due.facts, due.due], ["due", 0.5, 1, 1]);
-    assert.deepEqual(after.next.find((s) => s.kind === "revisit"), { kind: "revisit", need: "how-the-days-go", label: due.label, dimension: null, types: ["CIRCUMSTANCE"], value: 0.5, factIds: [days.id] });
+    assert.deepEqual(after.next.find((s) => s.kind === "revisit"), { kind: "revisit", need: "how-the-days-go", label: due.label, about: "entity", dimension: null, types: ["CIRCUMSTANCE"], value: 0.5, factIds: [days.id] });
     assert.equal(after.dimensions.find((d) => d.id === "life")!.due, 1);
   });
 
@@ -267,6 +267,8 @@ describe("Scenario: The evidence per dimension needs no objective", () => {
         ["likes", 0],
         ["life", 2],
         ["people", 0],
+        ["between", 0],
+        ["means", 0],
         ["other", 1],
       ],
       "an ended fact and a retired one count for nothing; a retired type counts under the fallback",

@@ -6,7 +6,7 @@ import { fixtureLens, fixtureLensDefinition, fixtureVisitLens, fixtureVisitLensD
 const minimal: LensDefinition = { id: "plain", version: 1, vocabulary: "fixture", header: "About {who}:", overHeading: "Over" };
 
 describe("Scenario: A lens says only what differs, and the vocabulary supplies the rest", () => {
-  it("reads every dimension as a section and as a need, labelled as the dimension is, with the vocabulary's pinned types", () => {
+  it("reads every dimension as a need, labelled as the dimension is, and every one but the knower's as a section, with the vocabulary's pinned types", () => {
     const lens = compileLens(minimal, fixtureVocabulary());
     assert.deepEqual(
       lens.sections.map((s) => [s.heading, s.dimensions]),
@@ -16,8 +16,10 @@ describe("Scenario: A lens says only what differs, and the vocabulary supplies t
         ["Likes", ["likes"]],
         ["Life", ["life"]],
         ["People", ["people"]],
+        ["Between you", ["between"]],
         ["Other", ["other"]],
       ],
+      "the knower's dimension is read beside every entity, and printed only where a lens places it",
     );
     assert.deepEqual([...lens.pinned].sort(), ["HAS", "LINE"]);
     assert.equal(lens.objective, null);
@@ -29,10 +31,19 @@ describe("Scenario: A lens says only what differs, and the vocabulary supplies t
         ["likes", "Likes", "likes"],
         ["life", "Life", "life"],
         ["people", "People", "people"],
+        ["between", "Between you", "between"],
+        ["means", "Your means", "means"],
         ["other", "Other", "other"],
       ],
     );
-    assert.deepEqual(lens.needs.find((n) => n.id === "people"), { id: "people", label: "People", dimension: "people", types: ["PERSON"], when: [], weight: 1, enough: 1, after: [] });
+    assert.deepEqual(lens.needs.find((n) => n.id === "people"), { id: "people", label: "People", about: "entity", dimension: "people", types: ["PERSON"], when: [], weight: 1, enough: 1, after: [] });
+    assert.deepEqual(
+      lens.needs.filter((n) => n.about !== "entity").map((n) => [n.id, n.about]),
+      [
+        ["between", "relationship"],
+        ["means", "knower"],
+      ],
+    );
   });
 
   it("fills every need's weight, enough and order from the engine's defaults", () => {
@@ -142,6 +153,7 @@ describe("Scenario: A lens that does not read its vocabulary cleanly is refused 
       "dimension has is in no section, so its facts would never be on the page",
       "dimension likes is in no section, so its facts would never be on the page",
       "dimension people is in no section, so its facts would never be on the page",
+      "dimension between is in no section, so its facts would never be on the page",
       "dimension other is in no section, so its facts would never be on the page",
       "pinned names NOPE, which is not a fact type",
       "attributeTags names colour, which no type carries",

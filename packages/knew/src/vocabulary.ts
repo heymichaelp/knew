@@ -1,3 +1,4 @@
+import type { Subject } from "./types.ts";
 import { z, type ZodTypeAny } from "zod";
 import { FIELD_RE, ID_RE, KEY_RE, TYPE_KEY_RE } from "./patterns.ts";
 import { EXTRACT_V2, RECONCILE_V2 } from "./prompts/index.ts";
@@ -55,10 +56,15 @@ export interface FactTypeSpec {
   revisitAfterDays?: number;
 }
 
+/** The knower's own entry, on every roster: facts about the person writing attach here. */
+export const KNOWER_ID = "self";
+
 export interface DimensionSpec {
   /** What a reader calls it: the section heading a lens starts from, and the
    *  label of a need of it. */
   label: string;
+  /** What it is about. Default: the entity. */
+  about?: Subject;
 }
 
 export interface VocabularyDefinition {
@@ -128,7 +134,7 @@ export const vocabularyDefinitionSchema: z.ZodType<VocabularyDefinition> = z
     ),
     dimensions: z.record(
       z.string().regex(KEY_RE),
-      z.object({ label: z.string().min(1) }),
+      z.object({ label: z.string().min(1), about: z.enum(["entity", "relationship", "knower"]).optional() }),
     ),
     fallbackType: z.string(),
     fields: z.array(z.string().regex(FIELD_RE)),
@@ -146,6 +152,10 @@ export const vocabularyDefinitionSchema: z.ZodType<VocabularyDefinition> = z
     if (Object.keys(vocabulary.factTypes).length === 0) issue("a vocabulary needs at least one fact type");
     if (!(vocabulary.fallbackType in vocabulary.factTypes)) {
       issue(`fallbackType ${vocabulary.fallbackType} is not one of the fact types`);
+    } else {
+      // A retired type on an entity reads as the fallback, so the fallback must be about the entity too.
+      const about = vocabulary.dimensions[vocabulary.factTypes[vocabulary.fallbackType]!.dimension]?.about ?? "entity";
+      if (about !== "entity") issue(`fallbackType ${vocabulary.fallbackType} is about the ${about}, and a fact that fits no other type is about the entity`);
     }
     const dimensions = new Set(Object.keys(vocabulary.dimensions));
     const informed = new Set<string>();
@@ -201,6 +211,7 @@ export interface CompiledFactType {
 export interface CompiledDimension {
   id: string;
   label: string;
+  about: Subject;
 }
 
 export interface Vocabulary {
@@ -277,7 +288,7 @@ export function compileVocabulary(definition: VocabularyDefinition): Vocabulary 
     kind: definition.kind,
     factTypes,
     factTypeKeys: Object.keys(factTypes),
-    dimensions: Object.entries(definition.dimensions).map(([id, spec]) => ({ id, label: spec.label })),
+    dimensions: Object.entries(definition.dimensions).map(([id, spec]) => ({ id, label: spec.label, about: spec.about ?? "entity" })),
     extractAttributes,
     fallbackType: definition.fallbackType,
     sourceLabels: definition.sourceLabels ?? {},
@@ -326,22 +337,35 @@ export function parseFactAttributes(vocabulary: Vocabulary, type: string, attrib
  * The type list as the extraction prompt reads it — one line per type, with
  * its attributes. The vocabulary is the only place a type is described.
  */
+/** How the type list tells the model where a fact of each subject attaches. */
+const ATTACH: Record<Subject, string> = {
+  entity: "",
+  relationship: " (About the relationship between the writer and an entry: attach it to that entry.)",
+  knower: ` (About the writer: attach it to ${KNOWER_ID}.)`,
+};
+
 export function factTypeVocabulary(vocabulary: Vocabulary): string {
   return vocabulary.factTypeKeys
     .map((key) => {
       const definition = vocabulary.factTypes[key]!;
       const names = definition.attributeFields.map((field) => field.name);
       const attrs = names.length > 0 ? ` Attributes: ${names.join(", ")}.` : "";
-      return `- ${key}: ${definition.description}${attrs}`;
+      return `- ${key}: ${definition.description}${attrs}${ATTACH[subjectOf(vocabulary, key)]}`;
     })
     .join("\n");
+}
+
+/** What a stored type is about, through its dimension; a retired type reads as the fallback, as everywhere. */
+export function subjectOf(vocabulary: Vocabulary, type: string): Subject {
+  const dimension = factType(vocabulary, type).dimension;
+  return vocabulary.dimensions.find((candidate) => candidate.id === dimension)?.about ?? "entity";
 }
 
 /** One fact type as a screen shows it: plain data, safe to hand to a client. */
 export interface FactTypeGlossaryEntry {
   description: string;
-  /** The dimension it informs, by id and as a reader calls it. */
-  dimension: { id: string; label: string };
+  /** The dimension it informs, by id and as a reader calls it, and what it is about. */
+  dimension: { id: string; label: string; about: Subject };
   pinned: boolean;
   enduring: boolean;
   revisitAfterDays: number | null;
@@ -349,7 +373,7 @@ export interface FactTypeGlossaryEntry {
 }
 
 export function factTypeGlossary(vocabulary: Vocabulary): Record<string, FactTypeGlossaryEntry> {
-  const label = new Map(vocabulary.dimensions.map((d) => [d.id, d.label]));
+  const dimensionOf = new Map(vocabulary.dimensions.map((d) => [d.id, d]));
   return Object.fromEntries(
     vocabulary.factTypeKeys.map((key) => {
       const definition = vocabulary.factTypes[key]!;
@@ -357,7 +381,11 @@ export function factTypeGlossary(vocabulary: Vocabulary): Record<string, FactTyp
         key,
         {
           description: definition.description,
-          dimension: { id: definition.dimension, label: label.get(definition.dimension) ?? definition.dimension },
+          dimension: {
+            id: definition.dimension,
+            label: dimensionOf.get(definition.dimension)?.label ?? definition.dimension,
+            about: dimensionOf.get(definition.dimension)?.about ?? "entity",
+          },
           pinned: definition.pinned,
           enduring: definition.enduring,
           revisitAfterDays: definition.revisitAfterDays,

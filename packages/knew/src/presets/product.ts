@@ -3,10 +3,11 @@ import type { VocabularyDefinition } from "../vocabulary.ts";
 
 /**
  * A product: a thing someone owns, has owned or is considering, carved up
- * the way anyone who keeps track of their things would: what to watch out
- * for, what it is, its details, where they stand with it and how it is
- * holding up, where it came from, how they look after it, and what they make
- * of it. Generic on purpose: a bike, a camera, a sofa or a phone all fit.
+ * the way anyone who keeps track of their things would: about the thing, what
+ * to watch out for, what it is, its details and how it is holding up; about
+ * the knower's relationship with it, where they stand with it, where it came
+ * from, how they look after it, and what they make of it. Generic on purpose:
+ * a bike, a camera, a sofa or a phone all fit.
  *
  * Revisit windows are set only where a fact plainly drifts unheard (its
  * condition, whether they still have it, how they look after it); a client
@@ -26,7 +27,7 @@ const CHARTER = `# What is worth keeping
 **Small talk yields nothing.** Returning no facts is a proper answer.
 `;
 
-/** The product vocabulary: nine types across eight dimensions. */
+/** The product vocabulary: nine types across nine dimensions, four about the knower's relationship with it. */
 export function vocabulary(): VocabularyDefinition {
   return {
     id: PRESET.id,
@@ -52,13 +53,13 @@ export function vocabulary(): VocabularyDefinition {
       },
       OWNERSHIP: {
         description: "Where the knower stands with it: considering it, owns it, gave it away, sold it, lost it. Give the date when one was said.",
-        dimension: "standing",
+        dimension: "yours",
         revisitAfterDays: 365,
         attributes: [{ name: "state", kind: "enum", values: ["considering", "owns", "gave_away", "sold", "lost"] }],
       },
       CONDITION: {
         description: "How it is holding up: wear, faults, repairs. Give the date when one was said.",
-        dimension: "standing",
+        dimension: "condition",
         revisitAfterDays: 180,
       },
       ACQUIRED: {
@@ -83,10 +84,11 @@ export function vocabulary(): VocabularyDefinition {
       caution: { label: "Watch out for" },
       what: { label: "What it is" },
       details: { label: "Its details" },
-      standing: { label: "Where it stands" },
-      origin: { label: "Where it came from" },
-      care: { label: "Looking after it" },
-      opinion: { label: "What you make of it" },
+      yours: { label: "Where you stand with it", about: "relationship" },
+      condition: { label: "How it is holding up" },
+      origin: { label: "Where it came from", about: "relationship" },
+      care: { label: "Looking after it", about: "relationship" },
+      opinion: { label: "What you make of it", about: "relationship" },
       other: { label: "Other" },
     },
     fallbackType: "OTHER",
@@ -98,9 +100,9 @@ export function vocabulary(): VocabularyDefinition {
 /**
  * The starter lens: know it well enough to use it, look after it, or decide
  * on it. Its needs run coarse to fine: what it is, where the knower stands
- * with it, its details, what they make of it, where it came from, how they
- * look after it, and what to watch out for. Every need weighs the same, so
- * that is the order of the directions.
+ * with it, how it is holding up, its details, what they make of it, where it
+ * came from, how they look after it, and what to watch out for. Every need
+ * weighs the same, so that is the order of the directions.
  */
 export function lens(): LensDefinition {
   return {
@@ -111,6 +113,6 @@ export function lens(): LensDefinition {
     header: "What you know about {who}:",
     overHeading: "No longer the case",
     attributeTags: ["state"],
-    needs: ["what", "standing", "details", "opinion", "origin", "care", "caution"].map((dimension) => ({ id: dimension, dimension })),
+    needs: ["what", "yours", "condition", "details", "opinion", "origin", "care", "caution"].map((dimension) => ({ id: dimension, dimension })),
   };
 }

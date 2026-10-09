@@ -100,7 +100,7 @@ export function vocabulary(): VocabularyDefinition {
       offer: { label: "What's on offer" },
       feel: { label: "What it's like" },
       people: { label: "Who you know there" },
-      history: { label: "Your history with it" },
+      history: { label: "Your history with it", about: "relationship" },
       other: { label: "Other" },
     },
     fallbackType: "OTHER",

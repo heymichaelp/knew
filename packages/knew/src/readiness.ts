@@ -1,7 +1,7 @@
 import { endedByDate, lastSaidOf } from "./brief.ts";
 import { ENGINE_DEFAULTS } from "./defaults.ts";
 import type { CompiledNeed, Lens } from "./lens.ts";
-import type { DimensionEvidence, Direction, Fact, Gap, NeedStanding, Readiness } from "./types.ts";
+import type { DimensionEvidence, Direction, Fact, Gap, NeedStanding, Readiness, Subject } from "./types.ts";
 import { factType, type Vocabulary } from "./vocabulary.ts";
 
 /**
@@ -10,7 +10,9 @@ import { factType, type Vocabulary } from "./vocabulary.ts";
  *
  *  - CURRENT UNDERSTANDING belongs to the vocabulary and needs no objective:
  *    per dimension, how many current facts there are, how many are due for a
- *    revisit, and when any was last said.
+ *    revisit, and when any was last said. A dimension is about the entity,
+ *    the relationship with it (both kept on the entity), or the knower (kept
+ *    on the knower, and the same beside every entity).
  *  - MISSING UNDERSTANDING belongs to the lens: per need, a strength against
  *    its `enough` and a state.
  *  - THE NEXT DIRECTIONS, in order of value: a need to learn more about, or
@@ -61,6 +63,11 @@ const oldestSaidFirst = (a: Fact, b: Fact): number => lastSaidOf(a).getTime() - 
  *
  * `facts` are the facts believed at `at` (`factsKnownAt`); a fact whose own
  * end date has passed by `at` is over and counts for nothing, as on the page.
+ * The entity's facts hold what is known about it and about the relationship
+ * with it; `knower` holds what is known about the knower. Each need counts the
+ * set its subject is kept in, so a need about the knower is met for every
+ * entity at once, and the directions rank all three together.
+ *
  * For a need with n current facts, d of them due for a revisit and f fresh:
  *
  *  - strength is 1 when f meets `enough`; otherwise
@@ -83,18 +90,22 @@ export function readinessFor(
   entity: { fields: Readonly<Record<string, string | null>> },
   facts: Fact[],
   at: Date = new Date(),
+  knower: Fact[] = [],
 ): Readiness {
   const vocabulary = lens.vocabulary;
-  // One row per fact id, however the caller assembled the ledger.
-  const unique = [...new Map(facts.map((fact) => [fact.id, fact])).values()];
-  const current = unique.filter((fact) => !fact.expiredAt && !endedByDate(fact, at));
+  // One row per fact id, however the caller assembled the ledger; what is current at `at`.
+  const currentOf = (ledger: Fact[]) => [...new Map(ledger.map((fact) => [fact.id, fact])).values()].filter((fact) => !fact.expiredAt && !endedByDate(fact, at));
+  const ofEntity = currentOf(facts);
+  const ofKnower = currentOf(knower);
+  const pool = (about: Subject) => (about === "knower" ? ofKnower : ofEntity);
   const due = (fact: Fact) => isDueForRevisit(vocabulary, fact, at);
 
   const dimensions: DimensionEvidence[] = vocabulary.dimensions.map((dimension) => {
-    const held = current.filter((fact) => factType(vocabulary, fact.type).dimension === dimension.id).sort(newestSaidFirst);
+    const held = pool(dimension.about).filter((fact) => factType(vocabulary, fact.type).dimension === dimension.id).sort(newestSaidFirst);
     return {
       id: dimension.id,
       label: dimension.label,
+      about: dimension.about,
       facts: held.length,
       due: held.filter(due).length,
       lastSaidAt: held.length > 0 ? lastSaidOf(held[0]!) : null,
@@ -105,7 +116,7 @@ export function readinessFor(
   const applicable = lens.needs.filter((need) => applies(need, entity.fields));
   const heard = new Map(
     applicable.map((need) => {
-      const held = current.filter((fact) => counts(vocabulary, need, fact)).sort(newestSaidFirst);
+      const held = pool(need.about).filter((fact) => counts(vocabulary, need, fact)).sort(newestSaidFirst);
       return [need.id, { held, due: held.filter(due) }] as const;
     }),
   );
@@ -130,6 +141,7 @@ export function readinessFor(
     return {
       id: need.id,
       label: need.label,
+      about: need.about,
       dimension: need.dimension,
       types: [...need.types],
       weight: need.weight,
@@ -148,7 +160,7 @@ export function readinessFor(
     .filter((standing) => standing.state === "open" || standing.state === "thin" || standing.state === "due")
     .map((standing): Direction => {
       const value = round(standing.weight * (1 - exact.get(standing.id)!));
-      const about = { need: standing.id, label: standing.label, dimension: standing.dimension, types: [...standing.types], value };
+      const about = { need: standing.id, label: standing.label, about: standing.about, dimension: standing.dimension, types: [...standing.types], value };
       if (standing.state === "due") {
         const dueFacts = [...heard.get(standing.id)!.due].sort(oldestSaidFirst);
         return { kind: "revisit", ...about, factIds: dueFacts.map((fact) => fact.id) };
@@ -185,8 +197,9 @@ export function gapsFor(
   entity: { fields: Readonly<Record<string, string | null>> },
   facts: Fact[],
   at: Date = new Date(),
+  knower: Fact[] = [],
 ): Gap[] {
-  return readinessFor(lens, entity, facts, at)
+  return readinessFor(lens, entity, facts, at, knower)
     .next.filter((direction) => direction.kind === "learn")
-    .map(({ need, label, dimension, types }) => ({ need, label, dimension, types }));
+    .map(({ need, label, about, dimension, types }) => ({ need, label, about, dimension, types }));
 }

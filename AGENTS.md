@@ -16,14 +16,16 @@ knew.dev site. The Postgres service is `heymichaelp/knew-service`.
 - **knew reports understanding; it writes no questions.** Per entity and lens it gives the
   current understanding by dimension, the missing understanding (needs not met), and the next
   directions. Nothing in the package produces a question for the knower; what to do with a
-  direction is the client's call.
+  direction is the client's call. Understanding has three subjects: the entity, the relationship
+  with it (kept on the entity, one to each), and the knower (kept on `self`, the same beside every
+  entity). Keep the knower separate, and never move relationship facts off their entity.
 - **Nothing client-specific lives in the package.** The core ships no vocabulary and no lens: no
   fact type, no dimension, no heading, no charter. Vocabularies and lenses are data a client
   registers. The one exception is `@popjoker/knew/presets`: opt-in, generic starter vocabularies
   and lenses per kind (`person`, `place` and `product` today). A product's own content —
   knewpeople's `relationships` lens, Sweeket's gifting charter — stays in its repo, and
   `test/presets.test.ts` fails if any preset's type key appears in the core's code.
-  The site's worked example is the person preset; the fixture vocabulary and its two lenses in
+  The site's worked example is the person preset; the fixture vocabulary and its three lenses in
   `@popjoker/knew/testing` back the contract suite.
 - **Weights order directions; they never weigh what is believed.** Readiness ranks needs and
   revisits; it never reorders, filters or annotates a page, and a fact due for a revisit is still

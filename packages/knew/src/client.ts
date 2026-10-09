@@ -144,6 +144,7 @@ export function reviveReadiness(raw: Json): Readiness {
     dimensions: ((raw.dimensions as Json[]) ?? []).map((d) => ({
       id: String(d.id),
       label: String(d.label),
+      about: (d.about as Readiness["dimensions"][number]["about"] | undefined) ?? "entity",
       facts: Number(d.facts),
       due: Number(d.due),
       lastSaidAt: date(d.lastSaidAt),
@@ -365,6 +366,7 @@ export function intelligenceClient(options: IntelligenceClientOptions): Intellig
         unresolvedNames: (raw.unresolvedNames as string[]) ?? [],
         fieldUpdates: (raw.fieldUpdates as StatelessExtraction["fieldUpdates"]) ?? [],
         offRoster: Number(raw.offRoster ?? 0),
+        misattributed: Number(raw.misattributed ?? 0),
         droppedForCap: Number(raw.droppedForCap ?? 0),
         calls: (raw.calls as StatelessExtraction["calls"]) ?? [],
         promptVersions: raw.promptVersions as StatelessExtraction["promptVersions"],

@@ -20,17 +20,20 @@ describe("Scenario: A vocabulary is data a client registers, and extraction writ
   it("compiles a valid definition and reads its types and dimensions in order", () => {
     const vocabulary = fixtureVocabulary();
     assert.equal(vocabulary.kind, "person");
-    assert.deepEqual(vocabulary.factTypeKeys, ["LINE", "HAS", "SKILL", "LIKES", "EVENT", "CIRCUMSTANCE", "PERSON", "OTHER"]);
+    assert.deepEqual(vocabulary.factTypeKeys, ["LINE", "HAS", "SKILL", "LIKES", "EVENT", "CIRCUMSTANCE", "PERSON", "HISTORY", "MEANS", "OTHER"]);
     assert.deepEqual(
-      vocabulary.dimensions.map((d) => [d.id, d.label]),
+      vocabulary.dimensions.map((d) => [d.id, d.label, d.about]),
       [
-        ["never-cross", "Never cross"],
-        ["has", "Already has"],
-        ["likes", "Likes"],
-        ["life", "Life"],
-        ["people", "People"],
-        ["other", "Other"],
+        ["never-cross", "Never cross", "entity"],
+        ["has", "Already has", "entity"],
+        ["likes", "Likes", "entity"],
+        ["life", "Life", "entity"],
+        ["people", "People", "entity"],
+        ["between", "Between you", "relationship"],
+        ["means", "Your means", "knower"],
+        ["other", "Other", "entity"],
       ],
+      "a dimension is about the entity unless it says otherwise",
     );
     assert.equal(vocabulary.factTypes.LINE!.pinned, true);
     assert.equal(vocabulary.factTypes.LINE!.enduring, true);
@@ -39,9 +42,11 @@ describe("Scenario: A vocabulary is data a client registers, and extraction writ
     assert.deepEqual(vocabulary.extractAttributes.map((f) => f.name), ["level", "kind"]);
   });
 
-  it("renders the type list the prompt reads: one line per type, attributes named", () => {
+  it("renders the type list the prompt reads: one line per type, attributes named, and where a fact about the relationship or the knower attaches", () => {
     const list = factTypeVocabulary(fixtureVocabulary());
-    assert.equal(list.split("\n").length, 8);
+    assert.equal(list.split("\n").length, 10);
+    assert.ok(list.includes("- HISTORY: How the knower and they know each other. (About the relationship between the writer and an entry: attach it to that entry.)"));
+    assert.ok(list.includes("- MEANS: What the knower can spend or give. (About the writer: attach it to self.)"));
     assert.ok(list.includes("- SKILL: A pursuit with a depth claim. Attributes: level."));
     assert.ok(list.includes("- LIKES: An interest, with no claim about depth.\n"));
   });
@@ -80,7 +85,7 @@ describe("Scenario: A vocabulary is data a client registers, and extraction writ
     const glossary = factTypeGlossary(fixtureVocabulary());
     assert.deepEqual(glossary.SKILL, {
       description: "A pursuit with a depth claim.",
-      dimension: { id: "has", label: "Already has" },
+      dimension: { id: "has", label: "Already has", about: "entity" },
       pinned: false,
       enduring: true,
       revisitAfterDays: null,
