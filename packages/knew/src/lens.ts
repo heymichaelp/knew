@@ -1,7 +1,8 @@
 import { z } from "zod";
 import { ENGINE_DEFAULTS } from "./defaults.ts";
 import { FIELD_RE, ID_RE, KEY_RE } from "./patterns.ts";
-import { asFactType, factType, whoLabel, type Vocabulary } from "./vocabulary.ts";
+import type { Subject } from "./types.ts";
+import { asFactType, factType, subjectOf, whoLabel, type Vocabulary } from "./vocabulary.ts";
 
 /**
  * A LENS reads what is understood about an entity for one objective: the
@@ -191,8 +192,9 @@ export function lensProblems(definition: LensDefinition, vocabulary: Vocabulary)
     for (const dimension of placed) {
       if (!dimensions.has(dimension)) problems.push(`a section holds dimension ${dimension}, which the vocabulary does not have`);
     }
-    for (const dimension of dimensions.keys()) {
-      if (!placed.has(dimension)) problems.push(`dimension ${dimension} is in no section, so its facts would never be on the page`);
+    // The knower's dimensions are read beside every entity, and printed only where a lens places them.
+    for (const [id, dimension] of dimensions) {
+      if (dimension.about !== "knower" && !placed.has(id)) problems.push(`dimension ${id} is in no section, so its facts would never be on the page`);
     }
   }
   for (const type of definition.pinned ?? []) {
@@ -209,6 +211,8 @@ export function lensProblems(definition: LensDefinition, vocabulary: Vocabulary)
     for (const type of need.types ?? []) {
       if (!(type in vocabulary.factTypes)) problems.push(`need ${need.id} counts ${type}, which is not a fact type`);
     }
+    const subjects = new Set((need.types ?? []).filter((type) => type in vocabulary.factTypes).map((type) => subjectOf(vocabulary, type)));
+    if (subjects.size > 1) problems.push(`need ${need.id} counts types about the ${[...subjects].join(" and the ")}; a need is about one`);
     for (const clause of need.when ?? []) {
       if (!vocabulary.fields.includes(clause.field)) {
         problems.push(`need ${need.id} applies when ${clause.field} matches, which is not one of the vocabulary's fields`);
@@ -221,6 +225,8 @@ export function lensProblems(definition: LensDefinition, vocabulary: Vocabulary)
 export interface CompiledNeed {
   id: string;
   label: string;
+  /** What it is about: the entity, the relationship with it, or the knower, whose facts it counts. */
+  about: Subject;
   /** Its dimension, or null when it names its types. */
   dimension: string | null;
   /** The types whose facts count toward it: its own list, or every type in
@@ -261,12 +267,13 @@ export function compileLens(definition: LensDefinition, vocabulary: Vocabulary):
   if (problems.length > 0) throw new Error(`lens ${definition.id}@${definition.version}: ${problems.join("; ")}`);
   const sections: CompiledSection[] =
     definition.sections?.map((section) => ({ heading: section.heading, dimensions: [...section.dimensions] })) ??
-    vocabulary.dimensions.map((dimension) => ({ heading: dimension.label, dimensions: [dimension.id] }));
+    vocabulary.dimensions.filter((dimension) => dimension.about !== "knower").map((dimension) => ({ heading: dimension.label, dimensions: [dimension.id] }));
   const sectionOfDimension = new Map<string, number>();
   sections.forEach((section, index) => {
     for (const dimension of section.dimensions) sectionOfDimension.set(dimension, index);
   });
   const label = new Map(vocabulary.dimensions.map((d) => [d.id, d.label]));
+  const aboutOf = new Map(vocabulary.dimensions.map((d) => [d.id, d.about]));
   const typesIn = (dimension: string) => vocabulary.factTypeKeys.filter((key) => vocabulary.factTypes[key]!.dimension === dimension);
   const specs: NeedSpec[] = definition.needs ?? vocabulary.dimensions.map((dimension) => ({ id: dimension.id, dimension: dimension.id }));
   return {
@@ -285,6 +292,7 @@ export function compileLens(definition: LensDefinition, vocabulary: Vocabulary):
     needs: specs.map((need) => ({
       id: need.id,
       label: need.label ?? label.get(need.dimension!)!,
+      about: need.dimension ? aboutOf.get(need.dimension)! : subjectOf(vocabulary, need.types![0]!),
       dimension: need.dimension ?? null,
       types: need.types ? [...need.types] : typesIn(need.dimension!),
       when: (need.when ?? []).map((clause) => ({ field: clause.field, equals: [...clause.equals] })),

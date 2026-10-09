@@ -23,6 +23,13 @@ const HEADINGS = [
   { id: "extending-a-preset", text: "Extending a preset", level: 2 },
 ];
 
+/** Dimensions by what they are about, in this order. */
+const SUBJECTS = [
+  { about: "entity", heading: "About them" },
+  { about: "relationship", heading: "Between you" },
+  { about: "knower", heading: "About you" },
+] as const;
+
 function Row({ term, children }: { readonly term: string; readonly children: ReactNode }) {
   return (
     <div className="rule-t grid gap-x-6 gap-y-1 py-3 lg:grid-cols-[11rem_minmax(0,1fr)]">
@@ -48,31 +55,39 @@ function Preset({ outline, clause }: { readonly outline: PresetOutline; readonly
 
       <h3 className="display mt-10 text-xl">Dimensions</h3>
       <p className="measure mt-3 text-[0.9375rem] text-ink-soft">
-        Each dimension, in reading order, with the fact types that inform it. The flags are defined with{" "}
+        Each dimension, with the fact types that inform it: about them, about the two of you, and about you, the
+        knower, which is read beside every entity. The flags are defined with{" "}
         <TextLink href="/lenses#the-vocabulary">the vocabulary&apos;s fields</TextLink>.
       </p>
-      <div className="mt-6 space-y-8">
-        {dimensions.map((dimension) => (
-          <div key={dimension.id}>
-            <div className="flex flex-wrap items-baseline gap-x-3">
-              <h4 className="display text-lg">{dimension.label}</h4>
-              <code className="code text-[0.75rem] text-derived">{dimension.id}</code>
-            </div>
-            <div className="mt-2">
-              {dimension.types.map((type) => (
-                <div key={type.key} className="ledger-row">
-                  <span className="code text-[0.6875rem] tracking-[0.12em] text-stamp">{type.key}</span>
-                  <span className="text-[0.9375rem] leading-snug">
-                    {type.description}
-                    {type.attributes.length ? <span className="text-ink-faint"> {type.attributes.join(", ")}</span> : null}
-                  </span>
-                  <span className="text-[0.6875rem] italic text-ink-faint">{type.marks.join(" · ")}</span>
+      {SUBJECTS.filter(({ about }) => dimensions.some((dimension) => dimension.about === about)).map(({ about, heading }) => (
+        <div key={about} className="mt-8">
+          <p className="label">{heading}</p>
+          <div className="mt-4 space-y-8">
+            {dimensions
+              .filter((dimension) => dimension.about === about)
+              .map((dimension) => (
+                <div key={dimension.id}>
+                  <div className="flex flex-wrap items-baseline gap-x-3">
+                    <h4 className="display text-lg">{dimension.label}</h4>
+                    <code className="code text-[0.75rem] text-derived">{dimension.id}</code>
+                  </div>
+                  <div className="mt-2">
+                    {dimension.types.map((type) => (
+                      <div key={type.key} className="ledger-row">
+                        <span className="code text-[0.6875rem] tracking-[0.12em] text-stamp">{type.key}</span>
+                        <span className="text-[0.9375rem] leading-snug">
+                          {type.description}
+                          {type.attributes.length ? <span className="text-ink-faint"> {type.attributes.join(", ")}</span> : null}
+                        </span>
+                        <span className="text-[0.6875rem] italic text-ink-faint">{type.marks.join(" · ")}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               ))}
-            </div>
           </div>
-        ))}
-      </div>
+        </div>
+      ))}
 
       <h3 className="display mt-12 text-xl">Starter lens</h3>
       <p className="measure mt-3 text-[0.9375rem] text-ink-soft">

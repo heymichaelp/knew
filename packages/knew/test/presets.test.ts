@@ -37,16 +37,25 @@ const fact = (type: string, text: string, said: string): Fact => ({
 describe("Scenario: The person preset is a vocabulary and a lens a client can use as they stand", () => {
   const vocabulary = compileVocabulary(parseVocabularyDefinition(person.vocabulary()));
 
-  it("is a valid vocabulary of fourteen types across nine dimensions", () => {
+  it("is a valid vocabulary of seventeen types across twelve dimensions: about them, about the two of you, and about you", () => {
     assert.equal(vocabulary.kind, "person");
-    assert.equal(vocabulary.factTypeKeys.length, 14);
-    assert.deepEqual(vocabulary.dimensions.map((d) => d.id), ["avoid", "ahead", "life", "work", "people", "pursuits", "has", "background", "other"]);
+    assert.equal(vocabulary.factTypeKeys.length, 17);
+    assert.deepEqual(vocabulary.dimensions.map((d) => d.id), ["avoid", "ahead", "life", "work", "people", "pursuits", "has", "background", "between", "together", "you", "other"]);
+    assert.deepEqual(
+      vocabulary.dimensions.filter((d) => d.about !== "entity").map((d) => [d.id, d.about]),
+      [
+        ["between", "relationship"],
+        ["together", "relationship"],
+        ["you", "knower"],
+      ],
+    );
     assert.deepEqual(
       vocabulary.factTypeKeys.filter((key) => vocabulary.factTypes[key]!.revisitAfterDays !== null).map((key) => [key, vocabulary.factTypes[key]!.revisitAfterDays]),
       [
         ["CIRCUMSTANCE", 180],
         ["RITUAL", 365],
         ["WORK", 365],
+        ["COMMITMENT", 180],
       ],
     );
     assert.deepEqual(vocabulary.factTypeKeys.filter((key) => vocabulary.factTypes[key]!.pinned), ["AVOID", "HAS"]);
@@ -58,7 +67,7 @@ describe("Scenario: The person preset is a vocabulary and a lens a client can us
     const lens = compileLens(person.lens(), vocabulary);
     assert.equal(lens.objective, "Know them well enough to meet them well next time.");
     const readiness = readinessFor(lens, { fields: {} }, [], at("2026-10-05T00:00:00Z"));
-    assert.deepEqual(readiness.next.map((s) => s.need), ["work", "people", "life", "background", "pursuits", "ahead", "has", "avoid"]);
+    assert.deepEqual(readiness.next.map((s) => s.need), ["work", "people", "between", "life", "background", "pursuits", "ahead", "together", "has", "avoid"]);
     assert.deepEqual([readiness.next[0]!.kind, readiness.next[0]!.label], ["learn", "Work"]);
   });
 
@@ -75,6 +84,7 @@ describe("Scenario: The place and product presets stand as they are, as person d
       preset: place,
       types: 12,
       dimensions: ["caution", "what", "where", "when", "offer", "feel", "people", "history", "other"],
+      relationship: ["history"],
       windows: [["CAUTION", 365], ["HOURS", 30], ["BUSY", 90], ["OFFER", 180], ["PRICE", 365]],
       pinned: ["CAUTION"],
       first: "What it is",
@@ -82,19 +92,21 @@ describe("Scenario: The place and product presets stand as they are, as person d
     {
       preset: product,
       types: 9,
-      dimensions: ["caution", "what", "details", "standing", "origin", "care", "opinion", "other"],
+      dimensions: ["caution", "what", "details", "yours", "condition", "origin", "care", "opinion", "other"],
+      relationship: ["yours", "origin", "care", "opinion"],
       windows: [["OWNERSHIP", 365], ["CONDITION", 180], ["CARE", 365]],
       pinned: ["CAUTION"],
       first: "What it is",
     },
   ] as const;
 
-  for (const { preset, types, dimensions, windows, pinned, first } of cases) {
+  for (const { preset, types, dimensions, relationship, windows, pinned, first } of cases) {
     it(`is a valid ${preset.PRESET.id} vocabulary of ${types} types, with a starter lens that compiles against it and needs every dimension but the fallback's`, () => {
       const vocabulary = compileVocabulary(parseVocabularyDefinition(preset.vocabulary()));
       assert.deepEqual([vocabulary.id, vocabulary.version, vocabulary.kind], [preset.PRESET.id, 1, preset.PRESET.id]);
       assert.equal(vocabulary.factTypeKeys.length, types);
       assert.deepEqual(vocabulary.dimensions.map((d) => d.id), dimensions);
+      assert.deepEqual(vocabulary.dimensions.filter((d) => d.about === "relationship").map((d) => d.id), relationship, "what is about the knower's relationship with it");
       assert.deepEqual(
         vocabulary.factTypeKeys.filter((key) => vocabulary.factTypes[key]!.revisitAfterDays !== null).map((key) => [key, vocabulary.factTypes[key]!.revisitAfterDays]),
         windows,
@@ -195,7 +207,7 @@ describe("Scenario: A client extends a preset, saying only what differs", () => 
         context: { dimension: "context" },
       },
     });
-    assert.deepEqual(prep.needs!.map((a) => a.id), ["work", "people", "life", "background", "pursuits", "ahead", "has", "context"]);
+    assert.deepEqual(prep.needs!.map((a) => a.id), ["work", "people", "between", "life", "background", "pursuits", "ahead", "together", "has", "context"]);
     const lens = compileLens(prep, vocabulary);
     const facts = [fact("INTEREST", "Training for a marathon in October", "2026-09-01")];
     const readiness = readinessFor(lens, { fields: {} }, facts, at("2026-10-05T00:00:00Z"));
@@ -212,11 +224,11 @@ describe("Scenario: A client extends a preset, saying only what differs", () => 
     const weighted = extendLens(implicit, { id: "mine", version: 1, needs: { work: { weight: 3 }, other: { label: "Anything else?", dimension: "other" } } }, vocabulary);
     assert.deepEqual(
       weighted.needs!.map((a) => [a.id, a.weight ?? 1]),
-      [["avoid", 1], ["ahead", 1], ["life", 1], ["work", 3], ["people", 1], ["pursuits", 1], ["has", 1], ["background", 1], ["other", 1]],
+      [["avoid", 1], ["ahead", 1], ["life", 1], ["work", 3], ["people", 1], ["pursuits", 1], ["has", 1], ["background", 1], ["between", 1], ["together", 1], ["you", 1], ["other", 1]],
       "the defaults are written out, patched by id, and a new need goes last",
     );
     const fewer = extendLens(implicit, { id: "mine", version: 1, needs: { avoid: null } }, vocabulary);
-    assert.equal(fewer.needs!.length, 8, "dropping one default keeps the other eight");
+    assert.equal(fewer.needs!.length, 11, "dropping one default keeps the other eleven");
     assert.throws(() => extendLens(implicit, { id: "mine", version: 1, vocabulary: "elsewhere", needs: { work: { weight: 3 } } }, vocabulary), /reads vocabulary elsewhere/);
   });
 

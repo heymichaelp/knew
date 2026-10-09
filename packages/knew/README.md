@@ -1,7 +1,8 @@
 # @popjoker/knew
 
-knew models what someone understands about a person, place or thing as **dimensions** of
-understanding, built from what they write down. For a goal, it reports:
+knew models what someone understands about a person, place or thing, about their relationship
+with it, and about themselves, as **dimensions** of understanding built from what they write down.
+For a goal, it reports:
 
 - **Current understanding**: dated facts, by dimension.
 - **Missing understanding**: what the goal needs that is not yet known.

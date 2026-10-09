@@ -17,6 +17,12 @@ next direction. It writes no questions.
   understanding), `needs` (each with a state and a strength) and `next`: directions of kind
   `learn` or `revisit`, with `label`, `dimension`, `types`, `value` and `factIds`. `gapsFor` and
   `gaps()` return the `learn` directions. Fact types may set `revisitAfterDays`.
+- **Three subjects.** A dimension is `about` the entity, the relationship between the knower and
+  the entity (kept on the entity), or the knower (kept on `self`, `KNOWER_ID`, on every roster).
+  Extraction is shown the knower and where each type attaches, and attribution drops a fact filed
+  under the wrong subject (`misattributed`). Readiness, gaps and the page read the knower beside
+  every entity, and directions rank all three. The person preset has relationship and knower
+  dimensions; place and product mark the knower's relationship with them.
 - **Defaults and presets.** `ENGINE_DEFAULTS`; `extendVocabulary` and `extendLens`, which record
   `basedOn`; presets `person`, `place` and `product` in `./presets`.
 - **`Fact.lastSaidAt`**: the newest episode that said a fact. As-of reads withhold later

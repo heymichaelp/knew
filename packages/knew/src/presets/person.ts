@@ -5,8 +5,10 @@ import type { VocabularyDefinition } from "../vocabulary.ts";
  * A person, as anyone who keeps track of the people in their life would
  * carve them up: what to steer clear of, what is coming up, how their life is
  * arranged, their work, their people, what they love, what they already
- * have, where they are from. Generic on purpose — drawn from what the first
- * two products over people share, and named for neither.
+ * have, where they are from; how the two of you know each other and what is
+ * between you; and, about the knower, what shapes what they can do. Generic
+ * on purpose — drawn from what the first two products over people share, and
+ * named for neither.
  *
  * Revisit windows are set only where a fact plainly drifts unheard
  * (circumstances, standing habits, work); a client switches any off with
@@ -26,7 +28,7 @@ const CHARTER = `# What is worth keeping
 **Small talk yields nothing.** Returning no facts is a proper answer.
 `;
 
-/** The person vocabulary: fourteen types across nine dimensions. */
+/** The person vocabulary: seventeen types across twelve dimensions, two about the relationship and one about the knower. */
 export function vocabulary(): VocabularyDefinition {
   return {
     id: PRESET.id,
@@ -99,6 +101,20 @@ export function vocabulary(): VocabularyDefinition {
         dimension: "has",
         pinned: true,
       },
+      HISTORY: {
+        description: "How the knower and they know each other: how and when they met, how long, what they have been through together.",
+        dimension: "between",
+        enduring: true,
+      },
+      COMMITMENT: {
+        description: "Something between them now: a promise made, a favour owed, a plan they made together. Give the date when one was said.",
+        dimension: "together",
+        revisitAfterDays: 180,
+      },
+      CONSTRAINT: {
+        description: "Something about the knower that shapes what they can do for people: a budget, how far away they live, how much time they have.",
+        dimension: "you",
+      },
       ORIGIN: {
         description: "Where they are from or have lived: a hometown, a country, where they grew up or studied.",
         dimension: "background",
@@ -118,6 +134,9 @@ export function vocabulary(): VocabularyDefinition {
       pursuits: { label: "What they love" },
       has: { label: "Already has" },
       background: { label: "Background" },
+      between: { label: "How you know each other", about: "relationship" },
+      together: { label: "What's between you", about: "relationship" },
+      you: { label: "About you", about: "knower" },
       other: { label: "Other" },
     },
     fallbackType: "OTHER",
@@ -128,10 +147,10 @@ export function vocabulary(): VocabularyDefinition {
 
 /**
  * The starter lens: know them well enough to meet them well next time. Its
- * needs run coarse to fine: work, people, how life is arranged, where they
- * are from, then what they love, what is coming up, what they have, and what
- * to steer clear of. Every need weighs the same, so that is the order of the
- * directions.
+ * needs run coarse to fine: work, people, how you know each other, how life
+ * is arranged, where they are from, then what they love, what is coming up,
+ * what is between you, what they have, and what to steer clear of. Every need
+ * weighs the same, so that is the order of the directions.
  */
 export function lens(): LensDefinition {
   return {
@@ -142,6 +161,6 @@ export function lens(): LensDefinition {
     header: "What you know about {who}:",
     overHeading: "No longer the case",
     attributeTags: ["level"],
-    needs: ["work", "people", "life", "background", "pursuits", "ahead", "has", "avoid"].map((dimension) => ({ id: dimension, dimension })),
+    needs: ["work", "people", "between", "life", "background", "pursuits", "ahead", "together", "has", "avoid"].map((dimension) => ({ id: dimension, dimension })),
   };
 }

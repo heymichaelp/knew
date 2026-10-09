@@ -2,6 +2,7 @@ import { dayOf, monthOf } from "./dates.ts";
 import { ENGINE_DEFAULTS } from "./defaults.ts";
 import { briefHeader, isPinnedFactType, sectionIndexOf, type Lens } from "./lens.ts";
 import type { Fact, MustHonor } from "./types.ts";
+import { factType } from "./vocabulary.ts";
 
 /**
  * The brief: everything known about one entity, as the page a reader starts
@@ -38,7 +39,11 @@ export interface BriefInput {
   entity: { name: string; fields: Readonly<Record<string, string | null>> };
   /** The living profile; "" when there is none (or for an as-of brief). */
   summary: string;
+  /** What is known about the entity and about the relationship with it. */
   facts: Fact[];
+  /** What is known about the knower: printed only in sections the lens gives
+   *  the knower's dimensions. Alone, it makes no page. */
+  knower?: Fact[];
   maxChars?: number;
   /** The moment the page describes; default now. A fact whose end date
    *  (`invalidAt`) has passed by then is over, even if nobody said so. */
@@ -69,8 +74,10 @@ export function renderBrief(lens: Lens, input: BriefInput): string | null {
   // Facts past their own end date leave the sections — printed among what is
   // true, a reader took "in Lisbon (until 2026-11)" as a current fact — and
   // are listed last, as context, only if there is room.
-  const over = input.facts.filter((fact) => endedByDate(fact, at));
-  const facts = input.facts.filter((fact) => !endedByDate(fact, at));
+  const placed = (fact: Fact) => lens.sectionOfDimension.has(factType(lens.vocabulary, fact.type).dimension);
+  const all = [...input.facts, ...(input.knower ?? []).filter(placed)];
+  const over = all.filter((fact) => endedByDate(fact, at));
+  const facts = all.filter((fact) => !endedByDate(fact, at));
 
   const header = briefHeader(lens, input.entity);
   const opening = summary ? `${header}\n\n${summary.slice(0, Math.floor(maxChars / 2))}` : header;
@@ -111,15 +118,16 @@ export function renderBrief(lens: Lens, input: BriefInput): string | null {
   });
   const overLines = over.filter((fact) => chosen.has(fact.id)).sort(newestFirst).map(line);
   if (overLines.length > 0) blocks.push(`${lens.overHeading}:\n${overLines.join("\n")}`);
-  const left = input.facts.length - chosen.size;
+  const left = all.length - chosen.size;
   if (left > 0) blocks.push(`(+${left} older fact${left === 1 ? "" : "s"} not shown)`);
   return blocks.join("\n\n");
 }
 
-/** The pinned facts among what is believed at `at`: what a reader must honor
- *  rather than weigh. */
-export function mustHonorFrom(lens: Lens, facts: Fact[], at: Date = new Date()): MustHonor[] {
-  return facts
+/** The pinned facts among what is believed at `at`, about the entity, the
+ *  relationship and the knower: what a reader must honor rather than weigh.
+ *  "I don't drink" is honored on every plan. */
+export function mustHonorFrom(lens: Lens, facts: Fact[], at: Date = new Date(), knower: Fact[] = []): MustHonor[] {
+  return [...facts, ...knower]
     .filter((fact) => isPinnedFactType(lens, fact.type) && !endedByDate(fact, at))
     .map((fact) => ({ type: fact.type, fact: fact.fact }));
 }

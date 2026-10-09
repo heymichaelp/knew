@@ -1,6 +1,6 @@
 import { dayOf } from "./dates.ts";
 import type { Fact, RosterEntry } from "./types.ts";
-import { whoLabel, type Vocabulary } from "./vocabulary.ts";
+import { KNOWER_ID, whoLabel, type Vocabulary } from "./vocabulary.ts";
 
 /**
  * What the two model calls are shown — pure, so what the model sees is
@@ -23,10 +23,14 @@ export function extractInput(
     hints: readonly string[];
   },
 ): string {
+  // The knower is always on the list, first: what the person writing says about themselves attaches there.
+  const knower = input.roster.find((entry) => entry.id === KNOWER_ID);
+  const others = input.roster.filter((entry) => entry.id !== KNOWER_ID);
+  const knowerLine = `- id: ${KNOWER_ID} | name: ${knower?.name ?? "the person writing"} (the person writing: "I", "me", "my")`;
   const roster =
-    input.roster.length === 0
-      ? "(none yet — everything mentioned is unresolved)"
-      : input.roster
+    others.length === 0
+      ? `${knowerLine}\n(no other entries yet — anyone or anything else mentioned is unresolved)`
+      : [knowerLine, ...others
           .map((entry) => {
             const parts = [`id: ${entry.id}`, `name: ${entry.name}`];
             for (const field of vocabulary.promptFields) {
@@ -36,12 +40,11 @@ export function extractInput(
             if (entry.aliases.length > 0) parts.push(`also called: ${entry.aliases.join(", ")}`);
             const hinted = input.hints.includes(entry.id) ? " (recorded about them)" : "";
             return `- ${parts.join(" | ")}${hinted}`;
-          })
-          .join("\n");
+          })].join("\n");
   return [
     `Today (when this was said): ${dayOf(input.referenceAt)}`,
     `Where it came from: ${vocabulary.sourceLabels[input.source] ?? input.source}`,
-    `The entries on their list, each of kind "${vocabulary.kind}" (attach facts only to these ids):\n${roster}`,
+    `The entries on their list: the person writing, then each of kind "${vocabulary.kind}" (attach facts only to these ids):\n${roster}`,
     // THE QUESTION THEY WERE ANSWERING, when this is a reply — quoted apart
     // and labelled, because it is the client's wording, not testimony: it
     // tells the model what the answer is about and is never itself a fact.

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import type { ReconcileDecisions } from "./reconcile.ts";
 import type { Extraction } from "./schemas.ts";
 import type { Fact, Gap, Intelligence, IntelligenceScope, NewFact, Readiness } from "./types.ts";
+import { KNOWER_ID } from "./vocabulary.ts";
 
 /**
  * The contract, as tests. Every driver of `Intelligence` — the service's Postgres driver, the
@@ -10,7 +11,7 @@ import type { Fact, Gap, Intelligence, IntelligenceScope, NewFact, Readiness } f
  *
  * A driver's test file supplies `open`: a fresh, empty pair of scopes under one client whose
  * vocabulary is `fixtureVocabularyDefinition()` and whose lenses are `fixtureLensDefinition()`
- * (the default) and `fixtureVisitLensDefinition()`, and a way to tell the engine what the next
+ * (the default), `fixtureVisitLensDefinition()` and `fixtureGiftLensDefinition()`, and a way to tell the engine what the next
  * extraction finds when the driver has one (a scripted model behind the service; the fake's own
  * script). Without a script, the cases that need facts are withheld rather than run: a driver
  * that can extract nothing can still prove its roster, its episodes, its scopes and its
@@ -246,6 +247,8 @@ export function contractCases(): ContractCase[] {
           ["likes", 0, 0, null],
           ["life", 0, 0, null],
           ["people", 0, 0, null],
+          ["between", 0, 0, null],
+          ["means", 0, 0, null],
           ["other", 0, 0, null],
         ]);
 
@@ -554,6 +557,80 @@ export function contractCases(): ContractCase[] {
         assert.ok((await i.brief(scope, "linda"))!.text.includes("Moved to Denver"));
         await i.resolveProposal(scope, proposals[0]!.id, "accepted");
         assert.equal((await i.listProposals(scope, { status: "accepted" })).length, 1);
+      },
+    },
+    {
+      name: "the knower is on every roster: read with no facts until something is said, named by the client, never read through a lens",
+      scripted: false,
+      async run({ intelligence: i, scope }) {
+        const knower = await i.getEntity(scope, KNOWER_ID);
+        assert.deepEqual([knower?.id, knower?.kind, knower?.facts], [KNOWER_ID, "knower", []], "on every roster from the start");
+        assert.equal(await i.readiness(scope, KNOWER_ID), null, "read beside every entity, never through a lens of their own");
+        assert.equal(await i.gaps(scope, KNOWER_ID), null);
+        await i.upsertEntity(scope, { id: KNOWER_ID, name: "Ana" });
+        assert.equal((await i.getEntity(scope, KNOWER_ID))?.name, "Ana", "the client may name them");
+        await assert.rejects(i.upsertEntity(scope, { id: KNOWER_ID, name: "Ana", kind: "person" }), "the knower is not of the vocabulary's kind");
+      },
+    },
+    {
+      name: "one note, three subjects: about the writer goes on the knower, about the relationship and about the person go on the person, and a misattributed fact is dropped",
+      scripted: true,
+      async run({ intelligence: i, scope, script }) {
+        await i.upsertEntity(scope, { id: "linda", name: "Linda" });
+        await i.addEpisode(scope, { source: "note", sourceRef: "n-1", content: "I can spend about £40 on Mom. She raised me. She loves gardening.", entityHints: ["linda"], extract: "inline" });
+        script!({
+          extraction: extraction([
+            extracted(KNOWER_ID, "MEANS", "Can spend about £40"),
+            extracted("linda", "HISTORY", "Raised the knower"),
+            extracted("linda", "LIKES", "Gardening"),
+            extracted("linda", "MEANS", "A budget, filed under the person"),
+            extracted(KNOWER_ID, "LIKES", "A taste, filed under the knower"),
+          ]),
+        });
+        const now = await i.extractNow(scope, { maxEpisodes: 1 });
+        const done = now.episodes[0]!;
+        assert.equal(done.status, "ingested");
+        if (done.status === "ingested") assert.equal(done.misattributed, 2, "a fact about the knower on the person, and one about the person on the knower");
+        assert.deepEqual((await i.getEntity(scope, KNOWER_ID))!.facts.map((f) => f.fact), ["Can spend about £40"]);
+        assert.deepEqual((await i.getEntity(scope, "linda"))!.facts.map((f) => f.fact).sort(), ["Gardening", "Raised the knower"]);
+      },
+    },
+    {
+      name: "what is known about the knower counts beside every entity: a need about the knower met once is met for all, and directions rank all three subjects",
+      scripted: true,
+      async run({ intelligence: i, scope, script }) {
+        await i.upsertEntity(scope, { id: "linda", name: "Linda" });
+        await i.upsertEntity(scope, { id: "al", name: "Al" });
+        await i.addEpisode(scope, { source: "note", sourceRef: "n-1", content: "I can spend about £40 on presents this year.", extract: "inline" });
+        script!({ extraction: extraction([extracted(KNOWER_ID, "MEANS", "Can spend about £40")]) });
+        assert.equal((await i.extractNow(scope, { maxEpisodes: 1 })).outcome, "extracted");
+        for (const id of ["linda", "al"]) {
+          const gift = (await i.readiness(scope, id, { lens: "fixture-gift" }))!;
+          assert.deepEqual(
+            gift.needs.map((n) => [n.id, n.about, n.state]),
+            [
+              ["what-they-love", "entity", "open"],
+              ["how-you-know-them", "relationship", "open"],
+              ["what-you-can-spend", "knower", "met"],
+            ],
+            `${id}: the knower's budget is known for everyone`,
+          );
+          assert.deepEqual(gift.next.map((d) => [d.kind, d.need, d.about]), [["learn", "what-they-love", "entity"], ["learn", "how-you-know-them", "relationship"]]);
+          assert.deepEqual(gift.dimensions.filter((d) => d.facts > 0).map((d) => [d.id, d.about, d.facts]), [["means", "knower", 1]]);
+        }
+      },
+    },
+    {
+      name: "a page prints what is known about the knower only where its lens gives the knower a section",
+      scripted: true,
+      async run({ intelligence: i, scope, script }) {
+        await i.upsertEntity(scope, { id: "linda", name: "Linda" });
+        await i.addEpisode(scope, { source: "note", sourceRef: "n-1", content: "Mom loves gardening; I can spend about £40.", entityHints: ["linda"], extract: "inline" });
+        script!({ extraction: extraction([extracted("linda", "LIKES", "Gardening"), extracted(KNOWER_ID, "MEANS", "Can spend about £40")]) });
+        assert.equal((await i.extractNow(scope, { maxEpisodes: 1 })).outcome, "extracted");
+        const gift = (await i.brief(scope, "linda", { lens: "fixture-gift" }))!;
+        assert.ok(gift.text.includes("You:\n- Can spend about £40"), gift.text);
+        assert.ok(!(await i.brief(scope, "linda"))!.text.includes("£40"), "the default lens gives the knower no section");
       },
     },
   ];

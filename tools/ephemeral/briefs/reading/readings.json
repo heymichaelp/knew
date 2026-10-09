@@ -11,36 +11,22 @@
       }
     ]
   },
-  "11897efda828faf3a51494ddae28fd150faf279672250934515f576f47d1a856": {
+  "0ff31c88e89dc437d74cf4f6ef98459f8c58cebe0c3ca5183c33566ffac92c2e": {
     "decisions": [
       {
         "newIndex": 0,
-        "action": "supersede",
+        "action": "merge",
         "factId": "00000000-0000-4000-a000-000000000001",
         "invalidAt": null
-      }
-    ],
-    "summary": "Bar Nine opens at 10 and closes at 6, as of the latest hours given on 2026-05-27. Earlier, on 2026-05-12, it was said to be open 8am to 6pm every day."
-  },
-  "174825471e48fae3e571df15659dd62f5d57b557417ab757e7ebc68dad186b2e": {
-    "facts": [
+      },
       {
-        "entityId": "luna",
-        "type": "KIND",
-        "fact": "Is a café",
-        "attributes": null,
-        "validAt": null,
+        "newIndex": 1,
+        "action": "merge",
+        "factId": "00000000-0000-4000-a000-000000000002",
         "invalidAt": null
       }
     ],
-    "aliases": [
-      {
-        "entityId": "luna",
-        "alias": "Luna"
-      }
-    ],
-    "unresolvedNames": [],
-    "fieldUpdates": []
+    "summary": "Café Luna is a café with a reading room upstairs."
   },
   "273f251bbf2bc209fcff594a038da37f27726764ecba3ea8440489e63ed70df9": {
     "statements": [
@@ -62,26 +48,6 @@
       }
     ]
   },
-  "2a38da7542d3f2c8538673a91d7fa414cdf173bdf1877cf065660a09208ecc57": {
-    "facts": [
-      {
-        "entityId": "luna",
-        "type": "KIND",
-        "fact": "Is a café",
-        "attributes": null,
-        "validAt": null,
-        "invalidAt": null
-      }
-    ],
-    "aliases": [
-      {
-        "entityId": "luna",
-        "alias": "Luna"
-      }
-    ],
-    "unresolvedNames": [],
-    "fieldUpdates": []
-  },
   "2ce22f4602530e9f2491a312609856d5bb1e6e0b81fecb36e6a583888971026e": {
     "statements": [
       {
@@ -102,41 +68,6 @@
       }
     ]
   },
-  "2deeca6071d25196756cdcbd5f86d561bfca26d3452aa00653fb4c345e6c51a7": {
-    "facts": [
-      {
-        "entityId": "luna",
-        "type": "ORDER",
-        "fact": "Dumpling pop-up on Fridays",
-        "attributes": null,
-        "validAt": null,
-        "invalidAt": "2026-03-01"
-      }
-    ],
-    "aliases": [],
-    "unresolvedNames": [],
-    "fieldUpdates": []
-  },
-  "326843c700d45789dfec3ab221a6b342222a7e6115a2633a565db5d0db5d8842": {
-    "facts": [
-      {
-        "entityId": "luna",
-        "type": "ORDER",
-        "fact": "Serves wine and small plates in the evenings",
-        "attributes": null,
-        "validAt": null,
-        "invalidAt": null
-      }
-    ],
-    "aliases": [
-      {
-        "entityId": "luna",
-        "alias": "Luna"
-      }
-    ],
-    "unresolvedNames": [],
-    "fieldUpdates": []
-  },
   "36c66d45dd723a26e0bf9a98ae38c1d5e032c393ae8410bab765d3292e2880ea": {
     "statements": [
       {
@@ -149,89 +80,6 @@
       }
     ]
   },
-  "381a0a9b3b01229b8f1b1f60154557aa57bde4333ccc29f2f6c950c0a8513c3b": {
-    "facts": [
-      {
-        "entityId": "nine",
-        "type": "KIND",
-        "fact": "Is a wine bar, not a cocktail bar",
-        "attributes": null,
-        "validAt": null,
-        "invalidAt": null
-      }
-    ],
-    "aliases": [
-      {
-        "entityId": "nine",
-        "alias": "Nine"
-      }
-    ],
-    "unresolvedNames": [],
-    "fieldUpdates": []
-  },
-  "38ef00ae151d5722a2067afbc31332de92ab16058bcab7079e455180435961b4": {
-    "facts": [
-      {
-        "entityId": "luna",
-        "type": "KIND",
-        "fact": "Is a café",
-        "attributes": null,
-        "validAt": null,
-        "invalidAt": null
-      },
-      {
-        "entityId": "luna",
-        "type": "VIBE",
-        "fact": "Has a reading room upstairs",
-        "attributes": null,
-        "validAt": null,
-        "invalidAt": null
-      }
-    ],
-    "aliases": [],
-    "unresolvedNames": [],
-    "fieldUpdates": []
-  },
-  "413cbb4c5762444d0204741efa6e693160b6f167486264dfd4b2adb24d2c247e": {
-    "facts": [
-      {
-        "entityId": "luna",
-        "type": "KIND",
-        "fact": "Is a café",
-        "attributes": null,
-        "validAt": null,
-        "invalidAt": null
-      }
-    ],
-    "aliases": [
-      {
-        "entityId": "luna",
-        "alias": "Luna"
-      }
-    ],
-    "unresolvedNames": [],
-    "fieldUpdates": []
-  },
-  "43f5d22010c858696c656a807f47d4876cae20251d9ffff54fad4ea8f94be00b": {
-    "facts": [
-      {
-        "entityId": "nine",
-        "type": "KIND",
-        "fact": "Is a cocktail bar",
-        "attributes": null,
-        "validAt": null,
-        "invalidAt": null
-      }
-    ],
-    "aliases": [
-      {
-        "entityId": "nine",
-        "alias": "Nine"
-      }
-    ],
-    "unresolvedNames": [],
-    "fieldUpdates": []
-  },
   "544a71ff012c0fcd0693e45ac1ccc2feebbbe21ba3da18bede6c70a0a2161f7a": {
     "decisions": [
       {
@@ -241,7 +89,27 @@
         "invalidAt": null
       }
     ],
-    "summary": "Bar Nine is a wine bar. It was earlier noted as a cocktail bar (told 2026-05-12), but that was corrected on 2026-05-30."
+    "summary": "Bar Nine is a wine bar. It was previously noted as a cocktail bar (told 2026-05-12), but this was corrected on 2026-05-30."
+  },
+  "5eafd3aa398a4a37515b251cccaf821a616ece6ba086fdb355999f28e1a36190": {
+    "facts": [
+      {
+        "entityId": "nine",
+        "type": "VIBE",
+        "fact": "Gets really loud after ten",
+        "attributes": null,
+        "validAt": null,
+        "invalidAt": null
+      }
+    ],
+    "aliases": [
+      {
+        "entityId": "nine",
+        "alias": "Nine"
+      }
+    ],
+    "unresolvedNames": [],
+    "fieldUpdates": []
   },
   "6799cac795b785a9f64a7c21dc34500e8c9f4713442372a5d4cfc4927876f574": {
     "statements": [
@@ -267,17 +135,6 @@
       }
     ]
   },
-  "7a100a133594b31dbc202ef2af08e8c5adee63f6ca252d39d5431d40610d65e0": {
-    "decisions": [
-      {
-        "newIndex": 0,
-        "action": "add",
-        "factId": null,
-        "invalidAt": null
-      }
-    ],
-    "summary": "Café Luna is a café. In the evenings it serves wine and small plates."
-  },
   "82b2f9d2aa0674c3bf76f31bb8eb6d3e23474139ac738719574527ff2e38309d": {
     "statements": [
       {
@@ -302,23 +159,41 @@
       }
     ]
   },
-  "870b742e85283cfbf490eb1f7fa9c0fd8ad6e29362326d37ae047b6f241b3c1f": {
+  "958d6807ef3884a9ef586be68aa167528901ae70f9c915490a0cec838afbe4f9": {
+    "facts": [
+      {
+        "entityId": "nine",
+        "type": "HOURS",
+        "fact": "Open 8am to 6pm every day",
+        "attributes": null,
+        "validAt": null,
+        "invalidAt": null
+      }
+    ],
+    "aliases": [],
+    "unresolvedNames": [],
+    "fieldUpdates": []
+  },
+  "ac2e603c26e9b7361250d206405caf5a9d2382a9f6d4d50942f9783732a26a21": {
+    "decisions": [
+      {
+        "newIndex": 0,
+        "action": "add",
+        "factId": null,
+        "invalidAt": null
+      }
+    ],
+    "summary": "Bar Nine is quiet and calm before eight, good for a proper chat, but gets really loud after ten (as of late May 2026)."
+  },
+  "ad0fdc639e7e7fee54f30c90e123d310be27583238a262d011bbb0d754bcf02e": {
     "facts": [
       {
         "entityId": "luna",
-        "type": "KIND",
-        "fact": "A café",
+        "type": "ORDER",
+        "fact": "Dumpling pop-up on Fridays",
         "attributes": null,
         "validAt": null,
-        "invalidAt": null
-      },
-      {
-        "entityId": "luna",
-        "type": "VIBE",
-        "fact": "Has a reading room upstairs",
-        "attributes": null,
-        "validAt": null,
-        "invalidAt": null
+        "invalidAt": "2026-03-01"
       }
     ],
     "aliases": [
@@ -327,38 +202,6 @@
         "alias": "Luna"
       }
     ],
-    "unresolvedNames": [],
-    "fieldUpdates": []
-  },
-  "94a6eb8a6edefae8ac70c6891689a66ed3bd3e081c5193c619e9960f834d136c": {
-    "decisions": [
-      {
-        "newIndex": 0,
-        "action": "merge",
-        "factId": "00000000-0000-4000-a000-000000000001",
-        "invalidAt": null
-      },
-      {
-        "newIndex": 1,
-        "action": "merge",
-        "factId": "00000000-0000-4000-a000-000000000002",
-        "invalidAt": null
-      }
-    ],
-    "summary": "Café Luna is a café with a reading room upstairs."
-  },
-  "a51e673c49c87a525534cee7dd76b837617468e34fe4403af43e66782598db3d": {
-    "facts": [
-      {
-        "entityId": "nine",
-        "type": "HOURS",
-        "fact": "Opens at 10 and closes at 6",
-        "attributes": null,
-        "validAt": null,
-        "invalidAt": null
-      }
-    ],
-    "aliases": [],
     "unresolvedNames": [],
     "fieldUpdates": []
   },
@@ -386,12 +229,20 @@
       }
     ]
   },
-  "ba92a9ae0a7039119bfac88d640b92e2a8a5761249542bdcf194f1aca95d40b6": {
+  "b32d1851198d8fee7dceb46aea63b5d3c6d8f973044b98e2b99e20696432782b": {
     "facts": [
       {
-        "entityId": "nine",
+        "entityId": "luna",
+        "type": "KIND",
+        "fact": "A café",
+        "attributes": null,
+        "validAt": null,
+        "invalidAt": null
+      },
+      {
+        "entityId": "luna",
         "type": "VIBE",
-        "fact": "Gets really loud after ten at night",
+        "fact": "Has a reading room upstairs",
         "attributes": null,
         "validAt": null,
         "invalidAt": null
@@ -399,30 +250,58 @@
     ],
     "aliases": [
       {
-        "entityId": "nine",
-        "alias": "Nine"
+        "entityId": "luna",
+        "alias": "Luna"
       }
     ],
     "unresolvedNames": [],
     "fieldUpdates": []
   },
-  "be6a7e2007ba80f74b50030cd35f3f310eabdebbe7a3cb394199eb1007212541": {
+  "b3c5e6a027f5769578f7d13c6bf49edc7da51b44f701618c6479c1228f6f167f": {
     "decisions": [
       {
         "newIndex": 0,
-        "action": "add",
-        "factId": null,
+        "action": "supersede",
+        "factId": "00000000-0000-4000-a000-000000000001",
         "invalidAt": null
       }
     ],
-    "summary": "Bar Nine is a bar with two distinct moods. It is calm and quiet before eight in the evening, good for a proper chat, and gets really loud after ten at night (noted May 2026)."
+    "summary": "Bar Nine is open from 10am to 6pm, as of what was said on 2026-05-27. This replaced the earlier note of 8am to 6pm every day."
   },
-  "cde443c5fced812311dab41d9932d62e541603db67cfb811789884a9684aa854": {
+  "bdcc641eb89e602fbc86e6d7772180c90d7dcea9947416f843d0fa48e61bb759": {
     "facts": [
       {
-        "entityId": "nine",
-        "type": "HOURS",
-        "fact": "Open 8am to 6pm every day",
+        "entityId": "luna",
+        "type": "ORDER",
+        "fact": "Does wine and small plates in the evenings",
+        "attributes": null,
+        "validAt": null,
+        "invalidAt": null
+      }
+    ],
+    "aliases": [
+      {
+        "entityId": "luna",
+        "alias": "Luna"
+      }
+    ],
+    "unresolvedNames": [],
+    "fieldUpdates": []
+  },
+  "bf95f77c48186415a259c476659e3bda5cb1885ec11c2f14675ffe5971330628": {
+    "facts": [
+      {
+        "entityId": "luna",
+        "type": "KIND",
+        "fact": "A café",
+        "attributes": null,
+        "validAt": null,
+        "invalidAt": null
+      },
+      {
+        "entityId": "luna",
+        "type": "VIBE",
+        "fact": "Has a reading room upstairs",
         "attributes": null,
         "validAt": null,
         "invalidAt": null
@@ -430,6 +309,43 @@
     ],
     "aliases": [],
     "unresolvedNames": [],
+    "fieldUpdates": []
+  },
+  "c35b4aa3eb5427281585d86e90ad01359aec12457197ff5c7f83585ecfca0332": {
+    "facts": [
+      {
+        "entityId": "luna",
+        "type": "KIND",
+        "fact": "Is a café",
+        "attributes": null,
+        "validAt": null,
+        "invalidAt": null
+      }
+    ],
+    "aliases": [
+      {
+        "entityId": "luna",
+        "alias": "Luna"
+      }
+    ],
+    "unresolvedNames": [],
+    "fieldUpdates": []
+  },
+  "c4d7343b3b53b3ef94518412eaba778e668b003f583eb46690649389c8c8800f": {
+    "facts": [
+      {
+        "entityId": "luna",
+        "type": "KIND",
+        "fact": "Is a café",
+        "attributes": null,
+        "validAt": null,
+        "invalidAt": null
+      }
+    ],
+    "aliases": [],
+    "unresolvedNames": [
+      "The shop on the corner"
+    ],
     "fieldUpdates": []
   },
   "d294c75cfb23efc97356971b39807ac768137ab210a3ee7d0731856402a22acf": {
@@ -444,19 +360,38 @@
       }
     ]
   },
-  "e4466b75f0ebc6df04ddbc0fc6c35fa7742984cf7a51afaf3111978cd4c55cca": {
-    "statements": [
+  "d47e3e3fa124d7543140e7a67ae054e5f57eeabb6c78a97a7696dbd0f3fa2b44": {
+    "decisions": [
       {
-        "placeId": "nine",
-        "topic": "HOURS",
-        "text": "Open 8am to 6pm every day",
-        "until": null,
-        "replaces": null,
-        "repeats": null
+        "newIndex": 0,
+        "action": "add",
+        "factId": null,
+        "invalidAt": null
       }
-    ]
+    ],
+    "summary": "Café Luna is a café. In the evenings it does wine and small plates."
   },
-  "f8fc3414536ca38bf52da1da59a5a665d32a2ceb02f9cdde4a444101c0fda500": {
+  "d4a1c26c40f791b0154e92fd2e436323e2b701eb0c929c48f15099aec085985b": {
+    "facts": [
+      {
+        "entityId": "nine",
+        "type": "KIND",
+        "fact": "Is a wine bar, not a cocktail bar",
+        "attributes": null,
+        "validAt": null,
+        "invalidAt": null
+      }
+    ],
+    "aliases": [
+      {
+        "entityId": "nine",
+        "alias": "Nine"
+      }
+    ],
+    "unresolvedNames": [],
+    "fieldUpdates": []
+  },
+  "e04ae5ff2b02be17156715ec6313d483e93845d140803b7c2af615be1199ef2e": {
     "facts": [
       {
         "entityId": "nine",
@@ -476,20 +411,79 @@
     "unresolvedNames": [],
     "fieldUpdates": []
   },
+  "e0e3810d02f3f6895e8a16644e6b2b5982ec2d430e8d37c87e29112153d3132c": {
+    "facts": [
+      {
+        "entityId": "nine",
+        "type": "HOURS",
+        "fact": "Opens at 10 and closes at 6.",
+        "attributes": null,
+        "validAt": null,
+        "invalidAt": null
+      }
+    ],
+    "aliases": [],
+    "unresolvedNames": [],
+    "fieldUpdates": []
+  },
+  "e4466b75f0ebc6df04ddbc0fc6c35fa7742984cf7a51afaf3111978cd4c55cca": {
+    "statements": [
+      {
+        "placeId": "nine",
+        "topic": "HOURS",
+        "text": "Open 8am to 6pm every day",
+        "until": null,
+        "replaces": null,
+        "repeats": null
+      }
+    ]
+  },
+  "e6f3e2faddf1e24eba9db97ceffae3baae9345739906a410437adbd9b687a874": {
+    "facts": [
+      {
+        "entityId": "nine",
+        "type": "KIND",
+        "fact": "Is a cocktail bar",
+        "attributes": null,
+        "validAt": null,
+        "invalidAt": null
+      }
+    ],
+    "aliases": [
+      {
+        "entityId": "nine",
+        "alias": "Nine"
+      }
+    ],
+    "unresolvedNames": [],
+    "fieldUpdates": []
+  },
+  "e782ee08deeda58ea18e526de1c1120973475efc6dfa879187d91519a166eb17": {
+    "facts": [
+      {
+        "entityId": "luna",
+        "type": "KIND",
+        "fact": "Is a café",
+        "attributes": null,
+        "validAt": null,
+        "invalidAt": null
+      }
+    ],
+    "aliases": [
+      {
+        "entityId": "luna",
+        "alias": "Luna"
+      }
+    ],
+    "unresolvedNames": [],
+    "fieldUpdates": []
+  },
   "fd0dc734ef94030aa72cf1eb5cb6892ec8b0df87bbe809e23c4df7f3bb305d8b": {
     "statements": [
       {
         "placeId": "luna",
         "topic": "ORDER",
         "text": "Wine and small plates in the evenings.",
-        "until": null,
-        "replaces": null,
-        "repeats": null
-      },
-      {
-        "placeId": "luna",
-        "topic": "HOURS",
-        "text": "Open in the evenings now.",
         "until": null,
         "replaces": null,
         "repeats": null

@@ -4,7 +4,7 @@ import { compileLens, type Lens, type LensDefinition } from "./lens.ts";
 import { gapsFor, readinessFor } from "./readiness.ts";
 import { attributeFacts, cleanProposals, orderEntities, planReconciliation } from "./reconcile.ts";
 import type { Entity, Episode, EpisodeOutcome, Fact, Intelligence, IntelligenceScope, NewFact, Proposal, ReconciliationPlan } from "./types.ts";
-import { compileVocabulary, parseFactAttributes, type Vocabulary, type VocabularyDefinition } from "./vocabulary.ts";
+import { compileVocabulary, KNOWER_ID, parseFactAttributes, subjectOf, type Vocabulary, type VocabularyDefinition } from "./vocabulary.ts";
 
 export * from "./contract.ts";
 
@@ -18,7 +18,8 @@ export * from "./contract.ts";
  */
 
 /** A small vocabulary with one type of every kind, for tests that need any
- *  vocabulary and no particular one. */
+ *  vocabulary and no particular one: about the person, about the relationship
+ *  with them (HISTORY), and about the knower (MEANS). */
 export function fixtureVocabularyDefinition(): VocabularyDefinition {
   return {
     id: "fixture",
@@ -41,6 +42,8 @@ export function fixtureVocabularyDefinition(): VocabularyDefinition {
       },
       CIRCUMSTANCE: { description: "How their life is arranged for now.", dimension: "life", revisitAfterDays: 90 },
       PERSON: { description: "Someone in their life.", dimension: "people" },
+      HISTORY: { description: "How the knower and they know each other.", dimension: "between", enduring: true },
+      MEANS: { description: "What the knower can spend or give.", dimension: "means" },
       OTHER: { description: "A statement worth keeping that fits no other type.", dimension: "other" },
     },
     dimensions: {
@@ -49,6 +52,8 @@ export function fixtureVocabularyDefinition(): VocabularyDefinition {
       likes: { label: "Likes" },
       life: { label: "Life" },
       people: { label: "People" },
+      between: { label: "Between you", about: "relationship" },
+      means: { label: "Your means", about: "knower" },
       other: { label: "Other" },
     },
     fallbackType: "OTHER",
@@ -95,7 +100,7 @@ export function fixtureVisitLensDefinition(): LensDefinition {
     overHeading: "Over now",
     sections: [
       { heading: "Mind", dimensions: ["never-cross", "life"] },
-      { heading: "Know", dimensions: ["has", "likes", "people", "other"] },
+      { heading: "Know", dimensions: ["has", "likes", "people", "between", "other"] },
     ],
     pinned: ["LINE"],
     needs: [
@@ -112,6 +117,30 @@ export function fixtureVisitLensDefinition(): LensDefinition {
   };
 }
 
+/** A third lens, for an objective that needs all three subjects: what they
+ *  love (the person), how the two of you know each other (the relationship),
+ *  and what the knower can spend (the knower), whose section it prints. */
+export function fixtureGiftLensDefinition(): LensDefinition {
+  return {
+    id: "fixture-gift",
+    version: 1,
+    objective: "Choose a gift.",
+    vocabulary: "fixture",
+    header: "A gift for {who}:",
+    overHeading: "Over now",
+    sections: [
+      { heading: "Them", dimensions: ["never-cross", "has", "likes", "life", "people", "other"] },
+      { heading: "Between you", dimensions: ["between"] },
+      { heading: "You", dimensions: ["means"] },
+    ],
+    needs: [
+      { id: "what-they-love", label: "What they love", types: ["LIKES"], weight: 3 },
+      { id: "how-you-know-them", dimension: "between", weight: 2, after: ["what-you-can-spend"] },
+      { id: "what-you-can-spend", dimension: "means" },
+    ],
+  };
+}
+
 export function fixtureVocabulary(): Vocabulary {
   return compileVocabulary(fixtureVocabularyDefinition());
 }
@@ -122,6 +151,10 @@ export function fixtureLens(): Lens {
 
 export function fixtureVisitLens(): Lens {
   return compileLens(fixtureVisitLensDefinition(), fixtureVocabulary());
+}
+
+export function fixtureGiftLens(): Lens {
+  return compileLens(fixtureGiftLensDefinition(), fixtureVocabulary());
 }
 
 /** The service reads at most this many entities' facts out of one episode. */
@@ -160,7 +193,7 @@ export interface FakeIntelligence extends Intelligence {
 
 export interface FakeIntelligenceOptions {
   /** The lenses it reads through, all over one vocabulary — the one it
-   *  writes in. Default: the fixture lens and the fixture visit lens. */
+   *  writes in. Default: the fixture lens, the fixture visit lens and the fixture gift lens. */
   lenses?: Lens[];
   /** The lens a read without one uses. Default: the first. */
   defaultLens?: string;
@@ -173,7 +206,7 @@ export interface FakeIntelligenceOptions {
  * place of a model's.
  */
 export function fakeIntelligence(options: FakeIntelligenceOptions = {}): FakeIntelligence {
-  const lenses = options.lenses ?? [fixtureLens(), fixtureVisitLens()];
+  const lenses = options.lenses ?? [fixtureLens(), fixtureVisitLens(), fixtureGiftLens()];
   if (lenses.length === 0) throw new Error("fakeIntelligence: it needs at least one lens");
   const vocabulary = lenses[0]!.vocabulary;
   for (const lens of lenses) {
@@ -201,8 +234,14 @@ export function fakeIntelligence(options: FakeIntelligenceOptions = {}): FakeInt
     }
     return found;
   };
+  /** The knower, named or not, is on every roster. */
+  const recordOf = (s: FakeState, entityId: string) =>
+    s.roster.get(entityId) ??
+    (entityId === KNOWER_ID ? { id: KNOWER_ID, kind: "knower", name: "the person writing", fields: {}, active: true } : undefined);
+  const knowerFacts = (s: FakeState, asOf?: Date) => factsKnownAt(s.entities.get(KNOWER_ID)?.facts ?? [], asOf);
+
   const entityFor = (s: FakeState, entityId: string) => {
-    const record = s.roster.get(entityId);
+    const record = recordOf(s, entityId);
     if (!record) return null;
     let entity = s.entities.get(entityId);
     if (!entity) {
@@ -274,12 +313,12 @@ export function fakeIntelligence(options: FakeIntelligenceOptions = {}): FakeInt
   /** One episode read with one scripted answer: attribution checked, entities capped, proposals kept. */
   const readEpisode = (s: FakeState, episode: Episode, turn: ScriptedTurn): EpisodeOutcome => {
     const roster = new Set([...s.roster.values()].filter((record) => record.active).map((record) => record.id));
-    const { byEntity, offRoster } = attributeFacts(turn.extraction.facts, roster);
+    const { byEntity, offRoster, misattributed } = attributeFacts(turn.extraction.facts, roster, (type) => subjectOf(vocabulary, type));
     const { kept, droppedForCap } = orderEntities(byEntity, episode.entityHints, ENTITIES_PER_EPISODE);
     const proposals = cleanProposals(turn.extraction, roster, vocabulary.fields);
     const changed = { added: 0, merged: 0, superseded: 0 };
     for (const entityId of kept) {
-      const record = s.roster.get(entityId)!;
+      const record = recordOf(s, entityId)!;
       const entity = entityFor(s, entityId)!;
       const current = entity.facts.filter((f) => !f.expiredAt);
       const incoming = byEntity.get(entityId)!;
@@ -323,6 +362,7 @@ export function fakeIntelligence(options: FakeIntelligenceOptions = {}): FakeInt
       entities: kept.length,
       unresolvedNames: proposals.unresolvedNames,
       offRoster,
+      misattributed,
       droppedForCap,
       calls: 0,
       costUsd: null,
@@ -331,14 +371,15 @@ export function fakeIntelligence(options: FakeIntelligenceOptions = {}): FakeInt
 
   return {
     async upsertEntity(scope, input) {
-      if (input.kind !== undefined && input.kind !== vocabulary.kind) {
-        throw new Error(`${input.id} is a ${input.kind}, and this vocabulary describes a ${vocabulary.kind}`);
+      const kind = input.id === KNOWER_ID ? "knower" : vocabulary.kind;
+      if (input.kind !== undefined && input.kind !== kind) {
+        throw new Error(`${input.id} is a ${input.kind}, and ${input.id === KNOWER_ID ? `${KNOWER_ID} is the knower` : `this vocabulary describes a ${vocabulary.kind}`}`);
       }
       const s = state(scope);
       const existing = s.roster.get(input.id);
       s.roster.set(input.id, {
         id: input.id,
-        kind: vocabulary.kind,
+        kind,
         name: input.name,
         fields: { ...(existing?.fields ?? {}), ...(input.fields ?? {}) },
         active: input.active ?? existing?.active ?? true,
@@ -346,7 +387,7 @@ export function fakeIntelligence(options: FakeIntelligenceOptions = {}): FakeInt
     },
     async deleteEntity(scope, entityId) {
       const s = state(scope);
-      if (!s.roster.has(entityId)) return { episodesRemoved: 0 };
+      if (!s.roster.has(entityId) && !(entityId === KNOWER_ID && s.entities.has(KNOWER_ID))) return { episodesRemoved: 0 };
       // Gone means gone: the episodes hinted at it, and every episode its facts cite.
       const cited = new Set(s.entities.get(entityId)?.facts.flatMap((f) => f.episodeIds) ?? []);
       s.roster.delete(entityId);
@@ -404,27 +445,30 @@ export function fakeIntelligence(options: FakeIntelligenceOptions = {}): FakeInt
       };
     },
     async getEntity(scope, entityId, readOptions = {}) {
-      const lens = readOptions.includeBrief ? lensFor(readOptions.lens) : null;
+      const lens = readOptions.includeBrief && entityId !== KNOWER_ID ? lensFor(readOptions.lens) : null;
       const s = state(scope);
       // On the roster with nothing known yet is an entity with no facts; off the roster is nothing.
       const entity = s.entities.get(entityId) ?? entityFor(s, entityId);
       if (!entity) return null;
       const facts = factsKnownAt(entity.facts, readOptions.asOf);
       const { facts: _all, ...rest } = entity;
-      const view = { ...rest, facts };
+      // The roster has the name as the client last gave it.
+      const view = { ...rest, name: recordOf(s, entityId)?.name ?? rest.name, facts };
       if (!lens) return view;
       const record = s.roster.get(entityId)!;
       const at = readOptions.asOf ?? new Date();
+      const knower = knowerFacts(s, readOptions.asOf);
       const text = renderBrief(lens, {
         entity: record,
         summary: readOptions.asOf ? "" : entity.summary,
         facts,
+        knower,
         at,
         ...(readOptions.maxChars !== undefined ? { maxChars: readOptions.maxChars } : {}),
       });
       return {
         ...view,
-        brief: text ? { text, mustHonor: mustHonorFrom(lens, facts, at), gaps: gapsFor(lens, record, facts, at) } : null,
+        brief: text ? { text, mustHonor: mustHonorFrom(lens, facts, at, knower), gaps: gapsFor(lens, record, facts, at, knower) } : null,
       };
     },
     async brief(scope, entityId, briefOptions = {}) {
@@ -435,15 +479,16 @@ export function fakeIntelligence(options: FakeIntelligenceOptions = {}): FakeInt
       const lens = lensFor(readOptions.lens);
       const s = state(scope);
       const record = s.roster.get(entityId);
-      if (!record) return null;
-      return gapsFor(lens, record, factsKnownAt(s.entities.get(entityId)?.facts ?? [], readOptions.asOf), readOptions.asOf ?? new Date());
+      // The knower is read beside every entity, never through a lens of their own.
+      if (!record || entityId === KNOWER_ID) return null;
+      return gapsFor(lens, record, factsKnownAt(s.entities.get(entityId)?.facts ?? [], readOptions.asOf), readOptions.asOf ?? new Date(), knowerFacts(s, readOptions.asOf));
     },
     async readiness(scope, entityId, readOptions = {}) {
       const lens = lensFor(readOptions.lens);
       const s = state(scope);
       const record = s.roster.get(entityId);
-      if (!record) return null;
-      return readinessFor(lens, record, factsKnownAt(s.entities.get(entityId)?.facts ?? [], readOptions.asOf), readOptions.asOf ?? new Date());
+      if (!record || entityId === KNOWER_ID) return null;
+      return readinessFor(lens, record, factsKnownAt(s.entities.get(entityId)?.facts ?? [], readOptions.asOf), readOptions.asOf ?? new Date(), knowerFacts(s, readOptions.asOf));
     },
     async searchFacts(scope, query, searchOptions = {}) {
       const s = state(scope);

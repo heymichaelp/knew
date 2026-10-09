@@ -6,7 +6,7 @@ import { fixtureVocabulary } from "../src/testing.ts";
 const at = (iso: string) => new Date(iso);
 
 describe("Scenario: The model is shown the roster it must choose from, with the hinted one marked", () => {
-  it("prints each entry with the vocabulary's prompt fields and aliases, under its kind", () => {
+  it("prints the knower first, then each entry with the vocabulary's prompt fields and aliases, under its kind", () => {
     const input = extractInput(fixtureVocabulary(), {
       content: "She loves it",
       source: "note",
@@ -19,7 +19,7 @@ describe("Scenario: The model is shown the roster it must choose from, with the 
     });
     assert.ok(input.includes("Today (when this was said): 2026-03-02"));
     assert.ok(input.includes("Where it came from: a note they wrote"));
-    assert.ok(input.includes('The entries on their list, each of kind "person" (attach facts only to these ids):'));
+    assert.ok(input.includes('The entries on their list: the person writing, then each of kind "person" (attach facts only to these ids):\n- id: self | name: the person writing (the person writing: "I", "me", "my")\n- id: r-1'));
     assert.ok(input.includes("- id: r-1 | name: Linda | relationship: mother | also called: Mom (recorded about them)"));
     assert.ok(input.includes("- id: r-2 | name: Priya\n"));
     assert.ok(input.includes('What was said:\n"""\nShe loves it\n"""'));
@@ -41,16 +41,16 @@ describe("Scenario: The model is shown the roster it must choose from, with the 
     assert.ok(question < input.indexOf('What was said:\n"""\nTwo, both at university\n"""'));
   });
 
-  it("names an unknown source by its own string and an empty roster as unresolved", () => {
+  it("names an unknown source by its own string, and a roster of only the knower, named by the client, as unresolved beyond them", () => {
     const input = extractInput(fixtureVocabulary(), {
       content: "x",
       source: "carrier-pigeon",
       referenceAt: at("2026-03-02T12:00:00Z"),
-      roster: [],
+      roster: [{ id: "self", name: "Ana", fields: {}, aliases: [] }],
       hints: [],
     });
     assert.ok(input.includes("Where it came from: carrier-pigeon"));
-    assert.ok(input.includes("(none yet — everything mentioned is unresolved)"));
+    assert.ok(input.includes('- id: self | name: Ana (the person writing: "I", "me", "my")\n(no other entries yet — anyone or anything else mentioned is unresolved)'));
   });
 
   it("weighs what was read off a photograph differently from what was guessed", () => {

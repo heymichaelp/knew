@@ -29,8 +29,8 @@ describe("Scenario: The gaps are the missing understanding, most valuable first"
   it("lists every applicable need for an entity known only by name, each with the types that count toward it", () => {
     const gaps = gapsFor(lens, { fields: { relationship: "mother" } }, [], jan);
     assert.deepEqual(gaps, [
-      { need: "what-they-love", label: "What they love", dimension: null, types: ["LIKES", "SKILL"] },
-      { need: "how-the-days-go", label: "How their days go", dimension: null, types: ["CIRCUMSTANCE"] },
+      { need: "what-they-love", label: "What they love", about: "entity", dimension: null, types: ["LIKES", "SKILL"] },
+      { need: "how-the-days-go", label: "How their days go", about: "entity", dimension: null, types: ["CIRCUMSTANCE"] },
     ]);
   });
 

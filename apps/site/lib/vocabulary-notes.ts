@@ -11,7 +11,7 @@ export const VOCABULARY_FIELD_NOTES: Record<string, string> = {
   version: "Bump on every change. Stamped on each episode extracted under it; a registered version is immutable.",
   kind: "What every entity it describes is: `person`, `place`, `thing`.",
   factTypes: "The fact types extraction writes, by key. Each informs one dimension.",
-  dimensions: "The dimensions of understanding, in reading order. Each has a label and holds at least one type.",
+  dimensions: "The dimensions of understanding, in reading order: about the entity, the relationship with it, or the knower. Each has a label and holds at least one type.",
   fallbackType: "What an unknown or retired type reads as. One of your own types.",
   fields: "Entity fields the client owns, such as `relationship`. Extraction may propose values; it never writes them.",
   promptFields: "The subset of `fields` shown beside a name, to the model and in a page's header.",
@@ -34,5 +34,6 @@ export const VOCABULARY_NESTED_NOTES: Record<string, Record<string, string>> = {
   },
   "dimensions.*": {
     label: "The dimension's name: its section heading on a page, and the label of a need of it.",
+    about: "`entity` (default), `relationship` (between the knower and the entity, kept on the entity) or `knower` (kept on `self`, read beside every entity).",
   },
 };

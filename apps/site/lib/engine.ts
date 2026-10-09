@@ -174,6 +174,8 @@ export interface PresetType {
 export interface PresetDimension {
   readonly id: string;
   readonly label: string;
+  /** The entity, the relationship with it, or the knower. */
+  readonly about: "entity" | "relationship" | "knower";
   /** The types that inform it, in the vocabulary's order. */
   readonly types: readonly PresetType[];
 }
@@ -215,6 +217,7 @@ function outlineOf(name: string, preset: (typeof presets)[keyof typeof presets])
     dimensions: vocabulary.dimensions.map((dimension) => ({
       id: dimension.id,
       label: dimension.label,
+      about: dimension.about,
       types: vocabulary.factTypeKeys.filter((key) => vocabulary.factTypes[key]!.dimension === dimension.id).map(typeOf),
     })),
     lens,

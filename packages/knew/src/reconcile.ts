@@ -1,6 +1,6 @@
 import { parseLooseDate } from "./dates.ts";
-import type { Fact, NewFact, ReconciliationPlan } from "./types.ts";
-import { isEnduringFactType, type Vocabulary } from "./vocabulary.ts";
+import type { Fact, NewFact, ReconciliationPlan, Subject } from "./types.ts";
+import { isEnduringFactType, KNOWER_ID, type Vocabulary } from "./vocabulary.ts";
 
 /**
  * The reconciliation PLAN: given what we currently believe about one entity,
@@ -118,7 +118,10 @@ export function planReconciliation(input: {
  * The facts extraction proposed, kept only for entities on the roster and
  * grouped by entity. Attribution is checked here, not trusted: a fact naming
  * an id that is not on THIS knower's roster is dropped, whatever the model
- * meant.
+ * meant. The knower (`KNOWER_ID`) is always on it. Given each type's subject,
+ * a fact about the knower must attach to the knower, and a fact about an
+ * entity or the relationship with it must not; one that does not is dropped
+ * and counted as misattributed.
  */
 export function attributeFacts(
   facts: Array<{
@@ -130,12 +133,18 @@ export function attributeFacts(
     invalidAt: string | null;
   }>,
   onRoster: ReadonlySet<string>,
-): { byEntity: Map<string, NewFact[]>; offRoster: number } {
+  subjectOf?: (type: string) => Subject,
+): { byEntity: Map<string, NewFact[]>; offRoster: number; misattributed: number } {
   const byEntity = new Map<string, NewFact[]>();
   let offRoster = 0;
+  let misattributed = 0;
   for (const fact of facts) {
-    if (!onRoster.has(fact.entityId)) {
+    if (fact.entityId !== KNOWER_ID && !onRoster.has(fact.entityId)) {
       offRoster += 1;
+      continue;
+    }
+    if (subjectOf && (subjectOf(fact.type) === "knower") !== (fact.entityId === KNOWER_ID)) {
+      misattributed += 1;
       continue;
     }
     const list = byEntity.get(fact.entityId) ?? [];
@@ -149,7 +158,7 @@ export function attributeFacts(
     });
     byEntity.set(fact.entityId, list);
   }
-  return { byEntity, offRoster };
+  return { byEntity, offRoster, misattributed };
 }
 
 /** Hinted entities first, then the most-discussed; past the cap, dropped and

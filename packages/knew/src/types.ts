@@ -1,4 +1,12 @@
 /**
+ * What a dimension of understanding is about: the entity itself, the
+ * relationship between the knower and the entity, or the knower. Relationship
+ * facts are kept on the entity they concern, one relationship to each; the
+ * knower's facts are kept on the knower (`KNOWER_ID`), one for every entity.
+ */
+export type Subject = "entity" | "relationship" | "knower";
+
+/**
  * The intelligence contract — ONE DOOR.
  *
  * A client reaches the engine only through `Intelligence`. The interface
@@ -132,6 +140,8 @@ export interface MustHonor {
 export interface Gap {
   need: string;
   label: string;
+  /** What it is about: the entity, the relationship with it, or the knower. */
+  about: Subject;
   /** Its dimension, or null when it names its types. */
   dimension: string | null;
   /** The types whose facts count toward it. */
@@ -151,6 +161,8 @@ export interface DimensionEvidence {
   id: string;
   /** As a reader calls it. */
   label: string;
+  /** The entity, the relationship with it, or the knower. */
+  about: Subject;
   /** Current facts in it. */
   facts: number;
   /** Of those, how many are due for a revisit. */
@@ -170,6 +182,7 @@ export type NeedState = "met" | "waiting" | "due" | "thin" | "open";
 export interface NeedStanding {
   id: string;
   label: string;
+  about: Subject;
   dimension: string | null;
   types: string[];
   weight: number;
@@ -195,6 +208,8 @@ export interface Direction {
   /** The need it serves. */
   need: string;
   label: string;
+  /** What to learn about: the entity, the relationship with it, or the knower. */
+  about: Subject;
   dimension: string | null;
   types: string[];
   /** weight · (1 − strength), three places: directions run from the highest. */
@@ -290,6 +305,9 @@ export type EpisodeOutcome =
       unresolvedNames: string[];
       /** Facts naming an id not on the roster — a model error, dropped. */
       offRoster: number;
+      /** Facts about the knower attached to an entity, or about an entity or
+       *  a relationship attached to the knower — a model error, dropped. */
+      misattributed: number;
       /** Facts about entities past the per-episode cap, dropped. */
       droppedForCap: number;
       calls: number;
@@ -464,6 +482,7 @@ export interface StatelessExtraction {
   unresolvedNames: string[];
   fieldUpdates: Array<{ entityId: string; field: string; value: string }>;
   offRoster: number;
+  misattributed: number;
   droppedForCap: number;
   calls: ModelCall[];
   promptVersions: { extract: string; reconcile: string | null };

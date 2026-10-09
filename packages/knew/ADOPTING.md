@@ -2,13 +2,17 @@
 
 ## 1. Concepts
 
-- **Knower**: your user, whose notebook this is: the scope's `subjectId`.
+- **Knower**: your user, whose notebook this is: the scope's `subjectId`. They are also on their
+  own roster, as `self` (`KNOWER_ID`).
 - **Entity**: what the knower knows about, on their roster: a person, a place, a thing. Its `kind`
   is the vocabulary's.
 - **Episode**: what the knower wrote, verbatim and dated. Facts are derived from episodes.
 - **Fact**: a typed, dated statement, citing its episodes. Superseded, never edited.
 - **Vocabulary**: the **dimensions** of understanding for one kind of entity, and the fact types
-  that inform them.
+  that inform them. A dimension is about one of three subjects:
+  - **the entity** (the default);
+  - **the relationship** between the knower and the entity, kept on the entity, one to each;
+  - **the knower**, kept on `self`, and the same beside every entity.
 - **Lens**: one goal over a vocabulary: its **needs** (what the goal needs understood), and how
   its page reads.
 
@@ -16,7 +20,7 @@ For an entity and a lens, knew reports three things:
 
 | | Where |
 |---|---|
-| Current understanding | `brief().text`, and `readiness().dimensions` |
+| Current understanding | `brief().text`, and `readiness().dimensions`, across all three subjects |
 | Missing understanding | `gaps()`, and `readiness().needs` that are not `met` |
 | The next directions | `readiness().next` |
 
@@ -112,6 +116,22 @@ on the page, returned as `mustHonor`), `enduring` (only its own type replaces it
 (entity fields you own; extraction may only propose values), `promptFields`, and a `charter`
 telling the model what to keep.
 
+**Subjects.** Give a dimension `about: "relationship"` or `about: "knower"`. A gift lens can then
+need what they love (the entity), how you know each other (the relationship) and what you can
+spend (the knower), and readiness ranks all three:
+
+```json
+"dimensions": {
+  "pursuits": { "label": "What they love" },
+  "between": { "label": "How you know each other", "about": "relationship" },
+  "you": { "label": "About you", "about": "knower" }
+}
+```
+
+The person preset has all three. A need's `types` must all be about one subject; the fallback type
+is about the entity. Knower dimensions are left out of a lens's default sections: the page prints
+them only where a lens's `sections` place them.
+
 **Lens.** `objective`, `needs`, `pinned`, `sections`, `header`, `overHeading`. Left out: one
 section and one need per dimension, and the vocabulary's pinned types. A need names a
 `dimension` or `types` (then it needs a `label`), and may set `weight`, `enough`, `after` and
@@ -147,6 +167,10 @@ An outbox table makes steps 2 and 3 survive a crash.
 
 - **Hints** point into the roster; they never add to it. `upsertEntity` first: a fact pinned on an
   id not on the roster is dropped and counted as `offRoster`.
+- **The knower** is always on the roster, as `self`. Name them with
+  `upsertEntity(scope, { id: "self", name })` so extraction can read "I" and "me" as them. A fact
+  about the knower goes on `self`; a fact about the relationship goes on the entity. A fact filed
+  under the wrong one is dropped and counted as `misattributed`.
 - **`hold: "until-hinted"`** keeps an episode out of extraction until `hintEpisodes({ sourceRefs,
   entityId })` names its entity.
 - **`inReplyTo`**: when the episode answers a question your app asked, pass that question. The
@@ -170,12 +194,15 @@ Every read that renders takes `lens`; without it, the default lens.
 
 - `brief(scope, entityId, { lens, asOf, maxChars })`: the page (`text`), `mustHonor`, and `gaps`.
   Null until something is known.
-- `readiness(scope, entityId, { lens, asOf })`:
-  - `dimensions`: per dimension, current facts, how many are due, when last said.
+- `readiness(scope, entityId, { lens, asOf })`, which reads what is known about the knower beside
+  the entity, without being asked:
+  - `dimensions`: per dimension, its `about`, current facts, how many are due, when last said.
   - `needs`: per need, `state` (`met`, `waiting`, `due`, `thin`, `open`) and `strength` (0 to 1).
-  - `next`: directions, most valuable first. Each has `kind` (`learn` where a need is open or
-    thin, `revisit` where facts have gone stale), `need`, `label`, `dimension`, `types`, `value`,
-    and `factIds`: the facts it builds on, readable through `getEntity`.
+  - `next`: directions, most valuable first, across all three subjects. Each has `kind` (`learn`
+    where a need is open or thin, `revisit` where facts have gone stale), `need`, `label`, `about`,
+    `dimension`, `types`, `value`, and `factIds`: the facts it builds on, in any subject, readable
+    through `getEntity` (the knower's through `getEntity(scope, "self")`). A need about the knower
+    met once is met for every entity.
 - `gaps(scope, entityId, { lens })`: the `learn` directions only.
 - `getEntity(scope, entityId, { asOf })`: the entity and its facts as believed at `asOf`, with no
   facts when nothing is known yet; null only when it isn't on the roster. Believed is not true: a
@@ -194,7 +221,8 @@ follow the lens's order. A fact is due once `revisitAfterDays` days have passed 
 said (or recorded); on that day, it is due. Weights order directions only: the page is never
 reweighted.
 
-**Stateless.** Run `readinessFor(lens, entity, factsKnownAt(facts, at), at)` yourself. When you
+**Stateless.** Run `readinessFor(lens, entity, factsKnownAt(facts, at), at, factsKnownAt(knowerFacts, at))`
+yourself, and pass `self` in the roster and its facts in `entities` when you extract. When you
 apply a plan's merge, set `lastSaidAt` to the plan's `knownAt` if later.
 
 ## 6. Corrections, proposals, deletion
@@ -236,7 +264,7 @@ contractSuite({
   test,
   scripted: true,
   open: async () => ({
-    intelligence: myDriver, // a fresh store with the fixture vocabulary and both fixture lenses
+    intelligence: myDriver, // a fresh store with the fixture vocabulary and the three fixture lenses
     scope: { clientId: "c", subjectId: fresh() },
     otherScope: { clientId: "c", subjectId: fresh() },
     script: (turn) => myScriptedModel.queue(turn),

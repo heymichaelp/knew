@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 3,
   "exercises": "What an app must get right a year in, built on knew and without it: corrections that keep their history, as-of reads, statements that end, repeats, stale hours, notes about places nobody added, notebooks that never cross.",
   "pinned": {
     "vocabulary": "notebook",
@@ -18,7 +18,8 @@
   "inputs": [],
   "allow": [
     "id",
-    "name"
+    "name",
+    "about"
   ],
   "change": {
     "lenses": [
