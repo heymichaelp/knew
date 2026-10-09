@@ -155,13 +155,13 @@ const MUTATIONS: Record<string, Mutation[]> = {
     {
       what: "a statement past its end date is still known",
       file: "src/app.ts",
-      edit: swap("(view?.facts ?? []).filter((fact) => !endedByDate(fact, asOf)).map(", "(view?.facts ?? []).map("),
+      edit: swap("factsTrueAt(view.facts, asOf).map(", "view.facts.map("),
       fails: "something with an end date stops being known after it",
     },
     {
       what: "a place never added reads as one with nothing known",
       file: "src/app.ts",
-      edit: swap("if ((await engine.readiness(scope(userId), placeId, { lens: LENS })) === null) return null;", ""),
+      edit: swap("if (!view) return null;", "if (!view) return [];"),
       fails: "a notebook is its owner's alone",
     },
     {
@@ -282,7 +282,7 @@ const MUTATIONS: Record<string, Mutation[]> = {
     {
       what: "an ended statement is still known",
       file: "src/app.ts",
-      edit: swap("(view?.facts ?? []).filter((fact) => !endedByDate(fact, asOf)).map((fact) => fact.fact)", "(view?.facts ?? []).map((fact) => fact.fact)"),
+      edit: swap("factsTrueAt(view.facts, asOf).map((fact) => fact.fact)", "view.facts.map((fact) => fact.fact)"),
       fails: ENDED,
     },
     {
@@ -321,7 +321,7 @@ const MUTATIONS: Record<string, Mutation[]> = {
     {
       what: "a place never added reads as one with nothing known",
       file: "src/app.ts",
-      edit: swap("if ((await engine.readiness(scope(userId), placeId, { lens: LENS })) === null) return null;", ""),
+      edit: swap("if (!view) return null;", "if (!view) return [];"),
       fails: "a place never added is unknown, and a new place starts with what kind of place it is",
     },
     {

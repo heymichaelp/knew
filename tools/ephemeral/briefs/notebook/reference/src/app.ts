@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { endedByDate, type Intelligence, type IntelligenceScope } from "@popjoker/knew";
+import { factsTrueAt, type Intelligence, type IntelligenceScope } from "@popjoker/knew";
 
 /**
  * Haunts on knew: the places on a user's list, what their notes say, what is
@@ -44,10 +44,9 @@ export function createApp(engine: Intelligence): Haunts {
 
     async known(userId, placeId, options = {}) {
       const asOf = options.asOf ?? new Date();
-      // getEntity is null until something is known; readiness is null only for a place never added.
-      if ((await engine.readiness(scope(userId), placeId, { lens: LENS })) === null) return null;
       const view = await engine.getEntity(scope(userId), placeId, { asOf });
-      return (view?.facts ?? []).filter((fact) => !endedByDate(fact, asOf)).map((fact) => fact.fact);
+      if (!view) return null;
+      return factsTrueAt(view.facts, asOf).map((fact) => fact.fact);
     },
 
     async nextToLearn(userId, placeId) {

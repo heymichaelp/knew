@@ -357,6 +357,10 @@ export interface Intelligence {
   /** The inline step: extract what is pending, bounded by wall clock. */
   extractNow(scope: IntelligenceScope, options: ExtractNowOptions): Promise<ExtractNowOutcome>;
 
+  /** The entity and its facts as believed at `asOf` (default now): with no
+   *  facts when nothing is known yet, and null only when it is not on the
+   *  roster. Believed is not the same as true: a fact past its own end date
+   *  is still believed, and listed; `factsTrueAt` keeps only what is true. */
   getEntity(
     scope: IntelligenceScope,
     entityId: string,

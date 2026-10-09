@@ -160,3 +160,12 @@ export function factsKnownAt(facts: Fact[], asOf?: Date): Fact[] {
     : facts.filter((f) => !f.expiredAt);
   return known.map((f) => asKnownAt(f, asOf));
 }
+
+/**
+ * "True at T": what was believed at T (`factsKnownAt`), less what had ended by
+ * its own end date by then. A six-month stay is believed all year and true
+ * only for its six months. Without T: true now.
+ */
+export function factsTrueAt(facts: Fact[], at: Date = new Date()): Fact[] {
+  return factsKnownAt(facts, at).filter((fact) => !endedByDate(fact, at));
+}

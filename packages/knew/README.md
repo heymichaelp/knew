@@ -69,7 +69,7 @@ const lens = extendLens(person.lens(), { id: "know-them", version: 1, vocabulary
 - Stateless mode: `intelligenceClient(...).extract` returns a `ReconciliationPlan` to apply to
   your own store.
 - Pure functions: `renderBrief`, `readinessFor`, `gapsFor`, `mustHonorFrom`,
-  `planReconciliation`, `factsKnownAt`.
+  `planReconciliation`, `factsKnownAt`, `factsTrueAt`.
 - Definitions: `compileVocabulary`, `compileLens`, `extendVocabulary`, `extendLens`,
   `ENGINE_DEFAULTS`.
 - Presets in `./presets`: `person`, `place`, `product`.

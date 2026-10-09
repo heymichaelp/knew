@@ -91,7 +91,9 @@ export function contractCases(): ContractCase[] {
         await i.upsertEntity(scope, { id: "al", name: "Al" });
         assert.deepEqual(needs(await i.gaps(scope, "al")), ["what-they-love"], "a need with a when clause waits for the field");
         assert.equal(await i.gaps(scope, "nobody"), null);
-        assert.equal(await i.getEntity(scope, "linda"), null, "nothing is known yet");
+        const known = await i.getEntity(scope, "linda");
+        assert.deepEqual([known?.id, known?.name, known?.facts], ["linda", "Linda", []], "on the roster with nothing known yet: the entity, and no facts");
+        assert.equal(await i.getEntity(scope, "nobody"), null, "not on the roster: nothing");
         assert.equal(await i.brief(scope, "linda"), null);
         await i.upsertEntity(scope, { id: "linda", name: "Linda", fields: { city: "Austin" } });
         assert.deepEqual(needs(await i.gaps(scope, "linda")), ["what-they-love", "how-the-days-go"], "a field not sent is kept");

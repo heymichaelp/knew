@@ -137,6 +137,8 @@ export interface LensOverrides {
   /** Replaces the pinned types; `null` goes back to the vocabulary's. */
   pinned?: string[] | null;
   attributeTags?: string[] | null;
+  /** `null` goes back to ordering by value. */
+  order?: "value" | "listed" | null;
   /** By need id: a patch merged into the base need, a complete need appended
    *  after the base's, or `null` to drop it. */
   needs?: Record<string, Patch<Omit<NeedSpec, "id">> | null>;
@@ -167,6 +169,7 @@ export function extendLens(base: LensDefinition, overrides: LensOverrides, vocab
   replace(result, "sections", overrides.sections);
   replace(result, "pinned", overrides.pinned);
   replace(result, "attributeTags", overrides.attributeTags);
+  replace(result, "order", overrides.order);
   if (overrides.needs) {
     let needs: NeedSpec[];
     if (base.needs) needs = base.needs.map((need) => ({ ...need }));

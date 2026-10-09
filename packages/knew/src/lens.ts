@@ -77,6 +77,11 @@ export interface LensDefinition {
   attributeTags?: string[];
   /** What the objective needs understood. Default: one need per dimension. */
   needs?: NeedSpec[];
+  /** How directions are ordered. `value` (the default): the highest
+   *  weight × (1 − strength) first, ties in the lens's order. `listed`: in
+   *  the lens's order, so the first need not met, or gone stale, is first,
+   *  whatever its weight. */
+  order?: "value" | "listed";
 }
 
 const needSpecSchema = z.object({
@@ -131,6 +136,7 @@ export const lensDefinitionSchema: z.ZodType<LensDefinition> = z
     pinned: z.array(z.string()).optional(),
     attributeTags: z.array(z.string()).optional(),
     needs: z.array(needSpecSchema).optional(),
+    order: z.enum(["value", "listed"]).optional(),
   })
   .superRefine((lens, ctx) => {
     const issue = (message: string) => ctx.addIssue({ code: "custom", message });
@@ -245,6 +251,7 @@ export interface Lens {
   pinned: ReadonlySet<string>;
   attributeTags: readonly string[];
   needs: readonly CompiledNeed[];
+  order: "value" | "listed";
 }
 
 /** Compile a validated definition against the vocabulary it reads. Throws
@@ -274,6 +281,7 @@ export function compileLens(definition: LensDefinition, vocabulary: Vocabulary):
     sectionOfDimension,
     pinned: new Set(definition.pinned ?? vocabulary.factTypeKeys.filter((key) => vocabulary.factTypes[key]!.pinned)),
     attributeTags: definition.attributeTags ?? [],
+    order: definition.order ?? "value",
     needs: specs.map((need) => ({
       id: need.id,
       label: need.label ?? label.get(need.dimension!)!,
