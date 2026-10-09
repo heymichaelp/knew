@@ -7,7 +7,7 @@ knew.dev site. The Postgres service is `heymichaelp/knew-service`.
 
 | Workspace | Name | What it holds |
 |---|---|---|
-| `packages/knew` | `@popjoker/knew` | The pure core. No database, no model, no React. One runtime dependency: zod. |
+| `packages/knew` | `@popjoker/knew` | The engine: the core, and the whole pipeline in your process (`localIntelligence`). No database and no network of its own: the model is the app's (`Model`), with Claude in `./anthropic` and Apple's on-device model in `./apple`. One runtime dependency: zod. |
 | `apps/site` | `@knew/site` | knew.dev — marketing and developer docs, Next App Router. |
 | `tools/ephemeral` | `@knew/ephemeral` | Ephemeral testing: an agent builds a throwaway app on the packed tarball from a product brief, and the package is judged by how that goes. Private. |
 
@@ -55,6 +55,12 @@ knew.dev site. The Postgres service is `heymichaelp/knew-service`.
   calls, or Turbopack traces the whole project into the server bundle. See
   `apps/site/lib/package-docs.ts`, which also explains why `require.resolve` cannot be used to
   find the package directory: the bundler rewrites it to a module id.
+- **The model is the app's.** The package opens no connection and holds no key. Its root, its
+  store and its on-device adapter run in React Native and the browser as well as Node:
+  `test/portable.test.ts` fails on a Node-only API in them. `@anthropic-ai/sdk` is an optional
+  peer, imported only by `./anthropic`. Every test answers with a script or a stand-in; no test
+  calls a real model. `apple/KnewFoundationModels.swift` is a reference the package can't
+  compile, so a change to it is checked on a device.
 - **The package builds with plain `tsc`** and tests with `node --import tsx --test`. No bundler,
   no vitest. `scripts/embed-prompts.mjs` generates `src/prompts/*.ts` from `prompts/*.md`, and
   `test/prompts.test.ts` fails when the two drift — regenerate with `npm run prompts -w @popjoker/knew`,

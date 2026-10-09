@@ -26,13 +26,88 @@ For an entity and a lens, knew reports three things:
 
 knew names directions; it writes no questions.
 
-## 2. Setup
+## 2. Run it
 
 ```sh
 npm install @popjoker/knew
 ```
 
-ES modules, Node 22 or later. Make one client per process:
+ES modules; Node 22 or later, React Native, or the browser. There are three ways to run the same
+contract, `Intelligence`, and the rest of this guide applies to all three.
+
+### In your process, on your own key
+
+`localIntelligence` is the whole engine in your process: the roster, the episodes, extraction,
+reconciliation, the page and readiness. You supply the model; nothing is hosted.
+
+```ts
+import { localIntelligence, memoryStore, type Intelligence } from "@popjoker/knew";
+import { anthropicModel } from "@popjoker/knew/anthropic"; // npm install @anthropic-ai/sdk
+
+export const intelligence = localIntelligence({
+  lenses: [lens], // compiled, over one vocabulary (section 3); the first is the default
+  model: anthropicModel({ apiKey: process.env.ANTHROPIC_API_KEY }),
+  store: memoryStore(), // the default; see below
+});
+```
+
+- **The model** is a function: `(request) => Promise<{ output, model?, usage? }>`. A request has
+  `task` (`extract` or `reconcile`), `system`, `prompt`, a JSON `schema` the answer must match, and
+  a `signal`. Any provider works; knew checks every answer against the schema and refuses one that
+  doesn't match.
+- **`anthropicModel`** (`./anthropic`, with `@anthropic-ai/sdk` installed) answers with Claude:
+  `claude-opus-5-5` by default, or `model: { extract, reconcile }` for one per call, and `effort`.
+  The system block is cached, so the second note onward costs less.
+- **Cost**: each note is one extract call, plus one reconcile call per entry it touches (at most
+  three). `extractNow` returns `calls`, each with its model and usage; a cost the provider didn't
+  report is `null`, never zero.
+- **The store** keeps each knower's notebook as one JSON-safe record (`ScopeRecord`, dates as ISO
+  strings). `memoryStore()` holds it in memory. Your own is three calls: `get(scope)`,
+  `put(scope, record)` and `delete(scope)`, over a SQLite row, AsyncStorage, a file or your
+  database. Each operation reads and writes the whole record, which suits notebooks of up to a few
+  thousand facts. Use one driver per store.
+- **Background reads**: `addEpisode`, `hintEpisodes` and `requestExtract` start a read in your
+  process, one per knower at a time. `await intelligence.settled()` waits for them. Pass
+  `background: false` to read only when you call `extractNow`.
+- **Failures**: a read that fails counts an attempt, unless your own deadline cut it short. After
+  three (`maxAttempts`), the episode is set aside (`gave-up:`) so later ones aren't held up.
+
+### On the device
+
+With `appleModel` (`./apple`), Apple's on-device model (iOS 26 and macOS 26, with Apple
+Intelligence) answers both calls. There's no key, and nothing leaves the phone. The engine is
+plain TypeScript and runs in React Native as it is.
+
+```ts
+import { fallbackModel, localIntelligence } from "@popjoker/knew";
+import { appleModel } from "@popjoker/knew/apple";
+import { KnewModels } from "./native"; // your bridge to KnewFoundationModels.swift
+
+const onDevice = appleModel({
+  respond: (call) => KnewModels.respond(call.instructions, call.prompt, JSON.stringify(call.schema)),
+});
+export const intelligence = localIntelligence({ lenses: [lens], model: onDevice, store: myStore });
+```
+
+- **The bridge**: add `apple/KnewFoundationModels.swift` (shipped in this package) to your app,
+  and expose `KnewFoundationModels.respond(instructions:prompt:schemaJSON:)` and `availability()`
+  to JavaScript. With Expo, that's an Expo module whose `AsyncFunction("respond")` awaits
+  `respond`; in bare React Native, a native module that does the same. A failure must reach
+  JavaScript with its `code` (`context`, `unavailable`, `unsupported-language`, `guardrail`).
+  The Swift file is a reference: build and check it on a device.
+- **Room**: the on-device model reads about 4,096 tokens in all. A short note against a small
+  roster fits; a long note, or reconciling against many facts, may not. A request past the budget
+  is refused before the call (`ModelContextError`), and the episode waits.
+- **Your key as the fallback**: `fallbackModel(onDevice, anthropicModel({ apiKey }))` sends a
+  request that doesn't fit, or a device without the model (`ModelUnavailableError`), to your key
+  instead. Leave it out to keep everything on the device. `calls` shows which model read each note.
+- **Quality**: the on-device model is small. It hasn't been measured on knew's notes yet, so try it
+  on yours before relying on it.
+
+### Hosted
+
+The knew service (section 8) stores the notebooks and runs extraction on its own key. Make one
+client per process:
 
 ```ts
 import { intelligenceClient, type Intelligence } from "@popjoker/knew";
@@ -151,7 +226,8 @@ and as tables at knew.dev/lenses. Parsing and compiling refuse, naming the field
 
 Extraction can only write your types: its output schema lists them.
 
-**Register** with `PUT /v1/vocabulary`, then `PUT /v1/lens` for each lens, or the service CLI's
+**In your process**, pass the compiled lenses to `localIntelligence`. **Hosted**, register with
+`PUT /v1/vocabulary`, then `PUT /v1/lens` for each lens, or the service CLI's
 `vocabulary set` and `lens set`. A registered version is immutable; change the `version`. The
 first lens registered is the default. Changing a lens touches no stored data; changing what a
 vocabulary's types mean may call for `resetForReplay`.
@@ -163,7 +239,9 @@ vocabulary's types mean may call for `resetForReplay`.
    `entityHints`. Idempotent on `(source, sourceRef)`.
 3. Then `requestExtract(scope)`, never before the commit.
 
-An outbox table makes steps 2 and 3 survive a crash.
+An outbox table makes steps 2 and 3 survive a crash. In your process, `addEpisode` itself starts a
+background read (unless you passed `background: false`), so step 3 is only needed after a hint or
+to retry.
 
 - **Hints** point into the roster; they never add to it. `upsertEntity` first: a fact pinned on an
   id not on the roster is dropped and counted as `offRoster`.
@@ -221,9 +299,13 @@ follow the lens's order. A fact is due once `revisitAfterDays` days have passed 
 said (or recorded); on that day, it is due. Weights order directions only: the page is never
 reweighted.
 
-**Stateless.** Run `readinessFor(lens, entity, factsKnownAt(facts, at), at, factsKnownAt(knowerFacts, at))`
-yourself, and pass `self` in the roster and its facts in `entities` when you extract. When you
-apply a plan's merge, set `lastSaidAt` to the plan's `knownAt` if later.
+**Stateless.** If your app keeps its own store, read each note with
+`statelessIntelligence({ vocabulary, model }).extract({ roster, entities, episode })` in your
+process (or `intelligenceClient(...).extract` hosted). Each returns a `ReconciliationPlan` per entry
+for you to apply. Pass `self` in the roster and its facts in `entities` to reconcile what the
+knower says about themselves. When you apply a plan's merge, set `lastSaidAt` to the plan's
+`knownAt` if later. Run `readinessFor(lens, entity, factsKnownAt(facts, at), at,
+factsKnownAt(knowerFacts, at))` yourself.
 
 ## 6. Corrections, proposals, deletion
 

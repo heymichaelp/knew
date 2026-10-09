@@ -182,27 +182,36 @@ export default function Home() {
 
       {/* ------------------------------------------------------------ the modes */}
       <section className="mx-auto max-w-6xl px-6 py-20">
-        <p className="clause">Two modes</p>
+        <p className="clause">Three ways to run it</p>
         <h2 className="display mt-2 max-w-2xl text-title">
-          It can hold the ledger, or hold nothing at all.
+          In your process, on the device, or hosted.
         </h2>
-        <div className="mt-10 grid gap-6 md:grid-cols-2">
+        <div className="mt-10 grid gap-6 md:grid-cols-3">
           <div className="card p-7">
-            <p className="label">Hosted</p>
-            <h3 className="display mt-3 text-2xl">The engine keeps it for you</h3>
+            <p className="label">In your process</p>
+            <h3 className="display mt-3 text-2xl">Your code, your model key</h3>
             <p className="mt-4 text-ink-soft">
-              Register a vocabulary and lenses, upsert entities, post episodes. The service stores episodes and facts
-              with their history and runs extraction. Read the page, the gaps and readiness through any lens.
+              The whole engine runs where your app does, keeping each person&apos;s notebook in a store you choose.
+              Reading a note is two calls to the model you supply: Claude on your own key, or any model that answers
+              with JSON.
             </p>
           </div>
           <div className="card p-7">
             <p className="label" style={{ color: "var(--derived)" }}>
-              Stateless
+              On the device
             </p>
-            <h3 className="display mt-3 text-2xl">The engine keeps nothing</h3>
+            <h3 className="display mt-3 text-2xl">Nothing leaves the phone</h3>
             <p className="mt-4 text-ink-soft">
-              Send the roster, the facts you hold and one episode; get back a reconciliation plan to apply to your own
-              store. The page and readiness are pure functions you run yourself. Nothing is kept.
+              The same engine, with Apple&apos;s on-device model reading the notes through a small Swift bridge. No key,
+              no server. When a note is too long for it, your own key can take over, or the note waits.
+            </p>
+          </div>
+          <div className="card p-7">
+            <p className="label">Hosted</p>
+            <h3 className="display mt-3 text-2xl">The service keeps it for you</h3>
+            <p className="mt-4 text-ink-soft">
+              Register a vocabulary and lenses, then post episodes. The service stores the notebooks and reads the
+              notes. Or keep your own store, and get back a plan to apply to it.
             </p>
           </div>
         </div>
@@ -217,7 +226,10 @@ export default function Home() {
             <p className="mt-4 text-sm text-ink-soft">
               From the package&apos;s <code className="code">README.md</code>, read at build time.
             </p>
-            <p className="mt-4 text-sm text-ink-faint">Node 22 or later, ES modules. The only dependency is zod 4.</p>
+            <p className="mt-4 text-sm text-ink-faint">
+              Node 22 or later, React Native or the browser. The only dependency is zod 4; the Anthropic SDK only if you
+              use Claude.
+            </p>
           </div>
           <div className="min-w-0">
             <pre className="overflow-x-auto border border-rule border-l-2 border-l-stamp bg-paper-sunken p-5 code text-[0.8125rem] leading-relaxed">

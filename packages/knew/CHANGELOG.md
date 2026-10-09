@@ -23,6 +23,13 @@ next direction. It writes no questions.
   under the wrong subject (`misattributed`). Readiness, gaps and the page read the knower beside
   every entity, and directions rank all three. The person preset has relationship and knower
   dimensions; place and product mark the knower's relationship with them.
+- **Runs in your process, on your own key, or on the device.** `localIntelligence` is the whole
+  engine in-process: roster, episodes, extraction, reconciliation, reads, with each knower's
+  notebook in a `LocalStore` (`memoryStore()` by default; one JSON-safe `ScopeRecord` per knower).
+  The model is the app's: a `Model` function, `anthropicModel` in `./anthropic` (the official SDK
+  as an optional peer), or `appleModel` in `./apple` (Apple's on-device model through the Swift
+  bridge in `apple/`), with `fallbackModel` for on-device first. `statelessIntelligence` is
+  stateless mode in-process. `fakeIntelligence` is now the local driver with a script.
 - **Defaults and presets.** `ENGINE_DEFAULTS`; `extendVocabulary` and `extendLens`, which record
   `basedOn`; presets `person`, `place` and `product` in `./presets`.
 - **`Fact.lastSaidAt`**: the newest episode that said a fact. As-of reads withhold later
