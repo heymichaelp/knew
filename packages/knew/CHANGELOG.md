@@ -11,7 +11,8 @@ next direction. It writes no questions.
   `attributeTags`. Several lenses read one vocabulary; writing never names a lens. `compileLens`
   checks every reference; `lensProblems` lists them.
 - **Needs.** A need names a dimension, or `types` with a `label`, and may set `weight`, `enough`,
-  `after` and `when`. Left out, a lens has one need per dimension.
+  `after` and `when`. Left out, a lens has one need per dimension. A lens's `order` is `value`
+  (the default) or `listed`, which keeps directions in the lens's order.
 - **Readiness.** `readinessFor` and `Intelligence.readiness` return `dimensions` (current
   understanding), `needs` (each with a state and a strength) and `next`: directions of kind
   `learn` or `revisit`, with `label`, `dimension`, `types`, `value` and `factIds`. `gapsFor` and
@@ -20,6 +21,9 @@ next direction. It writes no questions.
   `basedOn`; presets `person`, `place` and `product` in `./presets`.
 - **`Fact.lastSaidAt`**: the newest episode that said a fact. As-of reads withhold later
   retellings.
+- **`getEntity`** returns an entity on the roster with no facts when nothing is known yet; null
+  means not on the roster. **`factsTrueAt`** keeps what is true at a moment: believed then, and
+  not past its own end date.
 - **`EpisodeInput.inReplyTo`**: the question your app asked, so extraction reads the answer in
   context.
 - **Noun-neutral names**: `Intelligence`, `upsertEntity`, `deleteEntity`, `entityHints`,

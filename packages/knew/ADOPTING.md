@@ -71,6 +71,41 @@ export const prep = extendLens(person.lens(), {
 compileLens(prep, compileVocabulary(vocabulary)); // throws, naming every problem
 ```
 
+A vocabulary and a lens written from nothing, complete:
+
+```json
+{
+  "id": "places",
+  "version": 1,
+  "kind": "place",
+  "factTypes": {
+    "KIND": { "description": "What kind of place it is.", "dimension": "what", "enduring": true },
+    "HOURS": { "description": "When it is open.", "dimension": "hours", "revisitAfterDays": 30 },
+    "VIBE": { "description": "What it is like to be there. Several can be true at once.", "dimension": "vibe" }
+  },
+  "dimensions": {
+    "what": { "label": "What kind of place it is" },
+    "hours": { "label": "When it is open" },
+    "vibe": { "label": "What it is like to be there" }
+  },
+  "fallbackType": "VIBE",
+  "fields": [],
+  "charter": "# What we keep\n\nWhat changes the next visit. Only what the note says."
+}
+```
+
+```json
+{
+  "id": "visit",
+  "version": 1,
+  "vocabulary": "places",
+  "header": "Before you go to {who}:",
+  "overHeading": "No longer the case",
+  "order": "listed",
+  "needs": [{ "id": "what", "dimension": "what" }, { "id": "hours", "dimension": "hours" }, { "id": "vibe", "dimension": "vibe" }]
+}
+```
+
 **Vocabulary.** `factTypes`, each informing one of the `dimensions`. On a type: `pinned` (always
 on the page, returned as `mustHonor`), `enduring` (only its own type replaces it),
 `revisitAfterDays` (when an unrepeated fact is due for a revisit), `attributes`. Also `fields`
@@ -84,7 +119,17 @@ section and one need per dimension, and the vocabulary's pinned types. A need na
 `extendLens`'s third argument.
 
 **Every field** is documented where it is declared: `dist/vocabulary.d.ts` and `dist/lens.d.ts`,
-and as tables at knew.dev/lenses.
+and as tables at knew.dev/lenses. Parsing and compiling refuse, naming the field:
+- a type informing a dimension that doesn't exist, or a dimension with no type;
+- a `fallbackType` that isn't one of your types;
+- `revisitAfterDays` on an `enduring` type;
+- `promptFields` that aren't among `fields`;
+- a `weight` outside 0 (exclusive) to 1,000;
+- a need naming both a `dimension` and `types`, or neither, or `types` with no `label`;
+- a need waiting on itself or in a circle;
+- a section list that misses a dimension or holds one twice.
+
+Extraction can only write your types: its output schema lists them.
 
 **Register** with `PUT /v1/vocabulary`, then `PUT /v1/lens` for each lens, or the service CLI's
 `vocabulary set` and `lens set`. A registered version is immutable; change the `version`. The
@@ -106,6 +151,13 @@ An outbox table makes steps 2 and 3 survive a crash.
   entityId })` names its entity.
 - **`inReplyTo`**: when the episode answers a question your app asked, pass that question. The
   model reads the answer in context; `content` stays the knower's words.
+- **Corrections and repeats** are the reconcile call's to decide, per entity, against its current
+  facts: add, merge (a retelling, which moves `lastSaidAt`), supersede (the old fact ends, and is
+  still read as of before), or drop. The planner guards it: a fact the model forgot to decide about
+  is added, a decision citing an id it was never shown is added instead, and an `enduring` fact is
+  superseded only by a fact of its own type.
+- **Dates** in facts (`validAt`, `invalidAt`) are `YYYY`, `YYYY-MM` or `YYYY-MM-DD`, read as the
+  start of that period at 00:00 UTC; anything else is no date. A fact ends on its `invalidAt`.
 - **Inline extraction**: `extract: "inline"`, then `extractNow(scope, { maxEpisodes, deadlineMs,
   askedSourceRef })`. `outcome` is `extracted`, `busy` (another worker holds this knower),
   `budget` (deadline reached; work done is kept), `failed` or `none`. Don't loop: if
@@ -125,12 +177,17 @@ Every read that renders takes `lens`; without it, the default lens.
     thin, `revisit` where facts have gone stale), `need`, `label`, `dimension`, `types`, `value`,
     and `factIds`: the facts it builds on, readable through `getEntity`.
 - `gaps(scope, entityId, { lens })`: the `learn` directions only.
-- `getEntity(scope, entityId, { asOf })`: the facts. As of a date, each fact as it was believed then.
+- `getEntity(scope, entityId, { asOf })`: the entity and its facts as believed at `asOf`, with no
+  facts when nothing is known yet; null only when it isn't on the roster. Believed is not true: a
+  fact past its own end date is still listed. `factsTrueAt(view.facts, asOf)` keeps only what is
+  true then.
 - `searchFacts`, `factsLearnedBy(scope, sourceRefs)`, `episodes`.
 
 Reads throw `IntelligenceClientError` past their timeout. Answer from what you hold.
 
-**How directions are ordered.** A direction's value is `weight × (1 − strength)`. A fact due for a
+**How directions are ordered.** With `order: "listed"`, in the lens's order: the first need not
+met, or gone stale, comes first, whatever the weights. That is "the first of these that applies".
+Otherwise (`order: "value"`, the default), a direction's value is `weight × (1 − strength)`. A fact due for a
 revisit counts half, so with `enough: 1` a stale need of weight `w` ranks like an open need of
 weight `w / 2`. Use `after` for coarse-before-fine, not weights. With equal weights, directions
 follow the lens's order. A fact is due once `revisitAfterDays` days have passed since it was last

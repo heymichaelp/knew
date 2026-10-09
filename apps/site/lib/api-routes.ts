@@ -38,7 +38,7 @@ export const ROUTE_GROUPS: RouteGroup[] = [
       "Entities of the vocabulary's kind, named by the client. Reads take ?lens=; without it, the client's default lens.",
     routes: [
       { method: "PUT", path: "/v1/entities/:id", client: "upsertEntity", budget: "write", summary: "Create an entity or merge its fields. Null clears a field." },
-      { method: "GET", path: "/v1/entities/:id", client: "getEntity", budget: "read", summary: "The entity and its current facts, or null." },
+      { method: "GET", path: "/v1/entities/:id", client: "getEntity", budget: "read", summary: "The entity and its facts as believed; no facts yet, or null if not on the roster." },
       { method: "GET", path: "/v1/entities/:id/brief", client: "brief", budget: "read", summary: "The page: current understanding, rendered through a lens." },
       { method: "GET", path: "/v1/entities/:id/gaps", client: "gaps", budget: "read", summary: "Missing understanding: the lens's unmet needs, most valuable first." },
       { method: "GET", path: "/v1/entities/:id/readiness", client: "readiness", budget: "read", summary: "Current understanding per dimension, each need's standing, and the next directions." },

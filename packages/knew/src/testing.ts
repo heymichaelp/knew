@@ -406,7 +406,8 @@ export function fakeIntelligence(options: FakeIntelligenceOptions = {}): FakeInt
     async getEntity(scope, entityId, readOptions = {}) {
       const lens = readOptions.includeBrief ? lensFor(readOptions.lens) : null;
       const s = state(scope);
-      const entity = s.entities.get(entityId);
+      // On the roster with nothing known yet is an entity with no facts; off the roster is nothing.
+      const entity = s.entities.get(entityId) ?? entityFor(s, entityId);
       if (!entity) return null;
       const facts = factsKnownAt(entity.facts, readOptions.asOf);
       const { facts: _all, ...rest } = entity;

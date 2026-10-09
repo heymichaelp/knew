@@ -17,6 +17,7 @@ export const LENS_FIELD_NOTES: Record<string, string> = {
   pinned: "The types a reader must honor. Default: the vocabulary's pinned types.",
   attributeTags: "Attributes shown in brackets after a fact.",
   needs: "What the objective needs understood. Default: one need per dimension.",
+  order: "`value` (default): directions by weight × (1 − strength). `listed`: in the lens's order, the first need not met or gone stale first.",
 };
 
 /** The fields inside a need and a section. */

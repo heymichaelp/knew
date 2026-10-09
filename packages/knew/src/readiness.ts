@@ -75,7 +75,8 @@ const oldestSaidFirst = (a: Fact, b: Fact): number => lastSaidOf(a).getTime() - 
  * newest said first, or, when it has none, on the facts of the needs it comes
  * after. A due need is a direction of kind "revisit" carrying the facts due,
  * oldest said first. A direction's value is weight · (1 − strength);
- * directions run from the highest value, ties in the lens's order.
+ * directions run from the highest value, ties in the lens's order, or, for a
+ * lens whose `order` is `listed`, in the lens's order alone.
  */
 export function readinessFor(
   lens: Lens,
@@ -160,7 +161,7 @@ export function readinessFor(
       }
       return { kind: "learn", ...about, factIds: builtOn };
     })
-    .sort((a, b) => b.value - a.value || order.get(a.need)! - order.get(b.need)!);
+    .sort((a, b) => (lens.order === "listed" ? 0 : b.value - a.value) || order.get(a.need)! - order.get(b.need)!);
 
   const totalWeight = needs.reduce((sum, standing) => sum + standing.weight, 0);
   return {

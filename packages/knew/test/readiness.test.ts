@@ -4,6 +4,8 @@ import {
   compileLens,
   compileVocabulary,
   ENGINE_DEFAULTS,
+  factsKnownAt,
+  factsTrueAt,
   gapsFor,
   isDueForRevisit,
   readinessFor,
@@ -299,5 +301,35 @@ describe("Scenario: A need of a dimension counts every type in it, a retired typ
   it("names the lens and its objective, and the moment it describes", () => {
     const readiness = readinessFor(fixtureVisitLens(), mother, [], now);
     assert.deepEqual([readiness.lens, readiness.objective, readiness.at], ["fixture-visit", "Plan a visit: how their days go before what they love.", now]);
+  });
+});
+
+describe("Scenario: A lens can keep its directions in the order it lists them", () => {
+  const now = at("2026-10-05T00:00:00Z");
+  const needs: NeedSpec[] = [
+    { id: "light", label: "Light", types: ["CIRCUMSTANCE"] },
+    { id: "heavy", label: "Heavy", types: ["LIKES"], weight: 3 },
+  ];
+
+  it("puts the first need not met first, whatever the weights, where the value order would not", () => {
+    assert.deepEqual(readinessFor(lensOf(needs), mother, [], now).next.map((d) => d.need), ["heavy", "light"]);
+    assert.deepEqual(readinessFor(lensOf(needs, { order: "listed" }), mother, [], now).next.map((d) => d.need), ["light", "heavy"]);
+  });
+
+  it("puts a stale first need ahead of an open heavy one, so 'first of these that applies' needs no weights", () => {
+    const stale = fact("CIRCUMSTANCE", "Works nights", "2026-01-01");
+    const listed = readinessFor(lensOf(needs, { order: "listed" }), mother, [stale], now);
+    assert.deepEqual(listed.next.map((d) => [d.kind, d.need]), [["revisit", "light"], ["learn", "heavy"]]);
+    assert.deepEqual(readinessFor(lensOf(needs), mother, [stale], now).next.map((d) => d.need), ["heavy", "light"], "by value, the open heavy need wins");
+  });
+});
+
+describe("Scenario: What is true at a moment is what was believed then, less what had ended", () => {
+  it("keeps a six-month stay true for its six months, and believed all year", () => {
+    const stay = fact("CIRCUMSTANCE", "Six months in Lisbon", "2026-04-01", { invalidAt: at("2026-10-01T00:00:00Z") });
+    assert.deepEqual(factsTrueAt([stay], at("2026-06-01T00:00:00Z")).map((f) => f.fact), ["Six months in Lisbon"]);
+    assert.deepEqual(factsTrueAt([stay], at("2026-11-01T00:00:00Z")), [], "over by its own end date");
+    assert.deepEqual(factsKnownAt([stay], at("2026-11-01T00:00:00Z")).map((f) => f.fact), ["Six months in Lisbon"], "and still believed");
+    assert.deepEqual(factsTrueAt([stay], at("2026-03-01T00:00:00Z")), [], "and not yet said");
   });
 });
