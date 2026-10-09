@@ -36,6 +36,7 @@ const DOCS = [
     label: "Presets",
     blurb: `The ${listed(presetNames)} preset${presetNames.length === 1 ? "" : "s"}: dimensions, fact types and starter lenses.`,
   },
+  { href: "/sandbox", label: "Sandbox", blurb: "Try a preset or your own shapes: add facts, move time, change the goal, and watch what it reports." },
   { href: "/adopting", label: "Adopting", blurb: "The guide: define, write, read, test." },
   { href: "/api", label: "The API", blurb: "Every route, the envelope, and the two headers." },
   { href: "/contract", label: "The contract", blurb: `The ${contractCaseSummaries().length} cases a driver must pass.` },
@@ -76,6 +77,9 @@ export default function Home() {
             className="border border-ink bg-ink px-5 py-2.5 text-sm text-paper no-underline transition-colors hover:border-stamp hover:bg-stamp"
           >
             Read the guide
+          </Link>
+          <Link href="/sandbox" className="text-sm text-ink no-underline underline-offset-4 hover:text-stamp hover:underline">
+            Try it in the sandbox
           </Link>
           <a href="#quickstart" className="text-sm text-ink no-underline underline-offset-4 hover:text-stamp hover:underline">
             Twenty lines to the first fact ↓
@@ -170,7 +174,7 @@ export default function Home() {
               Everything in this panel comes from <code className="code">renderBrief</code> and{" "}
               <code className="code">readinessFor</code>, run at build time through the{" "}
               <TextLink href="/presets#the-person-preset">person preset</TextLink>, as of {day(AT)}.
-              Goal: “{exampleReadiness.objective}”
+              Goal: “{exampleReadiness.objective}” <TextLink href="/sandbox#start=mum">Change it in the sandbox</TextLink>.
             </p>
           </article>
         </div>
