@@ -20,37 +20,43 @@ It writes no questions. What to do with a direction is your app's call.
 ## Use
 
 ```sh
-npm install @popjoker/knew
+npm install @popjoker/knew @anthropic-ai/sdk
 ```
 
 ```ts
-import { intelligenceClient } from "@popjoker/knew";
+import { compileLens, compileVocabulary, localIntelligence } from "@popjoker/knew";
+import { anthropicModel } from "@popjoker/knew/anthropic";
+import { person } from "@popjoker/knew/presets";
 
-const intelligence = intelligenceClient({
-  baseUrl: process.env.INTELLIGENCE_URL!,
-  serviceKey: process.env.INTELLIGENCE_SERVICE_KEY!,
+// The whole engine, in your process, on your own key. Nothing is hosted.
+const knew = localIntelligence({
+  lenses: [compileLens(person.lens(), compileVocabulary(person.vocabulary()))],
+  model: anthropicModel({ apiKey: process.env.ANTHROPIC_API_KEY }),
 });
 
 const scope = { clientId: "my-app", subjectId: user.id };
-
-await intelligence.upsertEntity(scope, {
-  id: "linda",
-  name: "Linda",
-  fields: { relationship: "mother" },
-});
-
-await intelligence.addEpisode(scope, {
+await knew.upsertEntity(scope, { id: "mia", name: "Mia" });
+await knew.addEpisode(scope, {
   source: "note",
-  sourceRef: note.id,
-  content: note.text,
-  entityHints: ["linda"],
+  content: "Mia's training for the Leeds marathon in April. I've known her since uni.",
+  entityHints: ["mia"],
+  extract: "inline",
 });
+await knew.extractNow(scope, { maxEpisodes: 5 }); // two model calls, on your key
 
-await intelligence.requestExtract(scope); // after your own transaction commits
-
-const brief = await intelligence.brief(scope, "linda"); // the page; null until something is known
-const readiness = await intelligence.readiness(scope, "linda"); // current, missing, next
+const brief = await knew.brief(scope, "mia"); // the page; null until something is known
+const readiness = await knew.readiness(scope, "mia"); // current, missing, next
 ```
+
+Three ways to run it, one contract (`Intelligence`):
+
+- **In your process**: `localIntelligence` with your own model key, keeping each user's notebook
+  in a store you choose (in memory by default). `anthropicModel` is in `./anthropic`; any
+  function that answers a prompt with JSON for a schema works (`Model`).
+- **On the device**: the same, with `appleModel` from `./apple` (Apple's on-device model, through a
+  Swift bridge the package ships in `apple/`). No key, and nothing leaves the phone.
+  `fallbackModel` sends what does not fit to your key instead.
+- **Hosted**: `intelligenceClient` against the knew service.
 
 Start a vocabulary and a lens from a preset:
 
@@ -60,14 +66,16 @@ import { person } from "@popjoker/knew/presets";
 
 const vocabulary = extendVocabulary(person.vocabulary(), { id: "my-app", version: 1, charter: "# What we keep…" });
 const lens = extendLens(person.lens(), { id: "know-them", version: 1, vocabulary: "my-app" });
-// PUT /v1/vocabulary with `vocabulary`, then PUT /v1/lens with `lens`.
 ```
 
 ## Contents
 
-- `Intelligence`, the contract, with two drivers: `intelligenceClient` (HTTP) and
-  `fakeIntelligence` in `./testing`.
-- Stateless mode: `intelligenceClient(...).extract` returns a `ReconciliationPlan` to apply to
+- `Intelligence`, the contract, with drivers: `localIntelligence` (in your process),
+  `intelligenceClient` (HTTP) and `fakeIntelligence` in `./testing` (scripted, for tests).
+- Models: the `Model` function type; `anthropicModel` in `./anthropic`; `appleModel` in `./apple`;
+  `fallbackModel`.
+- Stateless mode: `statelessIntelligence(...).extract` (in your process) or
+  `intelligenceClient(...).extract` (hosted) returns a `ReconciliationPlan` per entity to apply to
   your own store.
 - Pure functions: `renderBrief`, `readinessFor`, `gapsFor`, `mustHonorFrom`,
   `planReconciliation`, `factsKnownAt`, `factsTrueAt`.
@@ -76,7 +84,9 @@ const lens = extendLens(person.lens(), { id: "know-them", version: 1, vocabulary
 - Presets in `./presets`: `person`, `place`, `product`.
 - `contractSuite` in `./testing`, to prove a driver.
 
-No database, no model, no React. Node 22 or later, ES modules, one dependency (zod 4). MIT.
+No database, no network of its own: the model is yours. Node 22 or later, React Native and the
+browser; ES modules; one dependency (zod 4), and `@anthropic-ai/sdk` only if you import
+`./anthropic`. MIT.
 
 ## Docs
 

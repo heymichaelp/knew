@@ -8,7 +8,7 @@ This repo holds two of the three pieces. The third, the Postgres service, lives 
 
 | | | |
 |---|---|---|
-| `packages/knew` | [`@popjoker/knew`](https://www.npmjs.com/package/@popjoker/knew) | The pure core: the contract, vocabularies and lenses, readiness, the brief, the reconciliation plan, the prompts, the HTTP client, the opt-in presets, and the contract suite. No database, no model, no React. |
+| `packages/knew` | [`@popjoker/knew`](https://www.npmjs.com/package/@popjoker/knew) | The engine: the contract, vocabularies and lenses, readiness, the page, the reconciliation plan, the prompts, the whole pipeline in your process (`localIntelligence`), model adapters for Claude and Apple's on-device model, the HTTP client, the opt-in presets, and the contract suite. No database and no network of its own: the model is yours. |
 | `apps/site` | [knew.dev](https://knew.dev) | The site and the developer docs. |
 
 ## Working on it

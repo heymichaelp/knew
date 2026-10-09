@@ -1,7 +1,7 @@
 {
   "name": "@popjoker/knew",
   "version": "0.2.1",
-  "description": "The attention engine's pure core: the contract, the lenses, the brief, the reconciliation plan, the prompt text, and the HTTP client. No database, no model, no React.",
+  "description": "The attention engine: understanding by dimension, the next direction, and the whole pipeline in your process with your own model key, or on the device. One runtime dependency: zod.",
   "license": "MIT",
   "homepage": "https://knew.dev",
   "repository": {
@@ -44,6 +44,14 @@
       "types": "./dist/presets.d.ts",
       "default": "./dist/presets.js"
     },
+    "./anthropic": {
+      "types": "./dist/anthropic.d.ts",
+      "default": "./dist/anthropic.js"
+    },
+    "./apple": {
+      "types": "./dist/apple.d.ts",
+      "default": "./dist/apple.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [
@@ -52,7 +60,8 @@
     "LICENSE",
     "README.md",
     "ADOPTING.md",
-    "CHANGELOG.md"
+    "CHANGELOG.md",
+    "apple"
   ],
   "scripts": {
     "build": "tsc -p .",
@@ -65,7 +74,16 @@
   "dependencies": {
     "zod": "^4.5.4"
   },
+  "peerDependencies": {
+    "@anthropic-ai/sdk": ">=0.133.0"
+  },
+  "peerDependenciesMeta": {
+    "@anthropic-ai/sdk": {
+      "optional": true
+    }
+  },
   "devDependencies": {
+    "@anthropic-ai/sdk": "^0.133.0",
     "@types/node": "^22.0.0",
     "tsx": "^4.20.0",
     "typescript": "^5.9.0"
