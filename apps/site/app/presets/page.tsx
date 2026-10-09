@@ -5,6 +5,8 @@ import { Inline } from "@/components/site/inline";
 import { DocBody, DocHeader, Section, TextLink } from "@/components/site/page-shell";
 import { needMarks, presetOutlines, type PresetOutline } from "@/lib/engine";
 import { presetExtensionExample, slugify } from "@/lib/package-docs";
+import { exampleFor, type PresetName } from "@/lib/sandbox-examples";
+import { SUBJECTS } from "@/lib/subjects";
 
 export const metadata: Metadata = {
   title: "Presets",
@@ -22,13 +24,6 @@ const HEADINGS = [
   ...outlines.map((outline) => ({ id: slugify(titleOf(outline)), text: titleOf(outline), level: 2 })),
   { id: "extending-a-preset", text: "Extending a preset", level: 2 },
 ];
-
-/** Dimensions by what they are about, in this order. */
-const SUBJECTS = [
-  { about: "entity", heading: "About them" },
-  { about: "relationship", heading: "Between you" },
-  { about: "knower", heading: "About you" },
-] as const;
 
 function Row({ term, children }: { readonly term: string; readonly children: ReactNode }) {
   return (
@@ -50,7 +45,8 @@ function Preset({ outline, clause }: { readonly outline: PresetOutline; readonly
         <code className="code">{name}.vocabulary()</code> and <code className="code">{name}.lens()</code> from{" "}
         <code className="code">@popjoker/knew/presets</code>. Vocabulary <code className="code">{vocabulary.id}</code>{" "}
         v{vocabulary.version}, kind <code className="code">{vocabulary.kind}</code>: {vocabulary.factTypeKeys.length} types
-        in {dimensions.length} dimensions.
+        in {dimensions.length} dimensions.{" "}
+        <TextLink href={`/sandbox#start=${exampleFor(name as PresetName).id}`}>Try it in the sandbox</TextLink>.
       </p>
 
       <h3 className="display mt-10 text-xl">Dimensions</h3>
