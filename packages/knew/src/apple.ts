@@ -42,7 +42,14 @@ export interface AppleCall {
 export interface AppleModelOptions {
   /** The app's native bridge to `KnewFoundationModels.respond`: the answer as a JSON string, or a rejection with a `code`. */
   respond: (call: AppleCall) => Promise<string>;
-  /** The model's context window, in tokens. Default 4,096. */
+  /**
+   * The app's native bridge to Apple's own count (`KnewFoundationModels.measure`, iOS 26.4): what
+   * the call costs as Apple's tokenizer reads it, and the model's window. Without it, or when it
+   * rejects (an older OS), the request is estimated, and an estimate can let through a request
+   * Apple then refuses.
+   */
+  measure?: (call: AppleCall) => Promise<{ tokens: number; contextTokens?: number }>;
+  /** The model's context window, in tokens, unless `measure` reports it. Default 4,096. */
   contextTokens?: number;
   /** Kept free for the answer. Default 1,000. */
   reserveForAnswer?: number;
@@ -139,21 +146,27 @@ export function withNulls(schema: Record<string, unknown>, answer: unknown): unk
 export const estimateTokens = (text: string) => Math.ceil(text.length / 3.5);
 
 export function appleModel(options: AppleModelOptions): Model {
-  const budget = (options.contextTokens ?? 4_096) - (options.reserveForAnswer ?? 1_000);
+  const reserve = options.reserveForAnswer ?? 1_000;
   return async (request) => {
     const schema = appleSchemaOf(request.schema);
-    const tokens = estimateTokens(request.system) + estimateTokens(request.prompt) + estimateTokens(JSON.stringify(schema));
+    const call: AppleCall = { instructions: request.system, prompt: request.prompt, schema };
+    const measured = options.measure ? await options.measure(call).catch(() => null) : null;
+    const tokens = measured?.tokens ?? estimateTokens(request.system) + estimateTokens(request.prompt) + estimateTokens(JSON.stringify(schema));
+    const budget = (measured?.contextTokens ?? options.contextTokens ?? 4_096) - reserve;
+    const size = measured ? `${tokens} tokens by Apple's count` : `about ${tokens} tokens`;
     if (tokens > budget) {
-      throw new ModelContextError(`the ${request.task} request is about ${tokens} tokens, past the ${budget} the on-device model has room for`, tokens, budget);
+      throw new ModelContextError(`the ${request.task} request is ${size}, past the ${budget} the on-device model has room for`, tokens, budget);
     }
     if (request.signal?.aborted) throw request.signal.reason ?? new Error("aborted");
     let text: string;
     try {
-      text = await options.respond({ instructions: request.system, prompt: request.prompt, schema });
+      text = await options.respond(call);
     } catch (error) {
       const code = (error as { code?: unknown } | null)?.code;
       const message = error instanceof Error ? error.message : String(error);
-      if (code === "context") throw new ModelContextError(`the on-device model ran out of room for the ${request.task} request`, tokens, budget);
+      if (code === "context") {
+        throw new ModelContextError(`the on-device model ran out of room for the ${request.task} request (${size}, ${budget} allowed before the answer)`, tokens, budget);
+      }
       if (code === "unavailable" || code === "unsupported-language") throw new ModelUnavailableError(message, code);
       throw new AppleModelError(typeof code === "string" ? code : "failed", message);
     }

@@ -53,6 +53,19 @@ public enum KnewFoundationModels {
     }
   }
 
+  /// What a call costs as Apple's tokenizer reads it, and the model's window, for `appleModel`'s
+  /// `measure` (iOS 26.4). The instructions, the prompt and the schema's JSON are each counted as
+  /// text; Apple puts the schema in the prompt in its own form, so that part is close, not exact.
+  @available(iOS 26.4, macOS 26.4, *)
+  public static func measure(instructions: String, prompt: String, schemaJSON: String) async throws -> (tokens: Int, contextSize: Int) {
+    let model = SystemLanguageModel.default
+    var tokens = 0
+    for text in [instructions, prompt, schemaJSON] {
+      tokens += try await model.tokenCount(for: Instructions(text))
+    }
+    return (tokens, model.contextSize)
+  }
+
   /// One call: the instructions, the prompt and the schema in; the answer, as JSON, out.
   public static func respond(instructions: String, prompt: String, schemaJSON: String) async throws -> String {
     guard case .available = SystemLanguageModel.default.availability else {
