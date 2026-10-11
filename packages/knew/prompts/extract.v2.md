@@ -62,6 +62,7 @@ small talk yields nothing, and returning no facts is a correct answer.
   the street from you", "Introduced to you by Dana": never "the writer", "the
   user", "the narrator" or "I".
 
+<!-- if: reply -->
 ## Answers to a question
 
 When the input shows the question they were answering, read what was said
@@ -70,6 +71,7 @@ kids?", is two facts about children at university. The question only
 supplies what a short answer is about; it is never evidence on its own, and
 an answer that does not answer — "not sure", "no idea", a change of
 subject — yields nothing from the question.
+<!-- end if -->
 
 ## Who or what it is about
 
@@ -82,6 +84,7 @@ subject — yields nothing from the question.
 - If you cannot tell which entry a statement is about, drop it. A fact on
   the wrong entry is worse than a missed one.
 
+<!-- if: fields -->
 ## Fields they own
 
 Some fields of an entry are theirs to edit, and when the list shows any
@@ -89,3 +92,4 @@ beside a name, those are the ones. If what they said changes one ("she
 moved to Portland", "she's my mother-in-law, actually"), put it in
 `fieldUpdates` with the value as they would write it. You may ALSO record
 the underlying event as a fact.
+<!-- end if -->

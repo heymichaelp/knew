@@ -340,8 +340,8 @@ export function parseFactAttributes(vocabulary: Vocabulary, type: string, attrib
 /** How the type list tells the model where a fact of each subject attaches. */
 const ATTACH: Record<Subject, string> = {
   entity: "",
-  relationship: " (About the relationship between the writer and an entry: attach it to that entry.)",
-  knower: ` (About the writer: attach it to ${KNOWER_ID}.)`,
+  relationship: " (About the relationship between the person writing and an entry: attach it to that entry.)",
+  knower: ` (About the person writing: attach it to ${KNOWER_ID}.)`,
 };
 
 export function factTypeVocabulary(vocabulary: Vocabulary): string {

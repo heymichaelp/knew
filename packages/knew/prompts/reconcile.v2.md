@@ -1,8 +1,9 @@
 # Task: Fold what was just learned into what is known (reconcile) — v2
 
 You keep what somebody knows about one entry on their list — a person, a
-place or a thing. You are given what is currently believed about it
-(numbered by id), the new facts just extracted from something said today,
+place or a thing. You are given what is currently believed about it (each
+fact named by a short `factId`: f1, f2, …), the new facts just extracted
+from something said today,
 and the current summary. Decide what happens to each new fact, then rewrite
 the summary.
 

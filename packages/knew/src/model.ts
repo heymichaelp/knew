@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { extractInput, reconcileInput, type NewFactForReconcile } from "./extract-io.ts";
+import { conditionsOf, extractInput, promptFor, reconcileInput, resolveFactHandles, type NewFactForReconcile, type PromptConditions } from "./extract-io.ts";
 import type { ReconcileDecisions } from "./reconcile.ts";
 import { extractSchemaFor, reconcileSchema, type Extraction } from "./schemas.ts";
 import type { Fact, ModelCall, ModelUsage, RosterEntry } from "./types.ts";
@@ -113,14 +113,14 @@ export function readerFor(vocabulary: Vocabulary, model: Model): Reader {
   const extractSchema = extractSchemaFor(vocabulary);
   const schemas = { extract: asJsonSchema(extractSchema), reconcile: asJsonSchema(reconcileSchema) };
   const extra = systemExtra(vocabulary);
-  const system = {
-    extract: [vocabulary.prompts.extract.text, ...extra].join("\n\n---\n\n"),
-    reconcile: [vocabulary.prompts.reconcile.text, ...extra].join("\n\n---\n\n"),
-  };
-  async function ask<T>(task: ModelRequest["task"], prompt: string, parser: z.ZodType<T>, calls: ModelCall[], signal?: AbortSignal): Promise<T> {
+  // A prompt's sections that wait for something (a question answered, fields shown) are left
+  // out when the input has none; reconcile has no such sections today.
+  const systemFor = (task: ModelRequest["task"], when: PromptConditions) =>
+    [promptFor(vocabulary.prompts[task].text, when), ...extra].join("\n\n---\n\n");
+  async function ask<T>(task: ModelRequest["task"], system: string, prompt: string, parser: z.ZodType<T>, calls: ModelCall[], signal?: AbortSignal): Promise<T> {
     let answer: ModelAnswer;
     try {
-      answer = await model({ task, system: system[task], prompt, schema: schemas[task], ...(signal ? { signal } : {}) });
+      answer = await model({ task, system, prompt, schema: schemas[task], ...(signal ? { signal } : {}) });
     } catch (error) {
       calls.push({ method: task, model: null, usage: null });
       throw error;
@@ -135,7 +135,12 @@ export function readerFor(vocabulary: Vocabulary, model: Model): Reader {
   }
   return {
     refs: { extract: vocabulary.prompts.extract.ref, reconcile: vocabulary.prompts.reconcile.ref },
-    extract: (args, calls, signal) => ask("extract", extractInput(vocabulary, args), extractSchema, calls, signal),
-    reconcile: (args, calls, signal) => ask("reconcile", reconcileInput(vocabulary, args), reconcileSchema, calls, signal),
+    extract: (args, calls, signal) =>
+      ask("extract", systemFor("extract", conditionsOf(vocabulary, args)), extractInput(vocabulary, args), extractSchema, calls, signal),
+    reconcile: async (args, calls, signal) => {
+      const answer = await ask("reconcile", systemFor("reconcile", { reply: false, fields: false }), reconcileInput(vocabulary, args), reconcileSchema, calls, signal);
+      // The input named the current facts by handle (`f1`, `f2`); the plan needs their ids.
+      return { ...answer, decisions: resolveFactHandles(answer.decisions, args.current) };
+    },
   };
 }
