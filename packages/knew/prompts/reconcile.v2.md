@@ -42,7 +42,9 @@ between add and supersede, add: a wrongly retired fact is lost from the page.
 
 The summary is the first thing a reader sees about this entry, above the
 facts. Write it from the current facts as they stand after your decisions,
-in at most 1,200 characters of plain prose, third person.
+in at most 1,200 characters of plain prose, third person. The person whose
+notes these are is the reader: when the summary mentions them, call them
+"you" ("lives across the street from you"), never "the writer" or "the user".
 
 - Lead with what it is now and what the charter says matters most about it,
   and give any line never to cross.
