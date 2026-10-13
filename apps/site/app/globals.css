@@ -61,7 +61,7 @@
   --color-derived: var(--derived);
   --color-derived-wash: var(--derived-wash);
 
-  --font-display: var(--font-playfair), ui-serif, Georgia, serif;
+  --font-display: var(--font-passion-one), ui-sans-serif, system-ui, sans-serif;
   --font-sans: var(--font-lato), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, "SF Mono", monospace;
 
@@ -88,13 +88,6 @@ body {
   font-synthesis-weight: none;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
-}
-
-main,
-header,
-footer {
-  position: relative;
-  z-index: 1;
 }
 
 ::selection {
@@ -409,12 +402,77 @@ footer {
   animation: press 1.3s cubic-bezier(0.22, 0.61, 0.36, 1) both;
 }
 
+/*
+  The home page's opening, after knewpeople's: the mark large in the middle of the
+  screen, shrinking slowly to its size, and the name and the line arriving under it.
+  First paint only, no script, and not at all for anyone who asked for less motion.
+*/
+.intro-mark {
+  animation: intro-shrink 2.2s cubic-bezier(0.22, 0.8, 0.2, 1) 0.3s both;
+  transform-origin: 50% 100%;
+}
+
+.intro-word {
+  animation: intro-rise 1s ease-out 1.7s both;
+}
+
+.intro-line {
+  animation: intro-rise 1s ease-out 2.2s both;
+}
+
+@keyframes intro-shrink {
+  from {
+    transform: scale(2.4);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+
+@keyframes intro-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/*
+  The hero's mark only: the strands catch the light one at a time, in no order. Each
+  dims softly and comes back on its own clock (set in components/site/mark.tsx).
+*/
+.shimmer {
+  animation-name: shimmer;
+  animation-iteration-count: infinite;
+  animation-timing-function: ease-in-out;
+}
+
+@keyframes shimmer {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  35% {
+    opacity: 0.35;
+  }
+  60% {
+    opacity: 1;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;
   }
   .rise,
-  .press {
+  .press,
+  .intro-mark,
+  .intro-word,
+  .intro-line,
+  .shimmer {
     animation: none;
   }
 }

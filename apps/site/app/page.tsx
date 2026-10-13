@@ -1,6 +1,10 @@
 import Link from "next/link";
 
+import { DRAWER_FOOTER, NAV } from "@/components/site/chrome";
+import { CopyCommand } from "@/components/site/copy-command";
+import { Mark } from "@/components/site/mark";
 import { TextLink } from "@/components/site/page-shell";
+import { ScrollHeader } from "@/components/site/scroll-header";
 import { contractCaseSummaries, presetOutlines } from "@/lib/engine";
 import {
   AT,
@@ -50,18 +54,34 @@ const LAST_CARD = [DOCS.length % 2 === 1 ? "sm:col-span-2" : "", ["lg:col-span-1
 export default function Home() {
   return (
     <>
+      <ScrollHeader nav={NAV} footer={DRAWER_FOOTER} />
+
+      {/*
+        The opening, after knewpeople's: the mark large in the middle of the screen,
+        settling to its size, then the name, the line, and how to install it.
+      */}
+      <section className="flex min-h-[100svh] flex-col items-center justify-center gap-5 px-6 py-24 text-center">
+        <div className="intro-mark">
+          <Mark shimmer className="size-20 text-ink sm:size-24" />
+        </div>
+        <p className="intro-word display text-5xl sm:text-6xl">
+          <span className="mr-[0.05em] inline-block translate-x-[0.04em] translate-y-[0.084em] -scale-y-100">k</span>new
+        </p>
+        <div className="intro-line mt-4 flex flex-col items-center gap-6">
+          <h1 className="display text-title">Attention, invested.</h1>
+          <p className="max-w-xl text-lg leading-relaxed text-ink-soft italic sm:text-xl">
+            There&apos;s no substitute for paying attention. But when you do, knew invests it, and it pays dividends in
+            your relationships.
+          </p>
+          <CopyCommand command={`npm install ${packageManifest.name}`} />
+        </div>
+      </section>
+
       {/* ------------------------------------------------------------- hero */}
-      <section className="mx-auto max-w-6xl px-6 pt-20 pb-16 sm:pt-28">
-        <p className="clause rise">The relationship engine</p>
-        <h1 className="display rise mt-5 max-w-4xl text-hero" style={{ animationDelay: "60ms" }}>
-          Attention, invested.
-        </h1>
-        <div className="mt-10 grid gap-10 lg:grid-cols-[minmax(0,34rem)_auto] lg:items-start lg:justify-between">
+      <section className="mx-auto max-w-6xl px-6 pt-16 pb-16 sm:pt-20">
+        <p className="clause">The relationship engine</p>
+        <div className="mt-5 grid gap-10 lg:grid-cols-[minmax(0,34rem)_auto] lg:items-start lg:justify-between">
           <div className="flex flex-col gap-5">
-            <p className="rise font-[family-name:var(--font-display)] text-xl leading-relaxed italic" style={{ animationDelay: "140ms" }}>
-              There&apos;s no substitute for paying attention. But when you do, knew invests it, and it pays dividends in
-              your relationships.
-            </p>
             <p className="rise text-lg leading-relaxed text-ink-soft" style={{ animationDelay: "180ms" }}>
               A relationship is what you have with anything you are getting to know: a person, a place, a thing. knew
               reads your notes into typed, dated facts, organised by the dimensions of that relationship, and for a goal
@@ -102,7 +122,7 @@ export default function Home() {
             <p className="label mt-5">
               {exampleEpisode.sourceLabel} · {day(exampleEpisode.at)}
             </p>
-            <blockquote className="mt-4 font-[family-name:var(--font-display)] text-[1.0625rem] leading-relaxed italic">
+            <blockquote className="mt-4 text-[1.0625rem] leading-relaxed italic">
               “{exampleEpisode.words}”
             </blockquote>
             <p className="mt-6 text-sm text-ink-faint">

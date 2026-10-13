@@ -4,7 +4,7 @@ import { packageManifest } from "@/lib/package-docs";
 
 import { Mark } from "./mark";
 
-const NAV = [
+export const NAV = [
   { href: "/lenses", label: "Lenses" },
   { href: "/presets", label: "Presets" },
   { href: "/sandbox", label: "Sandbox" },
@@ -44,6 +44,12 @@ export function SiteHeader() {
     </header>
   );
 }
+
+/** The quiet links at the foot of the home page's drawer. */
+export const DRAWER_FOOTER = [
+  { href: "https://www.npmjs.com/package/@popjoker/knew", label: `${packageManifest.name} ${packageManifest.version}` },
+  { href: "https://github.com/heymichaelp/knew", label: "GitHub" },
+];
 
 export function SiteFooter() {
   return (
