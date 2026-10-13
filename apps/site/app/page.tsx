@@ -5,6 +5,7 @@ import { CopyCommand } from "@/components/site/copy-command";
 import { Mark } from "@/components/site/mark";
 import { TextLink } from "@/components/site/page-shell";
 import { ScrollHeader } from "@/components/site/scroll-header";
+import { ShowcaseCarousel } from "@/components/site/showcase-carousel";
 import { Wordmark } from "@/components/site/wordmark";
 import { contractCaseSummaries, presetOutlines } from "@/lib/engine";
 import {
@@ -16,6 +17,7 @@ import {
   exampleReadiness,
 } from "@/lib/example";
 import { codeBlocks, packageManifest, readShipped } from "@/lib/package-docs";
+import { scenarios } from "@/lib/showcase";
 
 const day = (date: Date) => date.toISOString().slice(0, 10);
 
@@ -31,8 +33,7 @@ const listed = (items: string[]) => (items.length <= 1 ? items.join("") : `${ite
 const presetNames = presetOutlines().map((outline) => outline.name);
 
 const quickstart = codeBlocks(readShipped("README.md"));
-const install = quickstart.find((b) => b.lang === "sh")?.code ?? "npm install @popjoker/knew";
-const usage = quickstart.find((b) => b.lang === "ts")?.code ?? "";
+const install = (quickstart.find((b) => b.lang === "sh")?.code ?? "npm install @popjoker/knew").trim();
 
 const DOCS = [
   { href: "/lenses", label: "Lenses", blurb: "Every field of a vocabulary and a lens, generated from the schemas, and the defaults." },
@@ -52,7 +53,7 @@ const DOCS = [
 /** The last card stretches to the end of its row, so the grid never shows an empty cell. */
 const LAST_CARD = [DOCS.length % 2 === 1 ? "sm:col-span-2" : "", ["lg:col-span-1", "lg:col-span-3", "lg:col-span-2"][DOCS.length % 3]].join(" ");
 
-export default function Home() {
+export default async function Home() {
   return (
     <>
       <ScrollHeader nav={NAV} footer={DRAWER_FOOTER} />
@@ -109,7 +110,7 @@ export default function Home() {
             Try it in the sandbox
           </Link>
           <a href="#quickstart" className="text-sm text-ink no-underline underline-offset-4 hover:text-stamp hover:underline">
-            Twenty lines to the first fact ↓
+            See it in code ↓
           </a>
         </div>
       </section>
@@ -244,28 +245,27 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ------------------------------------------------------------ quickstart */}
+      {/* ---------------------------------------------------------- in code */}
       <section id="quickstart" className="mx-auto max-w-6xl px-6 pb-20">
-        <div className="rule-t grid gap-10 pt-10 lg:grid-cols-[18rem_minmax(0,1fr)]">
+        <div className="rule-t grid grid-cols-1 gap-6 pt-10 lg:grid-cols-[18rem_minmax(0,1fr)] lg:gap-10">
           <div>
-            <p className="clause">Quickstart</p>
-            <h2 className="display mt-2 text-3xl">Twenty lines to the first fact.</h2>
-            <p className="mt-4 text-sm text-ink-soft">
-              From the package&apos;s <code className="code">README.md</code>, read at build time.
-            </p>
-            <p className="mt-4 text-sm text-ink-faint">
-              Node 22 or later, React Native or the browser. The only dependency is zod 4; the Anthropic SDK only if you
-              use Claude.
-            </p>
+            <p className="clause">In code</p>
+            <h2 className="display mt-2 text-3xl">What it does, in code.</h2>
           </div>
-          <div className="min-w-0">
-            <pre className="overflow-x-auto border border-rule border-l-2 border-l-stamp bg-paper-sunken p-5 code text-[0.8125rem] leading-relaxed">
-              {install}
-            </pre>
-            <pre className="mt-4 overflow-x-auto border border-rule border-l-2 border-l-rule-strong bg-paper-sunken p-5 code text-[0.8125rem] leading-relaxed">
-              {usage}
-            </pre>
+          <div className="flex min-w-0 flex-col gap-4 text-sm text-ink-soft lg:pt-6">
+            <p className="max-w-2xl">
+              Sketches, not the API: the calls are simplified to show the idea. The values are real. Each sketch runs
+              against the engine when this site builds, with the model&apos;s reading of each note scripted, and
+              everything under a line is knew&apos;s own output. The real calls are in{" "}
+              <TextLink href="/adopting">the guide</TextLink>.
+            </p>
+            <div className="max-w-full self-start">
+              <CopyCommand command={install} />
+            </div>
           </div>
+        </div>
+        <div className="mt-10">
+          <ShowcaseCarousel scenarios={await scenarios()} />
         </div>
       </section>
 
