@@ -22,7 +22,7 @@ export function SiteHeader() {
       <div className="mx-auto flex max-w-6xl flex-wrap items-baseline gap-x-6 gap-y-2 px-6 py-3.5">
         <Link href="/" aria-label="knew, home" className="flex items-center gap-2 self-center text-ink no-underline">
           <Mark className="size-6 shrink-0" />
-          <Wordmark className="text-2xl" />
+          <Wordmark className="text-2xl" small />
         </Link>
         <nav className="flex flex-wrap items-baseline gap-x-5 gap-y-1">
           {NAV.map((item) => (
@@ -59,7 +59,7 @@ export function SiteFooter() {
         <div className="measure">
           <p className="flex items-center gap-2.5">
             <Mark className="size-7 shrink-0" />
-            <Wordmark className="text-3xl" />
+            <Wordmark className="text-3xl" small />
           </p>
           <p className="mt-3 text-sm text-ink-soft">
             The relationship engine. {packageManifest.license}-licensed, {packageManifest.version}, by invitation.
