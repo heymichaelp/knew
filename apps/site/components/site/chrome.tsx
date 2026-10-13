@@ -2,6 +2,8 @@ import Link from "next/link";
 
 import { packageManifest } from "@/lib/package-docs";
 
+import { Mark } from "./mark";
+
 const NAV = [
   { href: "/lenses", label: "Lenses" },
   { href: "/presets", label: "Presets" },
@@ -17,10 +19,9 @@ export function SiteHeader() {
   return (
     <header className="sticky top-0 z-20 border-b border-rule bg-paper/88 backdrop-blur-md">
       <div className="mx-auto flex max-w-6xl flex-wrap items-baseline gap-x-6 gap-y-2 px-6 py-3.5">
-        <Link href="/" className="display text-xl tracking-tight text-ink no-underline">
-          knew
-          <span className="text-stamp">.</span>
-          dev
+        <Link href="/" className="display flex items-center gap-2 self-center text-xl tracking-tight text-ink no-underline">
+          <Mark className="size-6 shrink-0" />
+          knew.dev
         </Link>
         <nav className="flex flex-wrap items-baseline gap-x-5 gap-y-1">
           {NAV.map((item) => (
@@ -49,8 +50,9 @@ export function SiteFooter() {
     <footer className="mt-28 border-t border-rule">
       <div className="mx-auto grid max-w-6xl gap-8 px-6 py-12 sm:grid-cols-[1fr_auto]">
         <div className="measure">
-          <p className="display text-2xl">
-            knew<span className="text-stamp">.</span>dev
+          <p className="display flex items-center gap-2.5 text-2xl">
+            <Mark className="size-7 shrink-0" />
+            knew.dev
           </p>
           <p className="mt-3 text-sm text-ink-soft">
             The relationship engine. {packageManifest.license}-licensed, {packageManifest.version}, by invitation.

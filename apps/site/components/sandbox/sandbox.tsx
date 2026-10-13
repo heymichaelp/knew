@@ -593,7 +593,7 @@ export function Sandbox() {
                   <button
                     type="submit"
                     disabled={!form.text.trim()}
-                    className="border border-ink bg-ink px-5 py-2 text-sm text-paper transition-colors hover:border-stamp hover:bg-stamp disabled:opacity-40"
+                    className="border border-ink bg-ink px-5 py-2 text-sm text-paper transition-colors hover:border-ink-soft hover:bg-ink-soft disabled:opacity-40"
                   >
                     {form.editing ? "Save the fact" : "Add the fact"}
                   </button>
