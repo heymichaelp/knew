@@ -12,10 +12,18 @@
   0.05em gap. The k is flipped the way CSS flipped it, about the middle of its box, which
   sits (ascent − descent) / 2 above the baseline, then moved 0.04em right and 0.084em down:
   the offsets tuned by eye on an iPhone at the opening's size.
+
+  The box the drawing reports is the x-height band of "new" alone — from the baseline up to
+  the top of the small letters — and the ascent and the k's hanging stem overflow it. That
+  way whatever centres on the name, the mark beside it in the header and the footer, centres
+  on the letters of "new", and the stem falls below the centre the way a descender would.
+  The bottom edge is the baseline, so inline it sits where text would.
 */
 const ASCENT = 0.835;
 const DESCENT = 0.266;
 const WIDTH = 1.979;
+/** The x-height: the top of "new" above the baseline. */
+const X_HEIGHT = 0.491;
 /** The middle of the k's box: (ascent − descent) / 2 above the baseline. */
 const AXIS = -(ASCENT - DESCENT) / 2;
 const K_OFFSET = { x: 0.04, y: 0.084 };
@@ -25,15 +33,14 @@ const NEW = "M0.685 -0.444L0.689 -0.444Q0.744 -0.491 0.81 -0.491Q0.876 -0.491 0.
 
 export function Wordmark({ className = "" }: { readonly className?: string }) {
   return (
-    <span className={className}>
+    <span className={`inline-flex ${className}`}>
       <svg
         role="img"
         aria-label="knew"
-        viewBox={`0 ${-ASCENT} ${WIDTH} ${ASCENT + DESCENT}`}
+        viewBox={`0 ${-X_HEIGHT} ${WIDTH} ${X_HEIGHT}`}
         fill="currentColor"
-        className="inline-block overflow-visible"
-        // As tall as a line of the face, and on its baseline, so it sits where the text did.
-        style={{ width: `${WIDTH}em`, height: `${ASCENT + DESCENT}em`, verticalAlign: `${-DESCENT}em` }}
+        className="overflow-visible"
+        style={{ width: `${WIDTH}em`, height: `${X_HEIGHT}em` }}
       >
         <path d={K} transform={`translate(${K_OFFSET.x} ${2 * AXIS + K_OFFSET.y}) scale(1 -1)`} />
         <path d={NEW} />
