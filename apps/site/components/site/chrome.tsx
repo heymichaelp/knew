@@ -53,7 +53,7 @@ export function SiteFooter() {
             knew<span className="text-stamp">.</span>dev
           </p>
           <p className="mt-3 text-sm text-ink-soft">
-            The attention engine. {packageManifest.license}-licensed, {packageManifest.version}, by invitation.
+            The relationship engine. {packageManifest.license}-licensed, {packageManifest.version}, by invitation.
             Its core ships no vocabulary or lens of its own.
           </p>
         </div>

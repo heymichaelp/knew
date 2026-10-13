@@ -1,7 +1,7 @@
 {
   "name": "@popjoker/knew",
   "version": "0.2.1",
-  "description": "The attention engine: understanding by dimension, the next direction, and the whole pipeline in your process with your own model key, or on the device. One runtime dependency: zod.",
+  "description": "The relationship engine: understanding by dimension, the next direction, and the whole pipeline in your process with your own model key, or on the device. One runtime dependency: zod.",
   "license": "MIT",
   "homepage": "https://knew.dev",
   "repository": {
@@ -13,7 +13,7 @@
     "url": "https://github.com/heymichaelp/knew/issues"
   },
   "keywords": [
-    "attention",
+    "relationship",
     "intelligence",
     "facts",
     "bi-temporal",
