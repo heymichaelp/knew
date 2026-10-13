@@ -101,7 +101,7 @@ export default function Home() {
         <div className="rise mt-10 flex flex-wrap items-center gap-x-6 gap-y-3" style={{ animationDelay: "220ms" }}>
           <Link
             href="/adopting"
-            className="border border-ink bg-ink px-5 py-2.5 text-sm text-paper no-underline transition-colors hover:border-ink-soft hover:bg-ink-soft"
+            className="border border-ink bg-ink px-5 py-2.5 text-sm text-paper no-underline transition-colors hover:border-stamp hover:bg-stamp"
           >
             Read the guide
           </Link>
@@ -138,7 +138,7 @@ export default function Home() {
             <div className="mt-3">
               {exampleFacts.map((f) => (
                 <div key={f.id} className="ledger-row">
-                  <span className="code text-[0.6875rem] tracking-[0.12em] text-stamp">
+                  <span className="code text-[0.6875rem] tracking-[0.12em] text-ink">
                     {f.type}
                     {typeof f.attributes.level === "string" ? (
                       <span className="text-ink-faint"> [{f.attributes.level}]</span>
@@ -185,8 +185,8 @@ export default function Home() {
               <p className="mt-2 text-sm text-ink-soft">{missing.map((need) => need.label).join(" · ") || "Nothing"}</p>
             </div>
             {next.map((direction, index) => (
-              <div key={direction.need} className="mt-5 border-l-2 border-derived pl-4">
-                <p className="label" style={{ color: "var(--derived)" }}>
+              <div key={direction.need} className={`mt-5 border-l-2 pl-4 ${index === 0 ? "border-stamp" : "border-rule-strong"}`}>
+                <p className="label" style={index === 0 ? { color: "var(--stamp)" } : undefined}>
                   {index === 0 ? "Next direction" : "Then"} · {direction.kind === "learn" ? "learn" : "revisit"}
                 </p>
                 <p className="mt-1.5 text-[0.9375rem] leading-snug">
