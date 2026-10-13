@@ -52,17 +52,23 @@ export default function Home() {
     <>
       {/* ------------------------------------------------------------- hero */}
       <section className="mx-auto max-w-6xl px-6 pt-20 pb-16 sm:pt-28">
-        <p className="clause rise">The attention engine</p>
+        <p className="clause rise">The relationship engine</p>
         <h1 className="display rise mt-5 max-w-4xl text-hero" style={{ animationDelay: "60ms" }}>
-          Understanding, by dimension, and where it should go next.
+          Attention, invested.
         </h1>
         <div className="mt-10 grid gap-10 lg:grid-cols-[minmax(0,34rem)_auto] lg:items-start lg:justify-between">
-          <p className="rise text-lg leading-relaxed text-ink-soft" style={{ animationDelay: "140ms" }}>
-            knew reads notes into typed, dated facts, organised by the dimensions of what someone understands about a
-            person, place or thing. For a goal, it reports the current understanding, what is missing, and the most
-            valuable direction to take next. It writes no questions: what to do with a direction is your app&apos;s
-            call.
-          </p>
+          <div className="flex flex-col gap-5">
+            <p className="rise font-[family-name:var(--font-display)] text-xl leading-relaxed italic" style={{ animationDelay: "140ms" }}>
+              There&apos;s no substitute for paying attention. But when you do, knew invests it, and it pays dividends in
+              your relationships.
+            </p>
+            <p className="rise text-lg leading-relaxed text-ink-soft" style={{ animationDelay: "180ms" }}>
+              A relationship is what you have with anything you are getting to know: a person, a place, a thing. knew
+              reads your notes into typed, dated facts, organised by the dimensions of that relationship, and for a goal
+              reports what you understand, what is missing, and the most valuable direction to take next. It writes no
+              questions: what to do with a direction is your app&apos;s call.
+            </p>
+          </div>
           <p className="stamp press" style={{ animationDelay: "320ms" }}>
             <span>{packageManifest.license}</span>
             <span aria-hidden>·</span>

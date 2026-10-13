@@ -35,14 +35,14 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   metadataBase: new URL("https://knew.dev"),
   title: {
-    default: "knew — the attention engine",
+    default: "knew — the relationship engine",
     template: "%s — knew",
   },
   description:
-    "knew turns notes into dated facts organised by dimensions of understanding, and reports, for a goal, what is understood, what is missing, and the most valuable direction next.",
+    "There's no substitute for paying attention. But when you do, knew invests it, and it pays dividends in your relationships: notes become dated facts by dimension, and for a goal it reports what is understood, what is missing, and the most valuable direction next.",
   openGraph: {
-    title: "knew — the attention engine",
-    description: "Understanding, by dimension, and where it should go next.",
+    title: "knew — the relationship engine",
+    description: "Attention, invested.",
     url: "https://knew.dev",
     siteName: "knew",
     type: "website",

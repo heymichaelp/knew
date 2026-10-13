@@ -1,6 +1,6 @@
 # knew
 
-The attention engine: one engine, distinct clients. This repo is the npm package and the
+The relationship engine: one engine, distinct clients. This repo is the npm package and the
 knew.dev site. The Postgres service is `heymichaelp/knew-service`.
 
 ## What it is
