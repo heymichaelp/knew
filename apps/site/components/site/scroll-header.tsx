@@ -67,7 +67,7 @@ export function ScrollHeader({ nav, footer }: { readonly nav: readonly NavItem[]
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
           <Link href="/" aria-label="knew, home" tabIndex={shown ? 0 : -1} className="flex items-center gap-2 text-ink no-underline">
             <Mark className="size-6 shrink-0" />
-            <Wordmark className="text-2xl" small />
+            <Wordmark className="text-2xl" />
           </Link>
           <button
             type="button"
@@ -98,7 +98,7 @@ export function ScrollHeader({ nav, footer }: { readonly nav: readonly NavItem[]
         <div className="flex h-16 items-center justify-between px-5">
           <span className="flex items-center gap-2 text-ink">
             <Mark className="size-5 shrink-0" />
-            <Wordmark className="text-xl" small />
+            <Wordmark className="text-xl" />
           </span>
           <button
             type="button"
