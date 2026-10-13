@@ -80,7 +80,7 @@ export default function Home() {
         <div className="rise mt-10 flex flex-wrap items-center gap-x-6 gap-y-3" style={{ animationDelay: "220ms" }}>
           <Link
             href="/adopting"
-            className="border border-ink bg-ink px-5 py-2.5 text-sm text-paper no-underline transition-colors hover:border-stamp hover:bg-stamp"
+            className="border border-ink bg-ink px-5 py-2.5 text-sm text-paper no-underline transition-colors hover:border-ink-soft hover:bg-ink-soft"
           >
             Read the guide
           </Link>

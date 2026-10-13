@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160">
+<style>
+.mk-hs { stroke: #000; fill: none; stroke-width: 6.875; stroke-linecap: round; }
+.mk-fl { fill: #000; }
+@media (prefers-color-scheme: dark) {
+  .mk-hs { stroke: #fff; }
+  .mk-fl { fill: #fff; }
+}
+</style>
+
+<g transform="translate(-20,47.5) scale(1.25)"><g transform="rotate(-16 80 26) translate(80 -0.9) scale(1.25)"><path class="mk-hs" d="M0 0 q4 -3 0 -7 q-4 -3.5 0 -7 q4 -3.5 0 -7"/></g><g transform="rotate(16 80 26) translate(80 -0.9) scale(1.25)"><path class="mk-hs" d="M0 0 q4 -3 0 -7 q-4 -3.5 0 -7 q4 -3.5 0 -7"/></g><g transform="rotate(45 80 26) translate(80 -0.9) scale(1.25)"><path class="mk-hs" d="M0 0 q4 -3 0 -7 q-4 -3.5 0 -7"/></g><g transform="rotate(74 80 26) translate(80 -0.9) scale(1.25)"><path class="mk-hs" d="M0 0 q4 -3 0 -7 q-4 -3.5 0 -7 q4 -3.5 0 -7"/></g><g transform="rotate(106 80 26) translate(80 -0.9) scale(1.25)"><path class="mk-hs" d="M0 0 q4 -3 0 -7 q-4 -3.5 0 -7 q4 -3.5 0 -7"/></g><g transform="rotate(135 80 26) translate(80 -0.9) scale(1.25)"><path class="mk-hs" d="M0 0 q4 -3 0 -7 q-4 -3.5 0 -7"/></g><g transform="rotate(164 80 26) translate(80 -0.9) scale(1.25)"><path class="mk-hs" d="M0 0 q4 -3 0 -7 q-4 -3.5 0 -7 q4 -3.5 0 -7"/></g><g transform="rotate(196 80 26) translate(80 -0.9) scale(1.25)"><path class="mk-hs" d="M0 0 q4 -3 0 -7 q-4 -3.5 0 -7 q4 -3.5 0 -7"/></g><g transform="rotate(225 80 26) translate(80 -0.9) scale(1.25)"><path class="mk-hs" d="M0 0 q4 -3 0 -7 q-4 -3.5 0 -7"/></g><g transform="rotate(254 80 26) translate(80 -0.9) scale(1.25)"><path class="mk-hs" d="M0 0 q4 -3 0 -7 q-4 -3.5 0 -7 q4 -3.5 0 -7"/></g><g transform="rotate(286 80 26) translate(80 -0.9) scale(1.25)"><path class="mk-hs" d="M0 0 q4 -3 0 -7 q-4 -3.5 0 -7 q4 -3.5 0 -7"/></g><g transform="rotate(315 80 26) translate(80 -0.9) scale(1.25)"><path class="mk-hs" d="M0 0 q4 -3 0 -7 q-4 -3.5 0 -7"/></g><circle class="mk-fl" cx="80" cy="26" r="17.3"/></g>
+</svg>
