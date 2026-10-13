@@ -115,6 +115,30 @@ export default async function Home() {
         </div>
       </section>
 
+      {/* ---------------------------------------------------------- in code */}
+      <section id="quickstart" className="mx-auto max-w-6xl px-6 pb-20">
+        <div className="rule-t grid grid-cols-1 gap-6 pt-10 lg:grid-cols-[18rem_minmax(0,1fr)] lg:gap-10">
+          <div>
+            <p className="clause">In code</p>
+            <h2 className="display mt-2 text-3xl">What it does, in code.</h2>
+          </div>
+          <div className="flex min-w-0 flex-col gap-4 text-sm text-ink-soft lg:pt-6">
+            <p className="max-w-2xl">
+              Sketches, not the API: the calls are simplified to show the idea. The values are real. Each sketch runs
+              against the engine when this site builds, with the model&apos;s reading of each note scripted, and
+              everything under a line is knew&apos;s own output. The real calls are in{" "}
+              <TextLink href="/adopting">the guide</TextLink>.
+            </p>
+            <div className="max-w-full self-start">
+              <CopyCommand command={install} />
+            </div>
+          </div>
+        </div>
+        <div className="mt-10">
+          <ShowcaseCarousel scenarios={await scenarios()} />
+        </div>
+      </section>
+
       {/* -------------------------------------------- the spread: in, out, read */}
       <section className="mx-auto max-w-6xl px-6 pb-8">
         <div className="rule-t grid gap-px bg-rule pt-0 lg:grid-cols-3">
@@ -242,30 +266,6 @@ export default async function Home() {
               notes. Or keep your own store, and get back a plan to apply to it.
             </p>
           </div>
-        </div>
-      </section>
-
-      {/* ---------------------------------------------------------- in code */}
-      <section id="quickstart" className="mx-auto max-w-6xl px-6 pb-20">
-        <div className="rule-t grid grid-cols-1 gap-6 pt-10 lg:grid-cols-[18rem_minmax(0,1fr)] lg:gap-10">
-          <div>
-            <p className="clause">In code</p>
-            <h2 className="display mt-2 text-3xl">What it does, in code.</h2>
-          </div>
-          <div className="flex min-w-0 flex-col gap-4 text-sm text-ink-soft lg:pt-6">
-            <p className="max-w-2xl">
-              Sketches, not the API: the calls are simplified to show the idea. The values are real. Each sketch runs
-              against the engine when this site builds, with the model&apos;s reading of each note scripted, and
-              everything under a line is knew&apos;s own output. The real calls are in{" "}
-              <TextLink href="/adopting">the guide</TextLink>.
-            </p>
-            <div className="max-w-full self-start">
-              <CopyCommand command={install} />
-            </div>
-          </div>
-        </div>
-        <div className="mt-10">
-          <ShowcaseCarousel scenarios={await scenarios()} />
         </div>
       </section>
 
