@@ -1,16 +1,20 @@
 @import "tailwindcss";
 
 /*
-  knew.dev — black and white.
+  knew.dev — black and white, with two accents from the body.
 
-  Ink on paper and nothing else: white and black, with greys only for what
-  steps back (secondary text, rules, sunken code). The mark, the type and the
-  hairlines carry the page; there is no accent hue.
+  Ink on paper: white and black, with greys for what steps back (secondary text,
+  rules, sunken code). Two accents, used sparingly and only where they contrast:
 
-  Every colour is a token. Light is the default; dark inverts the same tokens
-  under prefers-color-scheme, so nothing here needs a `dark:` variant. `stamp`
-  is the emphasis (full ink) and `derived` the quieter grey for what the
-  engine worked out; the names are kept so every component reads the same.
+  - `muscle` (the `stamp` token), a deep raw red: emphasis that can carry text —
+    the marginal clause numbers, link underlines and hovers, the required mark,
+    the first direction, focus rings, and the button's hover. 7:1 on paper.
+  - `flesh`, a warm skin tone: never text, only fills — washes behind a note,
+    the selection, a met need's bar.
+
+  The mark stays black and white. Every colour is a token; dark redefines the same
+  tokens under prefers-color-scheme, with both accents lifted to read on black.
+  `derived` stays the quieter grey for what the engine worked out.
 */
 
 :root {
@@ -22,8 +26,9 @@
   --ink-faint: #737373;
   --rule: #e5e5e5;
   --rule-strong: #cccccc;
-  --stamp: #000000;
-  --stamp-wash: #0000000a;
+  --stamp: #9b2c2c;
+  --flesh: #e7a68a;
+  --stamp-wash: #e7a68a2e;
   --derived: #5c5c5c;
   --derived-wash: #00000008;
   --shadow-page: 0 1px 0 var(--rule);
@@ -39,8 +44,9 @@
     --ink-faint: #8c8c8c;
     --rule: #262626;
     --rule-strong: #404040;
-    --stamp: #ffffff;
-    --stamp-wash: #ffffff12;
+    --stamp: #e5786a;
+    --flesh: #edb497;
+    --stamp-wash: #edb4971f;
     --derived: #a6a6a6;
     --derived-wash: #ffffff0d;
     --shadow-page: 0 1px 0 var(--rule);
@@ -58,10 +64,11 @@
   --color-rule-strong: var(--rule-strong);
   --color-stamp: var(--stamp);
   --color-stamp-wash: var(--stamp-wash);
+  --color-flesh: var(--flesh);
   --color-derived: var(--derived);
   --color-derived-wash: var(--derived-wash);
 
-  --font-display: var(--font-playfair), ui-serif, Georgia, serif;
+  --font-display: var(--font-passion-one), ui-sans-serif, system-ui, sans-serif;
   --font-sans: var(--font-lato), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, "SF Mono", monospace;
 
@@ -90,15 +97,8 @@ body {
   text-rendering: optimizeLegibility;
 }
 
-main,
-header,
-footer {
-  position: relative;
-  z-index: 1;
-}
-
 ::selection {
-  background: color-mix(in oklab, var(--stamp) 22%, transparent);
+  background: color-mix(in oklab, var(--flesh) 45%, transparent);
   color: var(--ink);
 }
 
@@ -409,12 +409,77 @@ footer {
   animation: press 1.3s cubic-bezier(0.22, 0.61, 0.36, 1) both;
 }
 
+/*
+  The home page's opening, after knewpeople's: the mark large in the middle of the
+  screen, shrinking slowly to its size, and the name and the line arriving under it.
+  First paint only, no script, and not at all for anyone who asked for less motion.
+*/
+.intro-mark {
+  animation: intro-shrink 2.2s cubic-bezier(0.22, 0.8, 0.2, 1) 0.3s both;
+  transform-origin: 50% 100%;
+}
+
+.intro-word {
+  animation: intro-rise 1s ease-out 1.7s both;
+}
+
+.intro-line {
+  animation: intro-rise 1s ease-out 2.2s both;
+}
+
+@keyframes intro-shrink {
+  from {
+    transform: scale(2.4);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+
+@keyframes intro-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/*
+  The hero's mark only: the strands catch the light one at a time, in no order. Each
+  dims softly and comes back on its own clock (set in components/site/mark.tsx).
+*/
+.shimmer {
+  animation-name: shimmer;
+  animation-iteration-count: infinite;
+  animation-timing-function: ease-in-out;
+}
+
+@keyframes shimmer {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  35% {
+    opacity: 0.35;
+  }
+  60% {
+    opacity: 1;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;
   }
   .rise,
-  .press {
+  .press,
+  .intro-mark,
+  .intro-word,
+  .intro-line,
+  .shimmer {
     animation: none;
   }
 }

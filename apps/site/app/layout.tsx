@@ -1,20 +1,19 @@
 import type { Metadata } from "next";
-import { Geist_Mono, Lato, Playfair_Display } from "next/font/google";
+import { Geist_Mono, Lato, Passion_One } from "next/font/google";
 
 import { SiteFooter, SiteHeader } from "@/components/site/chrome";
+import { UnlessHome } from "@/components/site/scroll-header";
 import "./globals.css";
 
 /*
-  Playfair Display for anything that speaks: a high-contrast serif with thin,
-  almost drawn strokes — romantic rather than official. Lato carries the reading,
-  soft and humanist and unhurried. The pairing is Figma's own (Playfair and Lato
-  both sit in its Josefin Sans palette). Geist Mono appears in code and nowhere
-  else — labels and dates are set in the reading face, so the page stays soft.
+  Passion One for anything that speaks: the wordmark and the headings, round and
+  heavy, black on white. Lato carries the reading, soft and humanist. Geist Mono
+  appears in code and nowhere else — labels and dates are set in the reading face.
 */
-const playfair = Playfair_Display({
+const passionOne = Passion_One({
   subsets: ["latin"],
-  style: ["normal", "italic"],
-  variable: "--font-playfair",
+  weight: "400",
+  variable: "--font-passion-one",
   display: "swap",
 });
 
@@ -51,9 +50,11 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { readonly children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${playfair.variable} ${lato.variable} ${geistMono.variable}`}>
+    <html lang="en" className={`${passionOne.variable} ${lato.variable} ${geistMono.variable}`}>
       <body>
-        <SiteHeader />
+        <UnlessHome>
+          <SiteHeader />
+        </UnlessHome>
         <main>{children}</main>
         <SiteFooter />
       </body>

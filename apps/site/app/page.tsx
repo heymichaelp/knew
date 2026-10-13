@@ -1,6 +1,11 @@
 import Link from "next/link";
 
+import { DRAWER_FOOTER, NAV } from "@/components/site/chrome";
+import { CopyCommand } from "@/components/site/copy-command";
+import { Mark } from "@/components/site/mark";
 import { TextLink } from "@/components/site/page-shell";
+import { ScrollHeader } from "@/components/site/scroll-header";
+import { Wordmark } from "@/components/site/wordmark";
 import { contractCaseSummaries, presetOutlines } from "@/lib/engine";
 import {
   AT,
@@ -50,18 +55,34 @@ const LAST_CARD = [DOCS.length % 2 === 1 ? "sm:col-span-2" : "", ["lg:col-span-1
 export default function Home() {
   return (
     <>
+      <ScrollHeader nav={NAV} footer={DRAWER_FOOTER} />
+
+      {/*
+        The opening, after knewpeople's: the mark large in the middle of the screen,
+        settling to its size, then the name, the line, and how to install it.
+      */}
+      <section className="flex min-h-[100svh] flex-col items-center justify-center gap-5 px-6 py-24 text-center">
+        <div className="intro-mark">
+          <Mark shimmer className="size-20 text-ink sm:size-24" />
+        </div>
+        <p className="intro-word">
+          <Wordmark className="text-5xl sm:text-6xl" />
+        </p>
+        <div className="intro-line mt-4 flex flex-col items-center gap-6">
+          <h1 className="display text-title">Attention, invested.</h1>
+          <p className="max-w-xl text-lg leading-relaxed text-ink-soft italic sm:text-xl">
+            There&apos;s no substitute for paying attention. But when you do, knew invests it, and it pays dividends in
+            your relationships.
+          </p>
+          <CopyCommand command={`npm install ${packageManifest.name}`} />
+        </div>
+      </section>
+
       {/* ------------------------------------------------------------- hero */}
-      <section className="mx-auto max-w-6xl px-6 pt-20 pb-16 sm:pt-28">
-        <p className="clause rise">The relationship engine</p>
-        <h1 className="display rise mt-5 max-w-4xl text-hero" style={{ animationDelay: "60ms" }}>
-          Attention, invested.
-        </h1>
-        <div className="mt-10 grid gap-10 lg:grid-cols-[minmax(0,34rem)_auto] lg:items-start lg:justify-between">
+      <section className="mx-auto max-w-6xl px-6 pt-16 pb-16 sm:pt-20">
+        <p className="clause">The relationship engine</p>
+        <div className="mt-5 grid gap-10 lg:grid-cols-[minmax(0,34rem)_auto] lg:items-start lg:justify-between">
           <div className="flex flex-col gap-5">
-            <p className="rise font-[family-name:var(--font-display)] text-xl leading-relaxed italic" style={{ animationDelay: "140ms" }}>
-              There&apos;s no substitute for paying attention. But when you do, knew invests it, and it pays dividends in
-              your relationships.
-            </p>
             <p className="rise text-lg leading-relaxed text-ink-soft" style={{ animationDelay: "180ms" }}>
               A relationship is what you have with anything you are getting to know: a person, a place, a thing. knew
               reads your notes into typed, dated facts, organised by the dimensions of that relationship, and for a goal
@@ -80,7 +101,7 @@ export default function Home() {
         <div className="rise mt-10 flex flex-wrap items-center gap-x-6 gap-y-3" style={{ animationDelay: "220ms" }}>
           <Link
             href="/adopting"
-            className="border border-ink bg-ink px-5 py-2.5 text-sm text-paper no-underline transition-colors hover:border-ink-soft hover:bg-ink-soft"
+            className="border border-ink bg-ink px-5 py-2.5 text-sm text-paper no-underline transition-colors hover:border-stamp hover:bg-stamp"
           >
             Read the guide
           </Link>
@@ -102,7 +123,7 @@ export default function Home() {
             <p className="label mt-5">
               {exampleEpisode.sourceLabel} · {day(exampleEpisode.at)}
             </p>
-            <blockquote className="mt-4 font-[family-name:var(--font-display)] text-[1.0625rem] leading-relaxed italic">
+            <blockquote className="mt-4 text-[1.0625rem] leading-relaxed italic">
               “{exampleEpisode.words}”
             </blockquote>
             <p className="mt-6 text-sm text-ink-faint">
@@ -117,7 +138,7 @@ export default function Home() {
             <div className="mt-3">
               {exampleFacts.map((f) => (
                 <div key={f.id} className="ledger-row">
-                  <span className="code text-[0.6875rem] tracking-[0.12em] text-stamp">
+                  <span className="code text-[0.6875rem] tracking-[0.12em] text-ink">
                     {f.type}
                     {typeof f.attributes.level === "string" ? (
                       <span className="text-ink-faint"> [{f.attributes.level}]</span>
@@ -164,8 +185,8 @@ export default function Home() {
               <p className="mt-2 text-sm text-ink-soft">{missing.map((need) => need.label).join(" · ") || "Nothing"}</p>
             </div>
             {next.map((direction, index) => (
-              <div key={direction.need} className="mt-5 border-l-2 border-derived pl-4">
-                <p className="label" style={{ color: "var(--derived)" }}>
+              <div key={direction.need} className={`mt-5 border-l-2 pl-4 ${index === 0 ? "border-stamp" : "border-rule-strong"}`}>
+                <p className="label" style={index === 0 ? { color: "var(--stamp)" } : undefined}>
                   {index === 0 ? "Next direction" : "Then"} · {direction.kind === "learn" ? "learn" : "revisit"}
                 </p>
                 <p className="mt-1.5 text-[0.9375rem] leading-snug">

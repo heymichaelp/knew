@@ -70,7 +70,7 @@ function Preset({ outline, clause }: { readonly outline: PresetOutline; readonly
                   <div className="mt-2">
                     {dimension.types.map((type) => (
                       <div key={type.key} className="ledger-row">
-                        <span className="code text-[0.6875rem] tracking-[0.12em] text-stamp">{type.key}</span>
+                        <span className="code text-[0.6875rem] tracking-[0.12em] text-ink">{type.key}</span>
                         <span className="text-[0.9375rem] leading-snug">
                           {type.description}
                           {type.attributes.length ? <span className="text-ink-faint"> {type.attributes.join(", ")}</span> : null}

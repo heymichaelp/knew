@@ -243,10 +243,10 @@ function Problems({ problems }: { problems: string[] }) {
   );
 }
 
-function Bar({ value, tone }: { value: number; tone: "stamp" | "derived" }) {
+function Bar({ value, tone }: { value: number; tone: "stamp" | "flesh" }) {
   return (
     <span className="block h-1.5 w-full overflow-hidden rounded-full bg-paper-sunken">
-      <span className={`block h-full rounded-full ${tone === "stamp" ? "bg-stamp" : "bg-derived"}`} style={{ width: percent(value) }} />
+      <span className={`block h-full rounded-full ${tone === "stamp" ? "bg-stamp" : "bg-flesh"}`} style={{ width: percent(value) }} />
     </span>
   );
 }
@@ -459,7 +459,7 @@ export function Sandbox() {
                         const values = Object.values(draft.attributes).filter(Boolean);
                         return (
                           <div key={draft.id} className={`ledger-row ${report.known.has(draft.id) ? "" : "opacity-50"}`}>
-                            <span className="code text-[0.6875rem] tracking-[0.12em] break-all text-stamp">{draft.type}</span>
+                            <span className="code text-[0.6875rem] tracking-[0.12em] break-all text-ink">{draft.type}</span>
                             <span className="text-[0.9375rem] leading-snug">
                               {draft.text}
                               <span className="mt-0.5 block text-xs text-ink-faint">
@@ -593,7 +593,7 @@ export function Sandbox() {
                   <button
                     type="submit"
                     disabled={!form.text.trim()}
-                    className="border border-ink bg-ink px-5 py-2 text-sm text-paper transition-colors hover:border-ink-soft hover:bg-ink-soft disabled:opacity-40"
+                    className="border border-ink bg-ink px-5 py-2 text-sm text-paper transition-colors hover:border-stamp hover:bg-stamp disabled:opacity-40"
                   >
                     {form.editing ? "Save the fact" : "Add the fact"}
                   </button>
@@ -807,8 +807,8 @@ function Results({ report, lens }: { report: Report; lens: Lens }) {
         ) : (
           <ol className="space-y-4">
             {readiness.next.map((direction, index) => (
-              <li key={direction.need} className={`border-l-2 pl-4 ${index === 0 ? "border-derived" : "border-rule-strong"}`}>
-                <p className="label" style={index === 0 ? { color: "var(--derived)" } : undefined}>
+              <li key={direction.need} className={`border-l-2 pl-4 ${index === 0 ? "border-stamp" : "border-rule-strong"}`}>
+                <p className="label" style={index === 0 ? { color: "var(--stamp)" } : undefined}>
                   {index === 0 ? "Next" : `Then, ${index + 1}`} · {direction.kind} · {SUBJECT_HEADING[direction.about].toLowerCase()} · value{" "}
                   {direction.value}
                 </p>
@@ -844,7 +844,7 @@ function Results({ report, lens }: { report: Report; lens: Lens }) {
                   {need.due > 0 ? `, ${need.due} due` : ""} · weighs {need.weight}
                 </span>
               </span>
-              <Bar value={need.strength} tone={need.state === "met" ? "derived" : "stamp"} />
+              <Bar value={need.strength} tone={need.state === "met" ? "flesh" : "stamp"} />
             </div>
           ))}
         </div>
@@ -878,7 +878,7 @@ function Results({ report, lens }: { report: Report; lens: Lens }) {
             <ul className="mt-2 space-y-1 text-[0.9375rem]">
               {report.mustHonor.map((line) => (
                 <li key={`${line.type}:${line.fact}`}>
-                  <span className="code text-[0.6875rem] tracking-[0.12em] text-stamp">{line.type}</span> {line.fact}
+                  <span className="code text-[0.6875rem] tracking-[0.12em] text-ink">{line.type}</span> {line.fact}
                 </li>
               ))}
             </ul>
