@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { Mark } from "./mark";
+import { Wordmark } from "./wordmark";
 
 export interface NavItem {
   readonly href: string;
@@ -64,9 +65,9 @@ export function ScrollHeader({ nav, footer }: { readonly nav: readonly NavItem[]
         className={`fixed inset-x-0 top-0 z-40 border-b border-rule bg-paper/90 backdrop-blur transition-transform duration-300 ${shown || open ? "translate-y-0" : "-translate-y-full"}`}
       >
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
-          <Link href="/" aria-label="knew.dev, home" tabIndex={shown ? 0 : -1} className="display flex items-center gap-2 text-xl text-ink no-underline">
+          <Link href="/" aria-label="knew, home" tabIndex={shown ? 0 : -1} className="flex items-center gap-2 text-ink no-underline">
             <Mark className="size-6 shrink-0" />
-            knew.dev
+            <Wordmark className="text-2xl" />
           </Link>
           <button
             type="button"
@@ -95,9 +96,9 @@ export function ScrollHeader({ nav, footer }: { readonly nav: readonly NavItem[]
         className={`fixed inset-y-0 right-0 z-50 flex w-[min(20rem,85vw)] flex-col border-l-[1.5px] border-ink bg-paper shadow-[-4px_0_0_var(--ink)] transition-transform duration-300 ${open ? "translate-x-0" : "translate-x-[calc(100%+8px)]"}`}
       >
         <div className="flex h-16 items-center justify-between px-5">
-          <span className="display flex items-center gap-2 text-lg text-ink">
+          <span className="flex items-center gap-2 text-ink">
             <Mark className="size-5 shrink-0" />
-            knew.dev
+            <Wordmark className="text-xl" />
           </span>
           <button
             type="button"

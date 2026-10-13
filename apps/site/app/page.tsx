@@ -5,6 +5,7 @@ import { CopyCommand } from "@/components/site/copy-command";
 import { Mark } from "@/components/site/mark";
 import { TextLink } from "@/components/site/page-shell";
 import { ScrollHeader } from "@/components/site/scroll-header";
+import { Wordmark } from "@/components/site/wordmark";
 import { contractCaseSummaries, presetOutlines } from "@/lib/engine";
 import {
   AT,
@@ -64,8 +65,8 @@ export default function Home() {
         <div className="intro-mark">
           <Mark shimmer className="size-20 text-ink sm:size-24" />
         </div>
-        <p className="intro-word display text-5xl sm:text-6xl">
-          <span className="mr-[0.05em] inline-block translate-x-[0.04em] translate-y-[0.084em] -scale-y-100">k</span>new
+        <p className="intro-word">
+          <Wordmark className="text-5xl sm:text-6xl" />
         </p>
         <div className="intro-line mt-4 flex flex-col items-center gap-6">
           <h1 className="display text-title">Attention, invested.</h1>
