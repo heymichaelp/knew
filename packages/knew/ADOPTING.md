@@ -101,7 +101,11 @@ export const intelligence = localIntelligence({ lenses: [lens], model: onDevice,
   The Swift file is a reference: build and check it on a device.
 - **Room**: the on-device model reads about 4,096 tokens in all. A short note against a small
   roster fits; a long note, or reconciling against many facts, may not. A request past the budget
-  is refused before the call (`ModelContextError`), and the episode waits.
+  is refused before the call (`ModelContextError`), and the episode waits. The budget is an
+  estimate unless you pass `measure`: a bridge to `KnewFoundationModels.measure` (iOS 26.4), which
+  counts the call with Apple's own tokenizer and reports the model's window. The estimate runs
+  low against Apple's count, so without `measure` Apple may refuse a request the estimate let
+  through; that refusal is a `ModelContextError` too.
 - **Your key as the fallback**: `fallbackModel(onDevice, anthropicModel({ apiKey }))` sends a
   request that doesn't fit, or a device without the model (`ModelUnavailableError`), to your key
   instead. Leave it out to keep everything on the device. `calls` shows which model read each note.

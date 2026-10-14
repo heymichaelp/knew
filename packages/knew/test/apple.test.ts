@@ -87,6 +87,20 @@ describe("Scenario: A note read on the device", () => {
     await assert.rejects(tiny({ task: "extract", system: "x".repeat(400), prompt: "p", schema: { type: "object", properties: {} } }), ModelContextError);
     assert.equal(called, false);
 
+    // Apple's own count, where the bridge has it, decides instead of the estimate: both ways.
+    const counted = (tokens: number, contextTokens?: number) =>
+      appleModel({ respond: async () => ((called = true), "{}"), measure: async () => ({ tokens, contextTokens }), reserveForAnswer: 100 });
+    const short = { task: "extract" as const, system: "s", prompt: "p", schema: { type: "object", properties: {} } };
+    await assert.rejects(counted(4_000)(short), (error: unknown) => error instanceof ModelContextError && /4000 tokens by Apple's count, past the 3996/.test(error.message));
+    assert.equal(called, false);
+    await assert.rejects(counted(600, 600)(short), ModelContextError, "the window the bridge reports replaces the default");
+    const long = { ...short, system: "x".repeat(20_000) };
+    await counted(3_000)(long);
+    assert.equal(called, true, "a request the estimate would refuse goes, when Apple counts it short enough");
+    // A bridge that cannot count (an OS before 26.4) falls back to the estimate.
+    const uncounted = appleModel({ respond: async () => "{}", measure: async () => Promise.reject(new Error("unsupported")), contextTokens: 50, reserveForAnswer: 10 });
+    await assert.rejects(uncounted(long), (error: unknown) => error instanceof ModelContextError && /about \d+ tokens/.test(error.message));
+
     const failingWith = (code: string) => appleModel({ respond: async () => Promise.reject(Object.assign(new Error(code), { code })) });
     const ask = (code: string) => failingWith(code)({ task: "reconcile", system: "s", prompt: "p", schema: { type: "object", properties: {} } });
     await assert.rejects(ask("context"), ModelContextError);

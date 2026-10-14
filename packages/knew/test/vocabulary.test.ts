@@ -45,8 +45,8 @@ describe("Scenario: A vocabulary is data a client registers, and extraction writ
   it("renders the type list the prompt reads: one line per type, attributes named, and where a fact about the relationship or the knower attaches", () => {
     const list = factTypeVocabulary(fixtureVocabulary());
     assert.equal(list.split("\n").length, 10);
-    assert.ok(list.includes("- HISTORY: How the knower and they know each other. (About the relationship between the writer and an entry: attach it to that entry.)"));
-    assert.ok(list.includes("- MEANS: What the knower can spend or give. (About the writer: attach it to self.)"));
+    assert.ok(list.includes("- HISTORY: How the knower and they know each other. (About the relationship between the person writing and an entry: attach it to that entry.)"));
+    assert.ok(list.includes("- MEANS: What the knower can spend or give. (About the person writing: attach it to self.)"));
     assert.ok(list.includes("- SKILL: A pursuit with a depth claim. Attributes: level."));
     assert.ok(list.includes("- LIKES: An interest, with no claim about depth.\n"));
   });

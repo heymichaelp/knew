@@ -1,9 +1,12 @@
 import {
   attributeFacts,
+  conditionsOf,
   extractInput,
   extractSchemaFor,
   reconcileInput,
+  promptFor,
   reconcileSchema,
+  resolveFactHandles,
   systemExtra,
   type EpisodeInput,
   type IntelligenceScope,
@@ -70,7 +73,9 @@ const mentions = (statement: Statement, ...words: string[]) => words.some((word)
  * scripted into the fake, whose planner applies it as the service's would.
  */
 function knewBench(createApp: (engine: unknown) => unknown, vocabulary: Vocabulary, lenses: Lens[], model: Model): () => Haunts {
-  const extractSystem = [vocabulary.prompts.extract.text, ...systemExtra(vocabulary)].join("\n\n");
+  // Sections of the prompt that wait for a question or for fields are left out when the note has neither, as the engine does.
+  const extractSystem = (roster: RosterEntry[], inReplyTo: string | null) =>
+    [promptFor(vocabulary.prompts.extract.text, conditionsOf(vocabulary, { roster, inReplyTo })), ...systemExtra(vocabulary)].join("\n\n");
   const reconcileSystem = [vocabulary.prompts.reconcile.text, ...systemExtra(vocabulary)].join("\n\n");
   const extractShape = extractSchemaFor(vocabulary);
   const extractJson = z.toJSONSchema(extractShape);
@@ -93,7 +98,7 @@ function knewBench(createApp: (engine: unknown) => unknown, vocabulary: Vocabula
       const roster = rosterOf(scope);
       const extraction = extractShape.parse(
         await model({
-          system: extractSystem,
+          system: extractSystem(roster, input.inReplyTo ?? null),
           prompt: extractInput(vocabulary, { content: input.content, source: input.source, referenceAt, roster, hints: input.entityHints ?? [], inReplyTo: input.inReplyTo ?? null }),
           schema: extractJson,
         }),
@@ -104,11 +109,8 @@ function knewBench(createApp: (engine: unknown) => unknown, vocabulary: Vocabula
         const view = await fake.getEntity(scope, entityId);
         const held = (view?.facts ?? []).filter((fact) => !fact.expiredAt);
         if (held.length === 0) continue;
-        // The model is shown stand-in ids, numbered in order, so what it is asked never depends on how many facts
-        // the fake minted before; its answer is mapped back to the real ones.
-        const standIn = (index: number) => `00000000-0000-4000-a000-${String(index + 1).padStart(12, "0")}`;
-        const current = held.map((fact, index) => ({ ...fact, id: standIn(index) }));
-        const real = new Map(held.map((fact, index) => [standIn(index), fact.id]));
+        // The model is shown the current facts by handle (f1, f2, in order), so what it is asked never depends on the
+        // ids the fake minted; its answer is mapped back to them as the engine's reader does.
         const entry = roster.find((candidate) => candidate.id === entityId)!;
         const answer = reconcileSchema.parse(
           await model({
@@ -116,14 +118,14 @@ function knewBench(createApp: (engine: unknown) => unknown, vocabulary: Vocabula
             prompt: reconcileInput(vocabulary, {
               entity: { name: entry.name, fields: entry.fields },
               referenceAt,
-              current,
+              current: held,
               incoming: incoming.map((fact) => ({ type: fact.type, fact: fact.fact, validAt: fact.validAt ?? null, invalidAt: fact.invalidAt ?? null })),
               summary: view?.summary ?? "",
             }),
             schema: reconcileJson,
           }),
         );
-        decisions.set(entry.name, { ...answer, decisions: answer.decisions.map((decision) => ({ ...decision, factId: decision.factId ? (real.get(decision.factId) ?? decision.factId) : null })) });
+        decisions.set(entry.name, { ...answer, decisions: resolveFactHandles(answer.decisions, held) });
       }
       return { extraction, reconcile: (entity) => decisions.get(entity.name) ?? { decisions: [], summary: `About ${entity.name}.` } };
     };

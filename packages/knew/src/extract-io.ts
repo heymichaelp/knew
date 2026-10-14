@@ -4,11 +4,57 @@ import type { Fact, ProposedDirection, RosterEntry } from "./types.ts";
 import { KNOWER_ID, whoLabel, type Vocabulary } from "./vocabulary.ts";
 
 /**
- * What the two model calls are shown — pure, so what the model sees is
+ * What the model calls are shown — pure, so what the model sees is
  * testable without a model. The vocabulary supplies its kind, the source
  * labels and which of an entity's fields are shown beside its name;
  * everything else is the engine's one wording, and names no domain.
  */
+
+/** The fields shown beside an entry's name: the vocabulary's prompt fields that have a value. */
+function fieldsShown(vocabulary: Vocabulary, entry: RosterEntry): Array<[string, string]> {
+  return vocabulary.promptFields.flatMap((field) => {
+    const value = entry.fields[field];
+    return typeof value === "string" && value.trim() !== "" ? [[field, value] as [string, string]] : [];
+  });
+}
+
+/**
+ * What a prompt section can wait for: `reply`, a question being answered; `fields`, a field
+ * shown beside a name on the list. A prompt marks such a section on lines of its own:
+ *
+ *     <!-- if: reply -->
+ *     ## Answers to a question
+ *     …
+ *     <!-- end if -->
+ */
+export interface PromptConditions {
+  reply: boolean;
+  fields: boolean;
+}
+
+/** What an extract input gives the prompt to act on. */
+export function conditionsOf(vocabulary: Vocabulary, input: { inReplyTo?: string | null; roster: RosterEntry[] }): PromptConditions {
+  return {
+    reply: Boolean(input.inReplyTo),
+    fields: input.roster.some((entry) => entry.id !== KNOWER_ID && fieldsShown(vocabulary, entry).length > 0),
+  };
+}
+
+const SECTION = /<!-- if: (\w+) -->\n([\s\S]*?)<!-- end if -->\n?(\n?)/g;
+
+/**
+ * A prompt without the sections that have nothing to act on: a model reads only what applies to
+ * this input, which matters most where the window is small. A prompt with no marked sections
+ * comes back as it is, and a section waiting for a condition the engine does not know is kept.
+ */
+export function promptFor(text: string, when: PromptConditions): string {
+  if (!text.includes("<!-- if: ")) return text;
+  return text
+    .replace(SECTION, (_, name: string, body: string, gap: string) =>
+      name in when && !when[name as keyof PromptConditions] ? "" : `${body}${gap}`,
+    )
+    .replace(/\n+$/, "\n");
+}
 
 export function extractInput(
   vocabulary: Vocabulary,
@@ -33,11 +79,7 @@ export function extractInput(
       ? `${knowerLine}\n(no other entries yet — anyone or anything else mentioned is unresolved)`
       : [knowerLine, ...others
           .map((entry) => {
-            const parts = [`id: ${entry.id}`, `name: ${entry.name}`];
-            for (const field of vocabulary.promptFields) {
-              const value = entry.fields[field];
-              if (typeof value === "string" && value.trim() !== "") parts.push(`${field}: ${value}`);
-            }
+            const parts = [`id: ${entry.id}`, `name: ${entry.name}`, ...fieldsShown(vocabulary, entry).map(([field, value]) => `${field}: ${value}`)];
             if (entry.aliases.length > 0) parts.push(`also called: ${entry.aliases.join(", ")}`);
             const hinted = input.hints.includes(entry.id) ? " (recorded about them)" : "";
             return `- ${parts.join(" | ")}${hinted}`;
@@ -74,6 +116,26 @@ export function extractInput(
   ].join("\n\n");
 }
 
+/**
+ * How reconcile names a current fact: `f1`, `f2`, … in the order listed. A stored id is 36
+ * characters and many tokens, and is listed once per fact on every reconcile, so the list that
+ * grows with what is known stays as short as it can.
+ */
+export const factHandle = (index: number) => `f${index + 1}`;
+
+/**
+ * Reconcile's decisions with each handle it cited turned back into the fact's id, against the
+ * same `current` the input listed. Anything else is left as the model wrote it, for the plan to
+ * report as an id it was never shown.
+ */
+export function resolveFactHandles<T extends { factId: string | null }>(decisions: T[], current: ReadonlyArray<{ id: string }>): T[] {
+  return decisions.map((decision) => {
+    const match = /^f(\d+)$/.exec(decision.factId?.trim() ?? "");
+    const fact = match ? current[Number(match[1]) - 1] : undefined;
+    return fact ? { ...decision, factId: fact.id } : decision;
+  });
+}
+
 export interface NewFactForReconcile {
   type: string;
   fact: string;
@@ -85,11 +147,14 @@ export interface NewFactForReconcile {
 const when = (fact: { validAt: Date | null; invalidAt: Date | null }): string =>
   [fact.validAt ? `true since ${dayOf(fact.validAt)}` : null, fact.invalidAt ? `until ${dayOf(fact.invalidAt)}` : null].filter(Boolean).join(", ");
 
-/** A current fact as the reconcile and next calls list it: `- id | type | fact | dates`. */
-const factLine = (fact: Fact): string => {
+/** A current fact as a call lists it, under the name that call gives it: `- name | type | fact | dates`. */
+const lineOf = (name: string, fact: Fact): string => {
   const dates = [when(fact), `told us ${dayOf(fact.createdAt)}`].filter(Boolean).join("; ");
-  return `- ${fact.id} | ${fact.type} | ${fact.fact} | ${dates}`;
+  return `- ${name} | ${fact.type} | ${fact.fact} | ${dates}`;
 };
+
+/** A current fact under its own id, as the next call lists it: the ids it cites are the facts'. */
+const factLine = (fact: Fact): string => lineOf(fact.id, fact);
 
 export function reconcileInput(
   vocabulary: Vocabulary,
@@ -101,7 +166,8 @@ export function reconcileInput(
     summary: string;
   },
 ): string {
-  const current = input.current.length === 0 ? "(nothing yet)" : input.current.map(factLine).join("\n");
+  // Reconcile names the current facts by handle, the plan turns the handles back into ids.
+  const current = input.current.length === 0 ? "(nothing yet)" : input.current.map((fact, index) => lineOf(factHandle(index), fact)).join("\n");
   const incoming = input.incoming
     .map((fact, index) => {
       const dates = when(fact);
@@ -111,7 +177,7 @@ export function reconcileInput(
   return [
     `About this ${vocabulary.kind}: ${whoLabel(vocabulary, input.entity)}`,
     `Today (when the new facts were said): ${dayOf(input.referenceAt)}`,
-    `Current facts (id | type | fact | dates):\n${current}`,
+    `Current facts (factId | type | fact | dates):\n${current}`,
     `New facts (index | type | fact | dates):\n${incoming}`,
     `Current summary:\n"""\n${input.summary || "(none yet)"}\n"""`,
   ].join("\n\n");

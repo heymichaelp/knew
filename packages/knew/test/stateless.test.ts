@@ -30,7 +30,9 @@ describe("Scenario: An app with its own store asks for a plan, in its own proces
         };
       }
       reconciled.push(request.prompt.split("\n")[0]!);
-      const known = /- (00000000-0000-4000-8000-0000000000aa) \|/.exec(request.prompt);
+      // The current facts are named by handle, not id; the engine turns the handle back into the id.
+      assert.doesNotMatch(request.prompt, /00000000-0000-4000-8000-0000000000aa/);
+      const known = /- (f\d+) \| MEANS \| Can spend about £30/.exec(request.prompt);
       return {
         output: known
           ? { decisions: [{ newIndex: 0, action: "supersede", factId: known[1], invalidAt: null }], summary: "Ana can spend £40." }

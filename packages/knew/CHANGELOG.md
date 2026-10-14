@@ -41,6 +41,12 @@ learn next. It writes no questions.
   as an optional peer), or `appleModel` in `./apple` (Apple's on-device model through the Swift
   bridge in `apple/`), with `fallbackModel` for on-device first. `statelessIntelligence` is
   stateless mode in-process. `fakeIntelligence` is now the local driver with a script.
+- **Smaller model calls.** A prompt section between `<!-- if: reply -->` (or `fields`) and
+  `<!-- end if -->` is sent only when the note answers a question (or the list shows fields), so
+  knew's extract prompt is about 770 characters shorter for most notes (`promptFor`,
+  `conditionsOf`). Reconcile names the current facts `f1`, `f2`, … instead of their ids, saving
+  about 34 characters a fact (`factHandle`), and `resolveFactHandles` maps an answer back. An app
+  that builds its own calls from `extractInput` and `reconcileInput` uses both.
 - **Defaults and presets.** `ENGINE_DEFAULTS`; `extendVocabulary` and `extendLens`, which record
   `basedOn`; presets `person`, `place` and `product` in `./presets`.
 - **`Fact.lastSaidAt`**: the newest episode that said a fact. As-of reads withhold later

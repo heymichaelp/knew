@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { extractInput, reconcileInput, type Fact } from "../src/index.ts";
+import { EXTRACT_V2, extractInput, promptFor, reconcileInput, resolveFactHandles, statelessIntelligence, type Fact, type ModelRequest } from "../src/index.ts";
 import { fixtureVocabulary } from "../src/testing.ts";
 
 const at = (iso: string) => new Date(iso);
@@ -69,7 +69,7 @@ describe("Scenario: The model is shown the roster it must choose from, with the 
   });
 });
 
-describe("Scenario: Reconcile sees the current facts by id and the new ones by index", () => {
+describe("Scenario: Reconcile sees the current facts by a short handle and the new ones by index", () => {
   it("lays out the entity, the dates, both lists and the summary", () => {
     const current: Fact = {
       id: "00000000-0000-4000-8000-000000000001",
@@ -94,8 +94,57 @@ describe("Scenario: Reconcile sees the current facts by id and the new ones by i
       summary: "",
     });
     assert.ok(input.startsWith("About this person: Linda (mother)\n\nToday (when the new facts were said): 2026-04-20"));
-    assert.ok(input.includes("- 00000000-0000-4000-8000-000000000001 | LIKES | Gardens | true since 2025-03-01; told us 2025-03-02"));
+    assert.ok(input.includes("Current facts (factId | type | fact | dates):\n- f1 | LIKES | Gardens | true since 2025-03-01; told us 2025-03-02"));
+    assert.ok(!input.includes("00000000-0000-4000-8000-000000000001"), "a stored id costs a reconcile 36 characters a fact");
     assert.ok(input.includes("- 0 | EVENT | Moved to Portland | true since 2025-09-01"));
     assert.ok(input.endsWith('Current summary:\n"""\n(none yet)\n"""'));
+  });
+});
+
+describe("Scenario: A handle reconcile cites comes back as the fact's id", () => {
+  it("maps f1, f2 in the order listed, and leaves anything else for the plan to report", () => {
+    const current = [{ id: "00000000-0000-4000-8000-000000000001" }, { id: "00000000-0000-4000-8000-000000000002" }];
+    const decide = (factId: string | null) => ({ newIndex: 0, action: "merge" as const, factId, invalidAt: null });
+    assert.deepEqual(
+      resolveFactHandles([decide("f2"), decide(" f1 "), decide("f3"), decide("00000000-0000-4000-8000-000000000009"), decide(null)], current).map((d) => d.factId),
+      ["00000000-0000-4000-8000-000000000002", "00000000-0000-4000-8000-000000000001", "f3", "00000000-0000-4000-8000-000000000009", null],
+    );
+  });
+});
+
+describe("Scenario: A prompt section with nothing to act on is left out", () => {
+  const text = "Intro.\n\n<!-- if: reply -->\n## Answers\n\nRead it as an answer.\n<!-- end if -->\n\n## Always\n\nKept.\n<!-- if: fields -->\n## Fields\n\nFields.\n<!-- end if -->\n";
+
+  it("keeps a section only when its condition holds, and leaves a prompt without sections untouched", () => {
+    assert.equal(promptFor(text, { reply: false, fields: false }), "Intro.\n\n## Always\n\nKept.\n");
+    assert.equal(promptFor(text, { reply: true, fields: true }), "Intro.\n\n## Answers\n\nRead it as an answer.\n\n## Always\n\nKept.\n## Fields\n\nFields.\n");
+    assert.equal(promptFor("No sections here.\n", { reply: false, fields: false }), "No sections here.\n");
+    // A condition the engine does not know is never a reason to hide instructions.
+    assert.match(promptFor("<!-- if: someday -->\nStill here.\n<!-- end if -->\n", { reply: false, fields: false }), /Still here/);
+  });
+
+  it("sends knew's extract prompt without the question and field sections when the note has neither, and with them when it has both", async () => {
+    assert.match(EXTRACT_V2, /<!-- if: reply -->\n## Answers to a question/);
+    assert.match(EXTRACT_V2, /<!-- if: fields -->\n## Fields they own/);
+    const systems: string[] = [];
+    const model = async (request: ModelRequest) => {
+      if (request.task === "extract") systems.push(request.system);
+      return { output: request.task === "extract" ? { facts: [], unresolvedNames: [], aliases: [], fieldUpdates: [] } : { decisions: [], summary: "" } };
+    };
+    const engine = statelessIntelligence({ vocabulary: fixtureVocabulary(), model });
+    const said = new Date("2026-04-20T18:00:00Z");
+    await engine.extract({ roster: [{ id: "linda", name: "Linda", fields: {}, aliases: [] }], entities: {}, episode: { source: "note", content: "Linda gardens.", referenceAt: said } });
+    await engine.extract({
+      roster: [{ id: "linda", name: "Linda", fields: { relationship: "mother" }, aliases: [] }],
+      entities: {},
+      episode: { source: "note", content: "Two, both at university.", inReplyTo: "Does she have kids?", referenceAt: said },
+    });
+    const [plain, full] = systems as [string, string];
+    for (const heading of ["## Answers to a question", "## Fields they own"]) {
+      assert.ok(!plain.includes(heading), `${heading} sent with nothing to act on`);
+      assert.ok(full.includes(heading), `${heading} missing when the note needs it`);
+    }
+    assert.ok(!full.includes("<!-- "), "a marker reached the model");
+    assert.ok(plain.length < full.length - 700, "the two sections are about 770 characters");
   });
 });

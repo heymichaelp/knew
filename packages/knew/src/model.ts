@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { extractInput, nextInput, reconcileInput, type NewFactForReconcile } from "./extract-io.ts";
+import { conditionsOf, extractInput, nextInput, promptFor, reconcileInput, resolveFactHandles, type NewFactForReconcile, type PromptConditions } from "./extract-io.ts";
 import type { ReconcileDecisions } from "./reconcile.ts";
 import { extractSchemaFor, nextSchemaFor, reconcileSchema, type Extraction, type NextAnswer } from "./schemas.ts";
 import type { Fact, ModelCall, ModelUsage, ProposedDirection, RosterEntry } from "./types.ts";
@@ -131,15 +131,17 @@ export function readerFor(vocabulary: Vocabulary, model: Model): Reader {
   const nextSchema = nextSchemaFor(vocabulary);
   const schemas = { extract: asJsonSchema(extractSchema), reconcile: asJsonSchema(reconcileSchema), next: asJsonSchema(nextSchema) };
   const extra = systemExtra(vocabulary);
-  const system = {
-    extract: [vocabulary.prompts.extract.text, ...extra].join("\n\n---\n\n"),
-    reconcile: [vocabulary.prompts.reconcile.text, ...extra].join("\n\n---\n\n"),
-    next: [vocabulary.prompts.next.text, ...nextSystemExtra(vocabulary)].join("\n\n---\n\n"),
-  };
-  async function ask<T>(task: ModelRequest["task"], prompt: string, parser: z.ZodType<T>, calls: ModelCall[], signal?: AbortSignal): Promise<T> {
+  // A prompt's sections that wait for something (a question answered, fields shown) are left
+  // out when the input has none; reconcile and next have no such sections today. The next call
+  // also carries the dimensions it proposes inside.
+  const systemFor = (task: ModelRequest["task"], when: PromptConditions) =>
+    [promptFor(vocabulary.prompts[task].text, when), ...(task === "next" ? nextSystemExtra(vocabulary) : extra)].join("\n\n---\n\n");
+  const nothingWaits: PromptConditions = { reply: false, fields: false };
+  const nextSystem = systemFor("next", nothingWaits);
+  async function ask<T>(task: ModelRequest["task"], system: string, prompt: string, parser: z.ZodType<T>, calls: ModelCall[], signal?: AbortSignal): Promise<T> {
     let answer: ModelAnswer;
     try {
-      answer = await model({ task, system: system[task], prompt, schema: schemas[task], ...(signal ? { signal } : {}) });
+      answer = await model({ task, system, prompt, schema: schemas[task], ...(signal ? { signal } : {}) });
     } catch (error) {
       calls.push({ method: task, model: null, usage: null });
       throw error;
@@ -154,8 +156,13 @@ export function readerFor(vocabulary: Vocabulary, model: Model): Reader {
   }
   return {
     refs: { extract: vocabulary.prompts.extract.ref, reconcile: vocabulary.prompts.reconcile.ref, next: vocabulary.prompts.next.ref },
-    extract: (args, calls, signal) => ask("extract", extractInput(vocabulary, args), extractSchema, calls, signal),
-    reconcile: (args, calls, signal) => ask("reconcile", reconcileInput(vocabulary, args), reconcileSchema, calls, signal),
-    next: (args, calls, signal) => ask("next", nextInput(vocabulary, args), nextSchema, calls, signal),
+    extract: (args, calls, signal) =>
+      ask("extract", systemFor("extract", conditionsOf(vocabulary, args)), extractInput(vocabulary, args), extractSchema, calls, signal),
+    reconcile: async (args, calls, signal) => {
+      const answer = await ask("reconcile", systemFor("reconcile", nothingWaits), reconcileInput(vocabulary, args), reconcileSchema, calls, signal);
+      // The input named the current facts by handle (`f1`, `f2`); the plan needs their ids.
+      return { ...answer, decisions: resolveFactHandles(answer.decisions, args.current) };
+    },
+    next: (args, calls, signal) => ask("next", nextSystem, nextInput(vocabulary, args), nextSchema, calls, signal),
   };
 }
