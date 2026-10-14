@@ -27,15 +27,16 @@ describe("the showcase", async () => {
   it("still shows what each blurb says", () => {
     const [page, next, question, nextAfter] = values(byId("friend"));
     assert.match(page!, /What you know about Mia/);
-    assert.match(next!, /^\["Work",/, "work is the first thing missing");
+    assert.match(next!, /^\[\s*"What she does for work",/, "the first thing to learn is specific, and proposed");
+    assert.doesNotMatch(next!, /"Work"|"Background"/, "no section label stands in for a direction");
     assert.match(question!, /work/, "and the app's question is about it");
-    assert.doesNotMatch(nextAfter!, /"Work"/, "once she's said where she works, work is no longer missing");
-    assert.notEqual(nextAfter, next, "and what's next moves on");
+    assert.doesNotMatch(nextAfter!, /What she does for work|Where she grew up/, "once she's said, those are answered");
+    assert.match(nextAfter!, /Broncos/, "and Denver opened a thread");
     const [mustHonor, forTheHost, toKnowHer] = values(byId("regular"));
     assert.match(mustHonor!, /shellfish/);
     assert.notEqual(forTheHost?.split(",")[0], toKnowHer?.split(",")[0], "the two goals ask for different things first");
     const [firstNight, fewVisitsIn, autumn, checkIn] = values(byId("place"));
-    assert.match(firstNight!, /Who you know there/, "the first night leaves the people to notice");
+    assert.match(firstNight!, /Who runs the bar/, "the first night leaves the people to notice, specifically");
     assert.equal(fewVisitsIn, "[]", "a few visits in, nothing is missing");
     assert.match(autumn!, /What's on offer/, "by autumn, what's on is due again");
     assert.match(checkIn!, /trio/, "and the app asks about it");

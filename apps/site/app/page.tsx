@@ -87,8 +87,9 @@ export default async function Home() {
             <p className="rise text-lg leading-relaxed text-ink-soft" style={{ animationDelay: "180ms" }}>
               A relationship is what you have with anything you are getting to know: a person, a place, a thing. knew
               reads your notes into typed, dated facts, organised by the dimensions of that relationship, and for a goal
-              reports what you understand, what is missing, and the most valuable direction to take next. It writes no
-              questions: what to do with a direction is your app&apos;s call.
+              reports what you understand, what is missing, and what to learn next: specific directions the model
+              proposes from what you already know. It writes no questions: what to do with a direction is your
+              app&apos;s call.
             </p>
           </div>
           <p className="stamp press" style={{ animationDelay: "320ms" }}>
@@ -125,8 +126,8 @@ export default async function Home() {
           <div className="flex min-w-0 flex-col gap-4 text-sm text-ink-soft lg:pt-6">
             <p className="max-w-2xl">
               Sketches, not the API: the calls are simplified to show the idea. The values are real. Each sketch runs
-              against the engine when this site builds, with the model&apos;s reading of each note scripted, and
-              everything under a line is knew&apos;s own output. The real calls are in{" "}
+              against the engine when this site builds, with the model&apos;s reading of each note, and what it proposes
+              learning next, scripted; everything under a line is knew&apos;s own output. The real calls are in{" "}
               <TextLink href="/adopting">the guide</TextLink>.
             </p>
             <div className="max-w-full self-start">
@@ -213,6 +214,7 @@ export default async function Home() {
               <div key={direction.id ?? direction.need} className={`mt-5 border-l-2 pl-4 ${index === 0 ? "border-stamp" : "border-rule-strong"}`}>
                 <p className="label" style={index === 0 ? { color: "var(--stamp)" } : undefined}>
                   {index === 0 ? "Next direction" : "Then"} · {direction.kind === "learn" ? "learn" : "revisit"}
+                  {direction.id ? " · proposed" : ""}
                 </p>
                 <p className="mt-1.5 text-[0.9375rem] leading-snug">
                   {direction.label}
@@ -225,8 +227,10 @@ export default async function Home() {
             <p className="mt-6 text-sm text-ink-faint">
               Everything in this panel comes from <code className="code">renderBrief</code> and{" "}
               <code className="code">readinessFor</code>, run at build time through the{" "}
-              <TextLink href="/presets#the-person-preset">person preset</TextLink>, as of {day(AT)}.
-              Goal: “{exampleReadiness.objective}” <TextLink href="/sandbox#start=mum">Change it in the sandbox</TextLink>.
+              <TextLink href="/presets#the-person-preset">person preset</TextLink>, as of {day(AT)}. The directions
+              marked proposed are written out here the way the model&apos;s <code className="code">next</code> call
+              would have proposed them from these facts; the engine ranks them. Goal: “{exampleReadiness.objective}”{" "}
+              <TextLink href="/sandbox#start=mum">Change it in the sandbox</TextLink>.
             </p>
           </article>
         </div>
@@ -244,7 +248,7 @@ export default async function Home() {
             <h3 className="display mt-3 text-2xl">Your code, your model key</h3>
             <p className="mt-4 text-ink-soft">
               The whole engine runs where your app does, keeping each person&apos;s notebook in a store you choose.
-              Reading a note is two calls to the model you supply: Claude on your own key, or any model that answers
+              Reading a note is three calls to the model you supply: Claude on your own key, or any model that answers
               with JSON.
             </p>
           </div>

@@ -13,7 +13,7 @@ import { EXAMPLES, exampleFor, type PresetName } from "../lib/sandbox-examples";
 
 describe("the sandbox's examples stay in step with the presets", () => {
   for (const example of EXAMPLES) {
-    it(`${example.id}: its lens compiles against its vocabulary, and every fact is of one of its types`, () => {
+    it(`${example.id}: its lens compiles against its vocabulary, every fact is of one of its types, and every direction is in one of its dimensions`, () => {
       const vocabulary = compileVocabulary(example.vocabulary);
       compileLens(example.lens, vocabulary);
       for (const fact of example.facts) {
@@ -23,6 +23,12 @@ describe("the sandbox's examples stay in step with the presets", () => {
           assert.ok(attribute, `${fact.id} sets ${name}, which ${fact.type} does not carry`);
           if (attribute.kind === "enum") assert.ok(attribute.values!.includes(value), `${fact.id} sets ${name} to ${value}`);
         }
+      }
+      for (const direction of example.directions) {
+        const dimension = vocabulary.dimensions.find((candidate) => candidate.id === direction.dimension);
+        assert.ok(dimension, `${direction.id} is in dimension ${direction.dimension}, which ${vocabulary.id} does not have`);
+        assert.notEqual(dimension.about, "knower", `${direction.id} is about the knower, and nothing is proposed about the knower`);
+        for (const id of direction.factIds) assert.ok(example.facts.some((fact) => fact.id === id), `${direction.id} grew from ${id}, which the example does not have`);
       }
     });
   }
