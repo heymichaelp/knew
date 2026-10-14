@@ -142,7 +142,7 @@ describe("Scenario: One note about Mia, read into all three subjects, through a 
       vocabulary: "gifts",
       order: "listed",
       needs: Object.fromEntries([
-        ...["work", "people", "between", "life", "background", "pursuits", "ahead", "together", "has", "avoid"].map((id) => [id, null]),
+        ...["work", "people", "between", "background", "pursuits", "ahead", "together", "has", "avoid"].map((id) => [id, null]),
         ["budget", { dimension: "you", label: "What you can spend" }],
         ["loves", { label: "What they love", types: ["INTEREST", "TASTE"] }],
         ["how-close", { dimension: "between", label: "How you know each other" }],

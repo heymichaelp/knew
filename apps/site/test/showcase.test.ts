@@ -25,10 +25,12 @@ describe("the showcase", async () => {
   });
 
   it("still shows what each blurb says", () => {
-    const [page, next, question] = values(byId("friend"));
+    const [page, next, question, nextAfter] = values(byId("friend"));
     assert.match(page!, /What you know about Mia/);
     assert.match(next!, /^\["Work",/, "work is the first thing missing");
     assert.match(question!, /work/, "and the app's question is about it");
+    assert.doesNotMatch(nextAfter!, /"Work"/, "once she's said where she works, work is no longer missing");
+    assert.notEqual(nextAfter, next, "and what's next moves on");
     const [mustHonor, forTheHost, toKnowHer] = values(byId("regular"));
     assert.match(mustHonor!, /shellfish/);
     assert.notEqual(forTheHost?.split(",")[0], toKnowHer?.split(",")[0], "the two goals ask for different things first");
