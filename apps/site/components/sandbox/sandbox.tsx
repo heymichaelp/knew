@@ -807,7 +807,7 @@ function Results({ report, lens }: { report: Report; lens: Lens }) {
         ) : (
           <ol className="space-y-4">
             {readiness.next.map((direction, index) => (
-              <li key={direction.need} className={`border-l-2 pl-4 ${index === 0 ? "border-stamp" : "border-rule-strong"}`}>
+              <li key={direction.id ?? direction.need} className={`border-l-2 pl-4 ${index === 0 ? "border-stamp" : "border-rule-strong"}`}>
                 <p className="label" style={index === 0 ? { color: "var(--stamp)" } : undefined}>
                   {index === 0 ? "Next" : `Then, ${index + 1}`} · {direction.kind} · {SUBJECT_HEADING[direction.about].toLowerCase()} · value{" "}
                   {direction.value}

@@ -46,6 +46,7 @@ type JsonSchemaNode = {
   minimum?: number;
   exclusiveMinimum?: number;
   anyOf?: JsonSchemaNode[];
+  const?: unknown;
   default?: unknown;
 };
 
@@ -62,6 +63,7 @@ export const lensJsonSchema = asJsonSchema(lensDefinitionSchema);
 /** A one-line type for a schema node, in the shape a reader would write it. */
 export function typeOf(node: JsonSchemaNode | undefined): string {
   if (!node) return "unknown";
+  if (node.const !== undefined) return JSON.stringify(node.const);
   if (node.anyOf?.length) return node.anyOf.map(typeOf).join(" | ");
   if (node.enum?.length) return node.enum.map((v) => JSON.stringify(v)).join(" | ");
   if (Array.isArray(node.type)) return node.type.join(" | ");

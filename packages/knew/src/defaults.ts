@@ -19,6 +19,11 @@ export const ENGINE_DEFAULTS = {
   /** What a fact due for a revisit counts toward an ask, against a fresh
    *  one's 1. A mechanic, not a field a definition sets. */
   dueCredit: 0.5,
+  /** Open directions the model may hold per dimension of an entity. */
+  directionsPerDimension: 2,
+  /** Days after it was proposed that a direction nobody acted on leaves
+   *  `next`. Read-time arithmetic, like a revisit window. */
+  directionLapseDays: 180,
   /** The page's size: what fits a reader's context beside its own material. */
   briefMaxChars: 3_500,
 } as const;

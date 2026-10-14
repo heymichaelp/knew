@@ -28,6 +28,8 @@ const CHARTER = `# What is worth keeping
 
 **Keep what changes the next meeting.** The specific beats the general: "training for a marathon in October" over "likes running".
 
+**A plain "no" is worth keeping.** "Single", "no kids", "doesn't drink" settle something; keep them as facts.
+
 **Who someone is survives where and when.** A craft, a taste, a line they hold stays true when a job or a city changes.
 
 **Small talk yields nothing.** Returning no facts is a proper answer.

@@ -210,7 +210,7 @@ export default async function Home() {
               <p className="mt-2 text-sm text-ink-soft">{missing.map((need) => need.label).join(" · ") || "Nothing"}</p>
             </div>
             {next.map((direction, index) => (
-              <div key={direction.need} className={`mt-5 border-l-2 pl-4 ${index === 0 ? "border-stamp" : "border-rule-strong"}`}>
+              <div key={direction.id ?? direction.need} className={`mt-5 border-l-2 pl-4 ${index === 0 ? "border-stamp" : "border-rule-strong"}`}>
                 <p className="label" style={index === 0 ? { color: "var(--stamp)" } : undefined}>
                   {index === 0 ? "Next direction" : "Then"} · {direction.kind === "learn" ? "learn" : "revisit"}
                 </p>

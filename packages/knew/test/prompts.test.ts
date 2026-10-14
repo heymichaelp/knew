@@ -12,7 +12,7 @@ describe("Scenario: The embedded prompts are the markdown files, byte for byte",
     for (const [ref, text] of Object.entries(PROMPT_TEXT)) {
       assert.equal(text, readFileSync(join(promptsDir, `${ref}.md`), "utf8"), `${ref}: run \`npm run prompts\``);
     }
-    assert.deepEqual(Object.keys(PROMPT_TEXT).sort(), ["extract.v1", "extract.v2", "reconcile.v1", "reconcile.v2"]);
+    assert.deepEqual(Object.keys(PROMPT_TEXT).sort(), ["extract.v1", "extract.v2", "next.v1", "reconcile.v1", "reconcile.v2"]);
   });
 
   it("names no domain: the defaults speak of entries and a charter, nothing more", () => {
@@ -21,14 +21,15 @@ describe("Scenario: The embedded prompts are the markdown files, byte for byte",
     }
   });
 
-  it("v2 is the default, speaks of entries rather than people, and calls nothing a memory", () => {
-    assert.deepEqual(DEFAULT_PROMPT_REFS, { extract: "extract.v2", reconcile: "reconcile.v2" });
-    for (const ref of ["extract.v2", "reconcile.v2"]) {
+  it("the defaults speak of entries rather than people, and call nothing a memory", () => {
+    assert.deepEqual(DEFAULT_PROMPT_REFS, { extract: "extract.v2", reconcile: "reconcile.v2", next: "next.v1" });
+    for (const ref of ["extract.v2", "reconcile.v2", "next.v1"]) {
       const text = PROMPT_TEXT[ref]!;
       assert.doesNotMatch(text, /\bmemory\b/i, `${ref} calls itself a memory`);
       assert.doesNotMatch(text, /personId|\bthe people in\b/, `${ref} assumes the list is people`);
     }
     assert.match(PROMPT_TEXT["extract.v2"]!, /`entityId`/);
     assert.match(PROMPT_TEXT["extract.v2"]!, /The question they were answering/);
+    assert.match(PROMPT_TEXT["next.v1"]!, /A topic, not a question/, "the next call proposes what to learn; the app writes any question");
   });
 });
