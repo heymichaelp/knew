@@ -272,6 +272,57 @@ export interface DirectionPlan {
   rejected: number;
 }
 
+/** A move the model proposed under an adapter: one thing of that adapter's
+ *  kind the app may do, or watch for, about an entity, in one line, with the
+ *  fields the adapter asks for and the facts it rests on. A proposal the app
+ *  acts on: knew performs nothing. Never evidence; derived, like a fact. */
+export interface Move {
+  id: string;
+  entityId: string;
+  /** The adapter it was proposed under, by id. */
+  adapter: string;
+  /** A topic or a gesture in one line, never a question. */
+  label: string;
+  /** The adapter's fields, each a string, or null where nothing shown supported a value. */
+  fields: Record<string, string | null>;
+  /** The facts it rests on; never empty. */
+  factIds: string[];
+  /** The note that prompted it. */
+  episodeId: string;
+  proposedAt: Date;
+  /** Open until the app does it or waves it away, or the model closes it:
+   *  answered by a later fact, or withdrawn as stale. Lapsing is read-time
+   *  arithmetic, not a status. */
+  status: "open" | "done" | "dismissed" | "answered" | "withdrawn";
+  resolvedAt: Date | null;
+}
+
+/** A move before it has an id: what `planMoves` keeps of a proposal. */
+export interface NewMove {
+  label: string;
+  fields: Record<string, string | null>;
+  factIds: string[];
+}
+
+/** What a `move` answer does to an entity's moves under one adapter, once the
+ *  engine has checked every row. */
+export interface MovePlan {
+  closed: Array<{ id: string; status: "done" | "answered" | "withdrawn" }>;
+  proposed: NewMove[];
+  /** Rows refused: an id not open, a move with no ground, a ground that is not
+   *  current, pinned or outside the adapter's dimensions, a label that is a
+   *  question or a repeat, or one past the room. */
+  rejected: number;
+}
+
+/** What re-grounding and withdrawal need of a direction or a move. */
+export interface Grounded {
+  id: string;
+  factIds: string[];
+  status: "open" | "answered" | "withdrawn" | "dismissed" | "done";
+  resolvedAt: Date | null;
+}
+
 /** Current understanding of one entity, what one lens's objective still
  *  needs, and the next directions. */
 export interface Readiness {

@@ -12,5 +12,7 @@ export const DEFAULT_NOTES = {
   dueCredit: "What a fact due for a revisit counts toward a need, against a fresh fact's 1. Never enough alone. Also what a proposed direction is worth in a need already met.",
   directionsPerDimension: "Open directions the model may hold per dimension of an entity, when the vocabulary names no number.",
   directionLapseDays: "Days after it was proposed that a direction nobody acted on leaves `next`, when the vocabulary names no window.",
+  movesPerEntity: "Open moves an adapter may hold per entity, when it names no number.",
+  moveLapseDays: "Days after it was proposed that a move nobody acted on leaves the list, when the adapter names no window and the move has no day of its own.",
   briefMaxChars: "The page's size in characters when a read names none.",
 } satisfies Record<keyof typeof ENGINE_DEFAULTS, string>;

@@ -36,7 +36,7 @@ const quickstart = codeBlocks(readShipped("README.md"));
 const install = (quickstart.find((b) => b.lang === "sh")?.code ?? "npm install @popjoker/knew").trim();
 
 const DOCS = [
-  { href: "/lenses", label: "Lenses", blurb: "Every field of a vocabulary and a lens, generated from the schemas, and the defaults." },
+  { href: "/lenses", label: "Lenses", blurb: "Every field of a vocabulary, a lens and an adapter, generated from the schemas, and the defaults." },
   {
     href: "/presets",
     label: "Presets",

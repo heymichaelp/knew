@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { Adapter } from "./adapter.ts";
 import type { Vocabulary } from "./vocabulary.ts";
 
 /**
@@ -91,6 +92,35 @@ export function nextSchemaFor(vocabulary: Vocabulary) {
 }
 
 export type NextAnswer = z.infer<ReturnType<typeof nextSchemaFor>>;
+
+/** What the `move` call answers, under one adapter. */
+export interface MoveAnswer {
+  closed: Array<{ moveId: string; reason: "done" | "answered" | "stale" }>;
+  proposed: Array<{ label: string; factIds: string[]; fields?: Record<string, string | null> }>;
+}
+
+/**
+ * The `move` call's answer schema for one adapter: which open moves no longer
+ * stand, and what to propose, each with the adapter's fields as an object of
+ * nullable keys (never a record, which a structured-output endpoint refuses).
+ * An adapter with no fields leaves the key out, since an empty object is
+ * untested on the device.
+ */
+export function moveSchemaFor(adapter: Adapter) {
+  const shape: Record<string, z.ZodTypeAny> = {};
+  for (const field of adapter.fields) shape[field.name] = (field.values ? z.enum(field.values as [string, ...string[]]) : z.string()).nullable();
+  const row = {
+    /** A topic or a gesture in one line, never a question: the planner refuses a label ending in `?`. */
+    label: z.string(),
+    /** The facts it rests on, by id; never empty. */
+    factIds: z.array(z.string()),
+    ...(adapter.fields.length > 0 ? { fields: z.object(shape) } : {}),
+  };
+  return z.object({
+    closed: z.array(z.object({ moveId: z.string(), reason: z.enum(["done", "answered", "stale"]) })),
+    proposed: z.array(z.object(row)),
+  });
+}
 
 /** Keywords a structured-output endpoint may refuse. A vocabulary whose
  *  compiled schema carries one would fail every live episode: `not` is what

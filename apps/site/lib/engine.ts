@@ -10,6 +10,8 @@
  * behind.
  */
 import {
+  adapterDefinitionSchema,
+  compileAdapter,
   compileLens,
   compileVocabulary,
   ENGINE_DEFAULTS,
@@ -20,6 +22,7 @@ import {
   readinessFor,
   SUBJECT_HEADER,
   vocabularyDefinitionSchema,
+  type Adapter,
   type CompiledNeed,
   type Lens,
   type Vocabulary,
@@ -59,6 +62,7 @@ const asJsonSchema = (schema: z.ZodType) => z.toJSONSchema(schema, { unrepresent
 
 export const vocabularyJsonSchema = asJsonSchema(vocabularyDefinitionSchema);
 export const lensJsonSchema = asJsonSchema(lensDefinitionSchema);
+export const adapterJsonSchema = asJsonSchema(adapterDefinitionSchema);
 
 /** A one-line type for a schema node, in the shape a reader would write it. */
 export function typeOf(node: JsonSchemaNode | undefined): string {
@@ -139,12 +143,21 @@ export function lensFields(): DefinitionField[] {
   return fieldsOf(lensJsonSchema);
 }
 
+/** Every field of an adapter definition, in schema order. */
+export function adapterFields(): DefinitionField[] {
+  return fieldsOf(adapterJsonSchema);
+}
+
 export function vocabularyNestedFields(): Record<string, DefinitionField[]> {
   return nestedFieldsOf(vocabularyJsonSchema);
 }
 
 export function lensNestedFields(): Record<string, DefinitionField[]> {
   return nestedFieldsOf(lensJsonSchema);
+}
+
+export function adapterNestedFields(): Record<string, DefinitionField[]> {
+  return nestedFieldsOf(adapterJsonSchema);
 }
 
 /* ------------------------------------------------------------- the defaults */
@@ -182,6 +195,13 @@ export interface PresetDimension {
   readonly types: readonly PresetType[];
 }
 
+export interface PresetAdapter {
+  /** What it is called on the preset: `moments` in `person.moments()`. */
+  readonly name: string;
+  /** Compiled, so every default it leaves to the engine is filled in. */
+  readonly adapter: Adapter;
+}
+
 export interface PresetOutline {
   /** What it is imported as from `@popjoker/knew/presets`. */
   readonly name: string;
@@ -192,6 +212,18 @@ export interface PresetOutline {
   readonly lens: Lens;
   /** The starter lens's first direction for an entity nothing is known about: its label. */
   readonly firstDirection: string | null;
+  /** The adapters it ships, in export order; none for a preset that ships none. */
+  readonly adapters: readonly PresetAdapter[];
+}
+
+/** The adapters a preset exports: every function on it, other than the
+ *  vocabulary and the lens, whose result is an adapter definition. */
+function adaptersOf(preset: object, vocabulary: Vocabulary): PresetAdapter[] {
+  return (Object.entries(preset) as Array<[string, unknown]>).flatMap(([name, value]) => {
+    if (name === "vocabulary" || name === "lens" || typeof value !== "function") return [];
+    const parsed = adapterDefinitionSchema.safeParse((value as () => unknown)());
+    return parsed.success ? [{ name, adapter: compileAdapter(parsed.data, vocabulary) }] : [];
+  });
 }
 
 function outlineOf(name: string, preset: (typeof presets)[keyof typeof presets]): PresetOutline {
@@ -225,6 +257,7 @@ function outlineOf(name: string, preset: (typeof presets)[keyof typeof presets])
     lens,
     // Nothing is known, so the moment asked at does not matter.
     firstDirection: readinessFor(lens, { fields: {} }, [], new Date(0)).next[0]?.label ?? null,
+    adapters: adaptersOf(preset, vocabulary),
   };
 }
 

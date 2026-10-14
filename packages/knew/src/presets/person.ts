@@ -1,3 +1,4 @@
+import type { AdapterDefinition } from "../adapter.ts";
 import type { LensDefinition } from "../lens.ts";
 import type { VocabularyDefinition } from "../vocabulary.ts";
 
@@ -167,5 +168,53 @@ export function lens(): LensDefinition {
     overHeading: "No longer the case",
     attributeTags: ["level"],
     needs: ["work", "people", "between", "background", "pursuits", "ahead", "together", "has", "avoid"].map((dimension) => ({ id: dimension, dimension })),
+  };
+}
+
+/**
+ * Moments: a small thing to do for them at the right time, proposed from
+ * what is coming up for them, what they love, and who is in their life. A
+ * product's own kind of moment (a host's, say) is `extendAdapter` with its
+ * own instructions.
+ */
+export function moments(): AdapterDefinition {
+  return {
+    id: "moments",
+    version: 1,
+    vocabulary: PRESET.id,
+    noun: "moment",
+    instructions: [
+      "**A moment** is a small thing to do for them at the right time, in one line: a message for an occasion they mentioned, a question about a plan when it comes round, a nod to something they love, a thought for someone they are seeing.",
+      "Their words only: a date they named, a plan they spoke of, a taste they stated, a person they mentioned. Never a guess at a birthday, a faith or a family from a name or a place. Nothing that touches what they steer clear of, and nothing they already have.",
+      "`when` is the day it is for, when their words give one; otherwise null, and the moment must stand on its own.",
+    ].join("\n\n"),
+    fields: { when: { description: "The day it is for, YYYY-MM-DD, when their words give one.", kind: "date" } },
+    lapse: { field: "when", afterDays: 90 },
+    dimensions: ["ahead", "pursuits", "people", "together"],
+  };
+}
+
+/**
+ * Watches: something in the world around them worth keeping an eye on, as a
+ * search the app may run. knew runs nothing: a watch is parameters, and the
+ * app decides whether and when to search.
+ */
+export function watches(): AdapterDefinition {
+  return {
+    id: "watches",
+    version: 1,
+    vocabulary: PRESET.id,
+    noun: "search",
+    instructions: [
+      "**A watch** is something in the world around them worth keeping an eye on, as a search an app may run: news from where they are from or live, a team they follow, a company they work for, an event they are going to.",
+      "Their words only: a place, a team, a company, an event they named. Never from a name, an accent, or where someone 'must' be from. Nothing about health, faith, politics or money unless they raised it, and nothing near what they steer clear of.",
+      "`query` is a few words a search engine takes; `why` is the fact it rests on, in plain words, for whoever reads a result. This is parameters only: you search nothing, and the app decides whether and when to.",
+    ].join("\n\n"),
+    fields: {
+      query: { description: "A few words a search engine takes: a place and what to watch for, a team's season, a company's news." },
+      why: { description: "The fact it rests on, in plain words, for whoever reads the result." },
+    },
+    lapse: { afterDays: 90 },
+    dimensions: ["background", "work", "pursuits", "ahead"],
   };
 }

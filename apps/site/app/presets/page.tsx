@@ -35,15 +35,21 @@ function Row({ term, children }: { readonly term: string; readonly children: Rea
 }
 
 function Preset({ outline, clause }: { readonly outline: PresetOutline; readonly clause: string }) {
-  const { name, vocabulary, dimensions, lens, firstDirection } = outline;
+  const { name, vocabulary, dimensions, lens, firstDirection, adapters } = outline;
   const sameWeight = new Set(lens.needs.map((need) => need.weight)).size <= 1;
   const waits = lens.needs.some((need) => need.after.length > 0);
+  const labelOf = (id: string) => dimensions.find((dimension) => dimension.id === id)?.label ?? id;
 
   return (
     <Section clause={clause} title={titleOf(outline)}>
       <p className="measure text-ink-soft">
-        <code className="code">{name}.vocabulary()</code> and <code className="code">{name}.lens()</code> from{" "}
-        <code className="code">@popjoker/knew/presets</code>. Vocabulary <code className="code">{vocabulary.id}</code>{" "}
+        <code className="code">{name}.vocabulary()</code>, <code className="code">{name}.lens()</code>
+        {adapters.map(({ name: adapterName }) => (
+          <span key={adapterName}>
+            , <code className="code">{name}.{adapterName}()</code>
+          </span>
+        ))}{" "}
+        from <code className="code">@popjoker/knew/presets</code>. Vocabulary <code className="code">{vocabulary.id}</code>{" "}
         v{vocabulary.version}, kind <code className="code">{vocabulary.kind}</code>: {vocabulary.factTypeKeys.length} types
         in {dimensions.length} dimensions.{" "}
         <TextLink href={`/sandbox#start=${exampleFor(name as PresetName).id}`}>Try it in the sandbox</TextLink>.
@@ -139,6 +145,52 @@ function Preset({ outline, clause }: { readonly outline: PresetOutline; readonly
         ) : null}
       </dl>
 
+      {adapters.length > 0 ? (
+        <>
+          <h3 className="display mt-12 text-xl">Adapters</h3>
+          <p className="measure mt-3 text-[0.9375rem] text-ink-soft">
+            Kinds of move the model may propose about a {vocabulary.kind} once a note is read, each resting on facts in
+            the dimensions it names. knew performs none of them: a move is the app&apos;s to act on. Register one as it
+            stands, or extend it with <code className="code">extendAdapter</code>.
+          </p>
+          {adapters.map(({ name: adapterName, adapter }) => (
+            <div key={adapter.id} className="mt-8">
+              <div className="flex flex-wrap items-baseline gap-x-3">
+                <h4 className="display text-lg">{adapterName}</h4>
+                <code className="code text-[0.75rem] text-derived">{adapter.id}</code>
+              </div>
+              <dl className="mt-3">
+                <Row term="Proposes">
+                  One {adapter.noun} at a time, up to {adapter.perEntity} open per {vocabulary.kind}
+                </Row>
+                <Row term="Rests on">{adapter.dimensions.map(labelOf).join(" · ")}</Row>
+                <Row term="Fields">
+                  {adapter.fields.length ? (
+                    <Inline text={adapter.fields.map((field) => `\`${field.name}\`, ${field.kind === "enum" ? `one of ${field.values!.join(", ")}` : field.kind}`).join("; ")} />
+                  ) : (
+                    "none: the label alone"
+                  )}
+                </Row>
+                <Row term="Lapses">
+                  {adapter.lapse.field ? (
+                    <>
+                      The day after the day its <code className="code">{adapter.lapse.field}</code> names, or {adapter.lapse.afterDays} days
+                      after it was proposed when it has none
+                    </>
+                  ) : (
+                    <>{adapter.lapse.afterDays} days after it was proposed</>
+                  )}
+                </Row>
+              </dl>
+              <pre className="mt-4 overflow-x-auto border border-rule border-l-2 border-l-stamp bg-paper-sunken p-5 code text-[0.8125rem] leading-relaxed whitespace-pre-wrap">
+                {adapter.instructions}
+              </pre>
+              <p className="mt-2 text-sm text-ink-faint">Sent to the model under “This kind of move”, beside the charter.</p>
+            </div>
+          ))}
+        </>
+      ) : null}
+
       <h3 className="display mt-12 text-xl">Charter</h3>
       <pre className="mt-4 overflow-x-auto border border-rule border-l-2 border-l-stamp bg-paper-sunken p-5 code text-[0.8125rem] leading-relaxed whitespace-pre-wrap">
         {vocabulary.charter}
@@ -150,13 +202,14 @@ function Preset({ outline, clause }: { readonly outline: PresetOutline; readonly
 
 export default function PresetsPage() {
   const types = outlines.reduce((sum, outline) => sum + outline.vocabulary.factTypeKeys.length, 0);
+  const adapters = outlines.reduce((sum, outline) => sum + outline.adapters.length, 0);
 
   return (
     <>
       <DocHeader
         clause="Presets"
         title="Starting points."
-        standfirst="A preset is a generic vocabulary and starter lens for one kind of entity. Extend one instead of writing your own from nothing. Opt-in, from @popjoker/knew/presets; everything below is read from the package at build time."
+        standfirst="A preset is a generic vocabulary and starter lens for one kind of entity, with the adapters that kind commonly wants. Extend one instead of writing your own from nothing. Opt-in, from @popjoker/knew/presets; everything below is read from the package at build time."
         aside={
           <p className="stamp">
             <span>
@@ -164,6 +217,14 @@ export default function PresetsPage() {
             </span>
             <span aria-hidden>·</span>
             <span>{types} types of fact</span>
+            {adapters > 0 ? (
+              <>
+                <span aria-hidden>·</span>
+                <span>
+                  {adapters} adapter{adapters === 1 ? "" : "s"}
+                </span>
+              </>
+            ) : null}
           </p>
         }
       />
@@ -176,10 +237,10 @@ export default function PresetsPage() {
 
           <Section clause={clauseOf(outlines.length)} title="Extending a preset">
             <p className="measure text-ink-soft">
-              <code className="code">extendVocabulary</code> and <code className="code">extendLens</code> take a base
-              and your overrides: a key given replaces or merges, <code className="code">null</code> removes, a key
-              left out is kept. The result records <code className="code">basedOn</code>: the preset, its version, and
-              what you changed or added.
+              <code className="code">extendVocabulary</code>, <code className="code">extendLens</code> and{" "}
+              <code className="code">extendAdapter</code> take a base and your overrides: a key given replaces or
+              merges, <code className="code">null</code> removes, a key left out is kept. An extended vocabulary records{" "}
+              <code className="code">basedOn</code>: the preset, its version, and what you changed or added.
             </p>
             <pre className="mt-6 overflow-x-auto border border-rule border-l-2 border-l-rule-strong bg-paper-sunken p-5 code text-[0.8125rem] leading-relaxed">
               {extending.code}

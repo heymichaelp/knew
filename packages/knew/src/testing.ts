@@ -1,3 +1,4 @@
+import { compileAdapter, type Adapter, type AdapterDefinition } from "./adapter.ts";
 import type { ScriptedTurn } from "./contract.ts";
 import { compileLens, type Lens, type LensDefinition } from "./lens.ts";
 import { createDriver, type LocalIntelligence, type StateStore } from "./local.ts";
@@ -158,6 +159,29 @@ export function fixtureVisitLens(): Lens {
 
 export function fixtureGiftLens(): Lens {
   return compileLens(fixtureGiftLensDefinition(), fixtureVocabulary());
+}
+
+/** An adapter over the fixture: a moment with a day and a reason, two per
+ *  person, lapsing a month after it was proposed or the day after its day. */
+export function fixtureAdapterDefinition(): AdapterDefinition {
+  return {
+    id: "fixture-moment",
+    version: 1,
+    vocabulary: "fixture",
+    noun: "moment",
+    instructions: "**A moment** is a small thing to do for them at the right time, in one line, resting on what they said.",
+    fields: {
+      when: { description: "The day it is for, YYYY-MM-DD, when their words give one.", kind: "date" },
+      why: { description: "The fact it rests on, in plain words." },
+    },
+    perEntity: 2,
+    lapse: { field: "when", afterDays: 30 },
+    dimensions: ["likes", "life", "people", "has"],
+  };
+}
+
+export function fixtureAdapter(): Adapter {
+  return compileAdapter(fixtureAdapterDefinition(), fixtureVocabulary());
 }
 
 let counter = 0;

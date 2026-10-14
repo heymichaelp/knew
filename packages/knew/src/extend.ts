@@ -1,3 +1,4 @@
+import { parseAdapterDefinition, type AdapterDefinition, type MoveFieldSpec } from "./adapter.ts";
 import { parseLensDefinition, type NeedSpec, type LensDefinition, type SectionSpec } from "./lens.ts";
 import { parseVocabularyDefinition, type DimensionSpec, type FactTypeSpec, type VocabularyDefinition } from "./vocabulary.ts";
 
@@ -30,7 +31,7 @@ export interface VocabularyOverrides {
   promptFields?: string[] | null;
   charter?: string;
   sourceLabels?: Record<string, string> | null;
-  prompts?: { extract?: string; reconcile?: string; next?: string } | null;
+  prompts?: { extract?: string; reconcile?: string; next?: string; move?: string } | null;
   /** How directions are kept; `false` proposes none; `null` goes back to the defaults. */
   directions?: { perDimension?: number; lapseAfterDays?: number } | false | null;
   extractAttributeKeys?: string[] | null;
@@ -199,4 +200,50 @@ export function extendLens(base: LensDefinition, overrides: LensOverrides, vocab
     result.needs = needs;
   }
   return parseLensDefinition(result);
+}
+
+export interface AdapterOverrides {
+  /** The new adapter's own name and version. */
+  id: string;
+  version: number;
+  /** The vocabulary it reads — an adapter extended from a preset's names the
+   *  client's own vocabulary here, and its own `dimensions`. */
+  vocabulary?: string;
+  noun?: string;
+  instructions?: string;
+  /** By field name: a patch merged into the base field, a complete spec for a
+   *  new one, or `null` to drop it. */
+  fields?: Record<string, Patch<MoveFieldSpec> | null>;
+  /** `null` goes back to the engine's default. */
+  perEntity?: number | null;
+  lapse?: { afterDays?: number; field?: string } | null;
+  /** Replaces the dimensions; `null` goes back to every one about the entity or the relationship. */
+  dimensions?: string[] | null;
+}
+
+/**
+ * An adapter of the client's own, from a base: a preset's, or another of the
+ * client's. A restaurant's hospitality moments are the person preset's
+ * `moments` with its own instructions. Throws when the result is not an
+ * adapter; references into the vocabulary are checked when it is compiled.
+ */
+export function extendAdapter(base: AdapterDefinition, overrides: AdapterOverrides): AdapterDefinition {
+  const result: Record<string, unknown> = { ...base };
+  result.id = overrides.id;
+  result.version = overrides.version;
+  replace(result, "vocabulary", overrides.vocabulary);
+  replace(result, "noun", overrides.noun);
+  replace(result, "instructions", overrides.instructions);
+  if (overrides.fields) {
+    const fields: Record<string, MoveFieldSpec> = { ...(base.fields ?? {}) };
+    for (const [name, patch] of Object.entries(overrides.fields)) {
+      if (patch === null) delete fields[name];
+      else fields[name] = merge(fields[name], patch);
+    }
+    result.fields = fields;
+  }
+  replace(result, "perEntity", overrides.perEntity);
+  replace(result, "lapse", overrides.lapse);
+  replace(result, "dimensions", overrides.dimensions);
+  return parseAdapterDefinition(result);
 }
