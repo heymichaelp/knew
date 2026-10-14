@@ -14,6 +14,7 @@ import type {
   StatelessExtraction,
   StatelessExtractRequest,
   StatelessIntelligence,
+  StatelessNext,
   SubjectExport,
 } from "./types.ts";
 
@@ -116,7 +117,7 @@ function reviveBrief(raw: Json | null | undefined): Brief | null {
   return {
     text: String(raw.text),
     mustHonor: (raw.mustHonor as Brief["mustHonor"]) ?? [],
-    gaps: (raw.gaps as Gap[]) ?? [],
+    gaps: ((raw.gaps as Json[]) ?? []).map((gap) => ({ ...(gap as unknown as Gap), id: (gap.id as string | null) ?? null })),
   };
 }
 
@@ -151,7 +152,11 @@ export function reviveReadiness(raw: Json): Readiness {
       factIds: (d.factIds as string[]) ?? [],
     })),
     needs: (raw.needs as Readiness["needs"]) ?? [],
-    next: (raw.next as Readiness["next"]) ?? [],
+    next: ((raw.next as Json[]) ?? []).map((direction) => ({
+      ...(direction as unknown as Readiness["next"][number]),
+      id: (direction.id as string | null) ?? null,
+      proposedAt: date(direction.proposedAt),
+    })),
   };
 }
 
@@ -339,6 +344,13 @@ export function intelligenceClient(options: IntelligenceClientOptions): Intellig
     async resolveProposal(scope, proposalId, resolution) {
       await call("POST", `/proposals/${encodeURIComponent(proposalId)}/resolve`, { scope, body: { resolution }, timeoutMs: timeouts.write });
     },
+    async dismissDirection(scope, directionId, dismissOptions = {}) {
+      await call("POST", `/directions/${encodeURIComponent(directionId)}/dismiss`, {
+        scope,
+        body: { at: dismissOptions.at?.toISOString() },
+        timeoutMs: timeouts.write,
+      });
+    },
     async exportSubject(scope) {
       const raw = await call<{ episodes: Json[] }>("GET", "/subject/export", { scope, timeoutMs: timeouts.export });
       return {
@@ -370,6 +382,17 @@ export function intelligenceClient(options: IntelligenceClientOptions): Intellig
         droppedForCap: Number(raw.droppedForCap ?? 0),
         calls: (raw.calls as StatelessExtraction["calls"]) ?? [],
         promptVersions: raw.promptVersions as StatelessExtraction["promptVersions"],
+      };
+    },
+    async next(request) {
+      const raw = await call<Json>("POST", "/stateless/next", {
+        body: { ...request, referenceAt: request.referenceAt?.toISOString() },
+        timeoutMs: timeouts.stateless,
+      });
+      return {
+        plan: raw.plan as StatelessNext["plan"],
+        calls: (raw.calls as StatelessNext["calls"]) ?? [],
+        promptVersion: String(raw.promptVersion),
       };
     },
   };

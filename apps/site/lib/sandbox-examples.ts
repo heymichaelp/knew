@@ -25,6 +25,19 @@ export interface DraftFact {
   attributes: Record<string, string>;
 }
 
+/** A direction as the sandbox holds it: what the model would have proposed learning, and the facts it grew from. */
+export interface DraftDirection {
+  id: string;
+  dimension: string;
+  label: string;
+  /** The facts it grew from, by id; empty for a basic. */
+  factIds: string[];
+  /** The day it was proposed. */
+  proposedOn: string;
+  /** The day the knower waved it away; empty while it is open. */
+  dismissedOn: string;
+}
+
 export interface SandboxExample {
   id: string;
   title: string;
@@ -37,12 +50,19 @@ export interface SandboxExample {
   vocabulary: VocabularyDefinition;
   lens: LensDefinition;
   facts: DraftFact[];
+  /** Written out the way the model's `next` call would have proposed them from the facts. */
+  directions: DraftDirection[];
 }
 
 type Said = Omit<DraftFact, "id" | "from" | "until" | "attributes"> & Partial<Pick<DraftFact, "from" | "until" | "attributes">>;
 
 const drafts = (prefix: string, facts: Said[]): DraftFact[] =>
   facts.map((fact, index) => ({ from: "", until: "", attributes: {}, ...fact, id: `${prefix}-${index + 1}` }));
+
+type Proposed = Pick<DraftDirection, "dimension" | "label" | "factIds">;
+
+const proposals = (prefix: string, proposedOn: string, directions: Proposed[]): DraftDirection[] =>
+  directions.map((direction, index) => ({ ...direction, proposedOn, dismissedOn: "", id: `${prefix}-d${index + 1}` }));
 
 /** A gift lens over the person preset: what they love, what they have, your budget, and how you know each other. */
 function giftLens(): LensDefinition {
@@ -77,13 +97,19 @@ export const EXAMPLES: SandboxExample[] = [
     lens: presets.person.lens(),
     facts: drafts("mum", [
       { type: "AVOID", text: "Never bring up Jamie.", said: "2025-03-02" },
-      { type: "CIRCUMSTANCE", text: "Living in Lisbon for the year.", said: "2025-09-10", until: "2026-09-28" },
+      { type: "HOME", text: "Living in Lisbon for the year.", said: "2025-09-10", until: "2026-09-28" },
       { type: "LIFE_EVENT", text: "Moved home from Lisbon.", said: "2026-10-04", from: "2026-09-28", attributes: { kind: "moved" } },
       { type: "WORK", text: "Starts a new job at the hospital.", said: "2026-10-04", from: "2026-10-12" },
       { type: "SKILL", text: "Makes ceramics.", said: "2026-10-04", attributes: { level: "serious" } },
       { type: "PLAN", text: "Selling her ceramics at the fair next month.", said: "2026-10-04", from: "2026-11-01" },
       { type: "RITUAL", text: "The Sunday phone call.", said: "2025-06-01" },
       { type: "COMMITMENT", text: "You promised to help set up her stall at the fair.", said: "2026-10-04" },
+    ]),
+    directions: proposals("mum", "2026-10-04", [
+      { dimension: "people", label: "Whether she's near family now she's back", factIds: ["mum-3"] },
+      { dimension: "work", label: "What the new job at the hospital is", factIds: ["mum-4"] },
+      { dimension: "pursuits", label: "Whether she has a kiln at home now", factIds: ["mum-3", "mum-5"] },
+      { dimension: "background", label: "Whether she kept any ties to Lisbon", factIds: ["mum-3"] },
     ]),
   },
   {
@@ -100,6 +126,10 @@ export const EXAMPLES: SandboxExample[] = [
       { type: "HISTORY", text: "Friends since university.", said: "2026-08-01" },
       { type: "TASTE", text: "Loves matcha.", said: "2026-10-01" },
       { type: "HAS", text: "Already has a matcha whisk set.", said: "2026-10-01" },
+    ]),
+    directions: proposals("mia", "2026-10-01", [
+      { dimension: "pursuits", label: "Which matcha she drinks at home", factIds: ["mia-3"] },
+      { dimension: "has", label: "Whether she has a proper bowl and scoop", factIds: ["mia-4"] },
     ]),
   },
   {
@@ -120,6 +150,10 @@ export const EXAMPLES: SandboxExample[] = [
       { type: "VISIT", text: "Spent a week there in May 2019.", said: "2026-06-01" },
       { type: "VERDICT", text: "Would go back for the food alone.", said: "2026-06-01" },
     ]),
+    directions: proposals("lisbon", "2026-08-01", [
+      { dimension: "when", label: "Whether the Alfama trams run later in summer", factIds: ["lisbon-3"] },
+      { dimension: "offer", label: "Which fado bar the locals go to", factIds: ["lisbon-4"] },
+    ]),
   },
   {
     id: "bike",
@@ -138,6 +172,10 @@ export const EXAMPLES: SandboxExample[] = [
       { type: "CONDITION", text: "The rear wheel is slightly out of true.", said: "2026-02-01" },
       { type: "OPINION", text: "Your favourite thing you own.", said: "2026-02-01" },
     ]),
+    directions: proposals("bike", "2026-02-01", [
+      { dimension: "condition", label: "Whether the rear wheel has been trued yet", factIds: ["bike-5"] },
+      { dimension: "details", label: "Which tyres it is running now", factIds: ["bike-2"] },
+    ]),
   },
   ...(Object.keys(presets) as PresetName[]).map(
     (preset): SandboxExample => ({
@@ -150,6 +188,7 @@ export const EXAMPLES: SandboxExample[] = [
       vocabulary: presets[preset].vocabulary(),
       lens: presets[preset].lens(),
       facts: [],
+      directions: [],
     }),
   ),
 ];

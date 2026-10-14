@@ -1,9 +1,10 @@
 import { dayOf } from "./dates.ts";
-import type { Fact, RosterEntry } from "./types.ts";
+import { isLapsed } from "./directions.ts";
+import type { Fact, ProposedDirection, RosterEntry } from "./types.ts";
 import { KNOWER_ID, whoLabel, type Vocabulary } from "./vocabulary.ts";
 
 /**
- * What the two model calls are shown — pure, so what the model sees is
+ * What the model calls are shown — pure, so what the model sees is
  * testable without a model. The vocabulary supplies its kind, the source
  * labels and which of an entity's fields are shown beside its name;
  * everything else is the engine's one wording, and names no domain.
@@ -142,6 +143,19 @@ export interface NewFactForReconcile {
   invalidAt: Date | null;
 }
 
+/** "true since 2026-03, until 2026-09": a fact's own dates, when it has any. */
+const when = (fact: { validAt: Date | null; invalidAt: Date | null }): string =>
+  [fact.validAt ? `true since ${dayOf(fact.validAt)}` : null, fact.invalidAt ? `until ${dayOf(fact.invalidAt)}` : null].filter(Boolean).join(", ");
+
+/** A current fact as a call lists it, under the name that call gives it: `- name | type | fact | dates`. */
+const lineOf = (name: string, fact: Fact): string => {
+  const dates = [when(fact), `told us ${dayOf(fact.createdAt)}`].filter(Boolean).join("; ");
+  return `- ${name} | ${fact.type} | ${fact.fact} | ${dates}`;
+};
+
+/** A current fact under its own id, as the next call lists it: the ids it cites are the facts'. */
+const factLine = (fact: Fact): string => lineOf(fact.id, fact);
+
 export function reconcileInput(
   vocabulary: Vocabulary,
   input: {
@@ -152,19 +166,8 @@ export function reconcileInput(
     summary: string;
   },
 ): string {
-  const when = (fact: { validAt: Date | null; invalidAt: Date | null }) =>
-    [fact.validAt ? `true since ${dayOf(fact.validAt)}` : null, fact.invalidAt ? `until ${dayOf(fact.invalidAt)}` : null]
-      .filter(Boolean)
-      .join(", ");
-  const current =
-    input.current.length === 0
-      ? "(nothing yet)"
-      : input.current
-          .map((fact, index) => {
-            const dates = [when(fact), `told us ${dayOf(fact.createdAt)}`].filter(Boolean).join("; ");
-            return `- ${factHandle(index)} | ${fact.type} | ${fact.fact} | ${dates}`;
-          })
-          .join("\n");
+  // Reconcile names the current facts by handle, the plan turns the handles back into ids.
+  const current = input.current.length === 0 ? "(nothing yet)" : input.current.map((fact, index) => lineOf(factHandle(index), fact)).join("\n");
   const incoming = input.incoming
     .map((fact, index) => {
       const dates = when(fact);
@@ -178,4 +181,61 @@ export function reconcileInput(
     `New facts (index | type | fact | dates):\n${incoming}`,
     `Current summary:\n"""\n${input.summary || "(none yet)"}\n"""`,
   ].join("\n\n");
+}
+
+/**
+ * What the `next` call is shown about one entity: what was just learned, the
+ * rest of what is known, the knower's facts where the vocabulary has a
+ * relationship dimension, the directions already open (a lapsed one marked,
+ * so the model may withdraw it) and how much room each dimension has left.
+ * The first line is its own, so a test model can tell the call apart.
+ */
+export function nextInput(
+  vocabulary: Vocabulary,
+  input: {
+    entity: { name: string; fields: Readonly<Record<string, string | null>> };
+    /** When this was learned: the note's date, or now for an entity just added. */
+    referenceAt: Date;
+    /** The entity's current facts. */
+    facts: Fact[];
+    /** The knower's current facts. */
+    knower: Fact[];
+    /** The facts this note added or retold, by id; empty when the entity was just added. */
+    learned: readonly string[];
+    /** The entity's directions; only the open ones are shown. */
+    directions: ProposedDirection[];
+    perDimension: number;
+    lapseAfterDays: number;
+  },
+): string {
+  const learned = new Set(input.learned);
+  const just = input.facts.filter((fact) => learned.has(fact.id));
+  const rest = input.facts.filter((fact) => !learned.has(fact.id));
+  const open = input.directions.filter((direction) => direction.status === "open");
+  const live = new Set(open.filter((direction) => !isLapsed(direction, input.lapseAfterDays, input.referenceAt)));
+  const nothingYet = input.facts.length === 0 && input.learned.length === 0;
+  const sections = [
+    `Directions for this ${vocabulary.kind}: ${whoLabel(vocabulary, input.entity)}`,
+    `Today (when this was learned): ${dayOf(input.referenceAt)}`,
+    `Just learned (id | type | fact | dates):\n${just.length > 0 ? just.map(factLine).join("\n") : nothingYet ? "(nothing yet: this entry was just added)" : "(nothing new)"}`,
+    `Also known (id | type | fact | dates):\n${rest.length > 0 ? rest.map(factLine).join("\n") : "(nothing else)"}`,
+  ];
+  if (input.knower.length > 0 && vocabulary.dimensions.some((dimension) => dimension.about === "relationship")) {
+    sections.push(`About the writer (id | type | fact | dates):\n${input.knower.map(factLine).join("\n")}`);
+  }
+  const directions = open.map((direction) => {
+    const from = direction.factIds.length > 0 ? direction.factIds.join(", ") : "nothing";
+    return `- ${direction.id} | ${direction.dimension} | ${direction.label} | ${from}${live.has(direction) ? "" : " (lapsed)"}`;
+  });
+  const room = vocabulary.dimensions
+    .filter((dimension) => dimension.about !== "knower")
+    .map((dimension) => {
+      const now = [...live].filter((direction) => direction.dimension === dimension.id).length;
+      return `- ${dimension.id} | ${now} | ${Math.max(0, input.perDimension - now)}`;
+    });
+  sections.push(
+    `Open directions (id | dimension | label | grew from):\n${directions.length > 0 ? directions.join("\n") : "(none yet)"}`,
+    `Room for new directions (dimension | open now | room left):\n${room.join("\n")}`,
+  );
+  return sections.join("\n\n");
 }

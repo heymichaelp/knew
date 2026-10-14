@@ -193,7 +193,7 @@ export function fakeIntelligence(options: FakeIntelligenceOptions = {}): FakeInt
   const turns: ScriptedTurn[] = [];
   let current: ScriptedTurn | undefined;
   const reader: Reader = {
-    refs: { extract: "fake", reconcile: "fake" },
+    refs: { extract: "fake", reconcile: "fake", next: "fake" },
     ready: () => turns.length > 0,
     async extract() {
       current = turns.shift();
@@ -202,6 +202,17 @@ export function fakeIntelligence(options: FakeIntelligenceOptions = {}): FakeInt
     },
     async reconcile(args) {
       return current?.reconcile?.({ name: args.entity.name, current: args.current }, args.incoming) ?? { decisions: [], summary: `About ${args.entity.name}.` };
+    },
+    async next(args) {
+      const learned = new Set(args.learned);
+      const shown = {
+        name: args.entity.name,
+        learned: args.facts.filter((fact) => learned.has(fact.id)),
+        known: args.facts.filter((fact) => !learned.has(fact.id)),
+        open: args.directions.filter((direction) => direction.status === "open"),
+      };
+      // Unscripted, nothing is proposed: every case that says nothing about directions reads as before.
+      return current?.next?.(shown) ?? { answered: [], withdrawn: [], proposed: [] };
     },
   };
 
@@ -231,7 +242,7 @@ export function fakeIntelligence(options: FakeIntelligenceOptions = {}): FakeInt
     if (!record) throw new Error(`fakeIntelligence: no entity ${entityId} on the roster`);
     let entity = s.entities.get(entityId);
     if (!entity) {
-      entity = { id: entityId, kind: record.kind, name: record.name, aliases: [], summary: "", summaryUpdatedAt: null, facts: [] };
+      entity = { id: entityId, kind: record.kind, name: record.name, aliases: [], summary: "", summaryUpdatedAt: null, facts: [], directions: [], directionsAt: null };
       s.entities.set(entityId, entity);
     }
     return entity;

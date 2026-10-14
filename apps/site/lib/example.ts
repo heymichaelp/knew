@@ -9,7 +9,7 @@
  * `renderBrief` and `readinessFor`. If either changes, or the preset does, the
  * front page changes with it.
  */
-import { compileLens, compileVocabulary, extendLens, extendVocabulary, type Fact, readinessFor, renderBrief } from "@popjoker/knew";
+import { compileLens, compileVocabulary, extendLens, extendVocabulary, type Fact, type ProposedDirection, readinessFor, renderBrief } from "@popjoker/knew";
 import { person } from "@popjoker/knew/presets";
 
 export const exampleVocabulary = compileVocabulary(
@@ -74,8 +74,30 @@ export const examplePage: string =
     at: AT,
   }) ?? "";
 
-/** What is known, how strongly, and what to learn next — decided by the engine. */
-export const exampleReadiness = readinessFor(exampleLens, examplePerson, exampleFacts, AT);
+const direction = (id: string, dimension: string, label: string, factIds: string[]): ProposedDirection => ({
+  id,
+  entityId: "mum",
+  dimension,
+  label,
+  factIds,
+  episodeId: "ep_1",
+  proposedAt: SAID,
+  status: "open",
+  answeredBy: null,
+  resolvedAt: null,
+});
+
+/** What the model proposed learning next, written out the way its `next` call would have returned them from these facts. */
+export const exampleDirections: ProposedDirection[] = [
+  direction("d1", "people", "Whether she's near family now she's back", ["f2"]),
+  direction("d2", "together", "Whether you'll be at the fair next month", ["f5"]),
+  direction("d3", "work", "What the new job at the hospital is", ["f3"]),
+  direction("d4", "pursuits", "Whether she has a kiln at home now", ["f2", "f4"]),
+  direction("d5", "background", "Whether she kept any ties to Lisbon", ["f2"]),
+];
+
+/** What is known, how strongly, and what to learn next — ranked by the engine. */
+export const exampleReadiness = readinessFor(exampleLens, examplePerson, exampleFacts, AT, [], exampleDirections);
 
 /**
  * A field is the client's business. The engine noticed the move and wants to

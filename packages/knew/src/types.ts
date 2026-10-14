@@ -136,8 +136,11 @@ export interface MustHonor {
 }
 
 /** Missing understanding: a need that is open, or thin against what its lens
- *  needs. Gaps come in order of value. */
+ *  needs, as the directions proposed in it or, with none yet, as itself. Gaps
+ *  come in order of value. */
 export interface Gap {
+  /** The proposed direction it is; null for a need with none yet, whose label is the need's. */
+  id: string | null;
   need: string;
   label: string;
   /** What it is about: the entity, the relationship with it, or the knower. */
@@ -200,21 +203,73 @@ export interface NeedStanding {
   factIds: string[];
 }
 
-/** A direction for understanding to grow in: `learn` where a need is open or
- *  thin, built on the facts already known; `revisit` where understanding has
- *  gone unsaid past its window, carrying the facts due. */
+/** A direction for understanding to grow in: `learn` where there is something
+ *  to find out, as a direction the model proposed (`id` set) or, for a need
+ *  with none yet, the need itself; `revisit` where understanding has gone
+ *  unsaid past its window, carrying the facts due. */
 export interface Direction {
+  /** The proposed direction this is; null for a need-level direction, whose label is the need's. */
+  id: string | null;
   kind: "learn" | "revisit";
   /** The need it serves. */
   need: string;
+  /** A topic, never a question. */
   label: string;
   /** What to learn about: the entity, the relationship with it, or the knower. */
   about: Subject;
+  /** The dimension it would inform; for a need-level direction, the need's
+   *  dimension, or null when the need names its types. */
   dimension: string | null;
   types: string[];
-  /** weight · (1 − strength), three places: directions run from the highest. */
+  /** weight · (1 − strength), three places, or weight · dueCredit for a
+   *  proposed direction in a need already met: directions run from the highest. */
   value: number;
+  /** What it builds on: the facts a proposed direction grew from; a need's own
+   *  facts, or those of the needs it comes after; the facts due for a revisit. */
   factIds: string[];
+  /** When the model proposed it; null for a need-level direction. */
+  proposedAt: Date | null;
+}
+
+/** Something specific to learn about an entity, proposed by the model's
+ *  `next` call inside one dimension of the vocabulary, from what is known. A
+ *  topic, never a question, and never evidence: the page, the facts and the
+ *  summary are untouched by it. Derived, like a fact: a replay rebuilds it. */
+export interface ProposedDirection {
+  id: string;
+  entityId: string;
+  /** The dimension it would inform. */
+  dimension: string;
+  label: string;
+  /** The facts it grew from; empty for one proposed before anything was known. */
+  factIds: string[];
+  /** The note that prompted it; null when it was proposed as the entity was added. */
+  episodeId: string | null;
+  proposedAt: Date;
+  /** Open until a fact answers it, the model withdraws it, or the knower
+   *  dismisses it. Lapsing is read-time arithmetic, not a status. */
+  status: "open" | "answered" | "withdrawn" | "dismissed";
+  /** The fact that answered it. */
+  answeredBy: string | null;
+  resolvedAt: Date | null;
+}
+
+/** A direction before it has an id: what `planDirections` keeps of a proposal. */
+export interface NewDirection {
+  dimension: string;
+  label: string;
+  factIds: string[];
+}
+
+/** What a `next` answer does to an entity's directions, once the engine has
+ *  checked every row: the plan a driver or a stateless app applies. */
+export interface DirectionPlan {
+  answered: Array<{ id: string; factId: string }>;
+  withdrawn: string[];
+  proposed: NewDirection[];
+  /** Rows refused: an id not open, a fact not current, a label that is a
+   *  question or a repeat, a dimension not offered, or one past the room. */
+  rejected: number;
 }
 
 /** Current understanding of one entity, what one lens's objective still
@@ -290,7 +345,7 @@ export interface ModelUsage {
 }
 
 export interface ModelCall {
-  method: "extract" | "reconcile";
+  method: "extract" | "reconcile" | "next";
   model: string | null;
   /** Null when the call threw. */
   usage: ModelUsage | null;
@@ -310,6 +365,11 @@ export type EpisodeOutcome =
       misattributed: number;
       /** Facts about entities past the per-episode cap, dropped. */
       droppedForCap: number;
+      /** What the `next` call did for the entities this note touched: the
+       *  directions proposed, the open ones it answered or withdrew, and the
+       *  rows the engine refused. All zero when the call failed. */
+      directions: { proposed: number; answered: number; withdrawn: number; rejected: number };
+      /** Every model call the note took, the `next` calls included, whether or not each came back. */
       calls: number;
       costUsd: number | null;
     }
@@ -392,7 +452,8 @@ export interface Intelligence {
    *  on the roster. */
   gaps(scope: IntelligenceScope, entityId: string, options?: ReadOptions): Promise<Gap[] | null>;
   /** Current understanding, what the lens's objective still needs, and the
-   *  next directions. Null when the entity is not on the roster. */
+   *  next directions: what the model proposed learning, inside the dimensions,
+   *  and what to revisit. Null when the entity is not on the roster. */
   readiness(scope: IntelligenceScope, entityId: string, options?: ReadOptions): Promise<Readiness | null>;
   searchFacts(scope: IntelligenceScope, query: string, options?: SearchFactsOptions): Promise<Fact[]>;
   /** What the engine kept from the given source refs — current facts only. */
@@ -405,6 +466,11 @@ export interface Intelligence {
 
   listProposals(scope: IntelligenceScope, options?: { entityId?: string; status?: Proposal["status"] }): Promise<Proposal[]>;
   resolveProposal(scope: IntelligenceScope, proposalId: string, resolution: "accepted" | "dismissed"): Promise<void>;
+
+  /** The knower waves a direction away: it leaves `next` as of `at` (default
+   *  now), and the model is refused a repeat of it. A no-op for an id that is
+   *  not an open direction. */
+  dismissDirection(scope: IntelligenceScope, directionId: string, options?: { at?: Date }): Promise<void>;
 
   exportSubject(scope: IntelligenceScope): Promise<SubjectExport>;
   /** Ordered explicit deletes of everything under the scope. */
@@ -488,6 +554,31 @@ export interface StatelessExtraction {
   promptVersions: { extract: string; reconcile: string | null };
 }
 
+export interface StatelessNextRequest {
+  /** The entity as the roster has it. */
+  entity: RosterEntry;
+  /** The entity's facts; only the current ones ground anything. */
+  facts: Fact[];
+  /** The facts a note just added or retold, by id; left out for an entity just added. */
+  learned?: string[];
+  /** The knower's facts, shown beside the relationship dimensions. */
+  knowerFacts?: Fact[];
+  /** The entity's directions, every status. */
+  directions: ProposedDirection[];
+  /** When this was learned. Default now. */
+  referenceAt?: Date;
+  callTimeoutMs?: number;
+}
+
+export interface StatelessNext {
+  /** What to do to the entity's directions: `applyDirectionPlan` applies it to your own store. */
+  plan: DirectionPlan;
+  calls: ModelCall[];
+  promptVersion: string;
+}
+
 export interface StatelessIntelligence {
   extract(request: StatelessExtractRequest): Promise<StatelessExtraction>;
+  /** What to learn next about one entity, from what the app holds. Nothing is kept. */
+  next(request: StatelessNextRequest): Promise<StatelessNext>;
 }

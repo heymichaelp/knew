@@ -59,4 +59,38 @@ describe("Scenario: An app with its own store asks for a plan, in its own proces
     assert.equal(answer.calls.length, 3);
     assert.deepEqual(answer.promptVersions, { extract: "extract.v2", reconcile: "reconcile.v2" });
   });
+
+  it("plans what to learn next from the facts and directions the app holds, for the app to apply", async () => {
+    const gardening = fact("00000000-0000-4000-8000-0000000000bb", "linda", "LIKES", "Gardening");
+    let prompt = "";
+    const model: Model = async (request) => {
+      prompt = request.prompt;
+      return {
+        output: {
+          answered: [],
+          withdrawn: [],
+          proposed: [
+            { dimension: "likes", label: "Whether she sells what she grows", factIds: [gardening.id] },
+            { dimension: "likes", label: "Is she entering the village show?", factIds: [] },
+          ],
+        },
+      };
+    };
+    const engine = statelessIntelligence({ vocabulary: fixtureVocabulary(), model });
+    const answer = await engine.next({
+      entity: { id: "linda", name: "Linda", fields: { relationship: "mother" }, aliases: [] },
+      facts: [gardening],
+      learned: [gardening.id],
+      directions: [],
+      referenceAt: said,
+    });
+    assert.ok(prompt.startsWith("Directions for this person: Linda (mother)\n\nToday (when this was learned): 2026-10-01"));
+    assert.deepEqual(answer.plan, {
+      answered: [],
+      withdrawn: [],
+      proposed: [{ dimension: "likes", label: "Whether she sells what she grows", factIds: [gardening.id] }],
+      rejected: 1,
+    });
+    assert.deepEqual([answer.calls.map((call) => call.method), answer.promptVersion], [["next"], "next.v1"]);
+  });
 });

@@ -1,6 +1,6 @@
 # knew
 
-The attention engine: one engine, distinct clients. This repo is the npm package and the
+The relationship engine: one engine, distinct clients. This repo is the npm package and the
 knew.dev site. The Postgres service is `heymichaelp/knew-service`.
 
 ## What it is
@@ -13,12 +13,15 @@ knew.dev site. The Postgres service is `heymichaelp/knew-service`.
 
 ## Rules
 
-- **knew reports understanding; it writes no questions.** Per entity and lens it gives the
-  current understanding by dimension, the missing understanding (needs not met), and the next
-  directions. Nothing in the package produces a question for the knower; what to do with a
-  direction is the client's call. Understanding has three subjects: the entity, the relationship
-  with it (kept on the entity, one to each), and the knower (kept on `self`, the same beside every
-  entity). Keep the knower separate, and never move relationship facts off their entity.
+- **knew reports understanding and names what to learn next; it writes no questions.** Per
+  entity and lens it gives the current understanding by dimension, the missing understanding
+  (needs not met), and the next directions: specific things to learn, which the model proposes
+  inside the vocabulary's dimensions from what is known (the `next` call, once a note is read),
+  and facts due to be heard again. A direction is a topic, never a question: its wording, and
+  what to do with it, are the client's. Understanding has three subjects: the entity, the
+  relationship with it (kept on the entity, one to each), and the knower (kept on `self`, the
+  same beside every entity). Keep the knower separate, never move relationship facts off their
+  entity, and never propose a direction about the knower.
 - **Nothing client-specific lives in the package.** The core ships no vocabulary and no lens: no
   fact type, no dimension, no heading, no charter. Vocabularies and lenses are data a client
   registers. The one exception is `@popjoker/knew/presets`: opt-in, generic starter vocabularies
@@ -27,10 +30,10 @@ knew.dev site. The Postgres service is `heymichaelp/knew-service`.
   `test/presets.test.ts` fails if any preset's type key appears in the core's code.
   The site's worked example is the person preset; the fixture vocabulary and its three lenses in
   `@popjoker/knew/testing` back the contract suite.
-- **Weights order directions; they never weigh what is believed.** Readiness ranks needs and
-  revisits; it never reorders, filters or annotates a page, and a fact due for a revisit is still
-  printed exactly as before. Revisit windows are opt-in per fact type and refused on enduring
-  types.
+- **Weights order directions; they never weigh what is believed.** Readiness ranks needs,
+  proposed directions and revisits; it never reorders, filters or annotates a page, a proposed
+  direction is never evidence, and a fact due for a revisit is still printed exactly as before.
+  Revisit windows are opt-in per fact type and refused on enduring types.
 - **The site imports the engine; it never transcribes it.** Long-form pages render the package's
   own `ADOPTING.md`/`CHANGELOG.md`, read from the installed tarball at build time. The vocabulary
   and lens tables come from `vocabularyDefinitionSchema` and `lensDefinitionSchema` via

@@ -4,7 +4,7 @@ import { ModelContextError } from "./fallback.ts";
 import type { Model, ModelRequest } from "./model.ts";
 
 /**
- * `@popjoker/knew/anthropic`: knew's two calls answered by Claude, on the
+ * `@popjoker/knew/anthropic`: knew's calls answered by Claude, on the
  * app's own key, through Anthropic's official SDK — an optional peer
  * dependency, so an app that never imports this path never installs it.
  *
@@ -21,8 +21,9 @@ export interface AnthropicModelOptions {
   apiKey?: string;
   /** A client the app built itself — another base URL, a proxy, or a test double. Wins over `apiKey`. */
   client?: Pick<Anthropic, "messages">;
-  /** One model for both calls, or one per call. Default `claude-opus-5-5`. */
-  model?: string | { extract: string; reconcile: string };
+  /** One model for every call, or one per call; `next` left out takes the
+   *  reconcile model. Default `claude-opus-5-5`. */
+  model?: string | { extract: string; reconcile: string; next?: string };
   /** How hard the model thinks. Default: the model's own (medium). */
   effort?: "low" | "medium" | "high";
   /** The most an answer may run to, thinking included. Default 16,000. */
@@ -33,8 +34,10 @@ export const DEFAULT_ANTHROPIC_MODEL = "claude-opus-5-5";
 
 export function anthropicModel(options: AnthropicModelOptions = {}): Model {
   const client = options.client ?? new Anthropic(options.apiKey !== undefined ? { apiKey: options.apiKey } : {});
-  const modelFor = (task: ModelRequest["task"]) =>
-    typeof options.model === "string" ? options.model : (options.model?.[task] ?? DEFAULT_ANTHROPIC_MODEL);
+  const modelFor = (task: ModelRequest["task"]) => {
+    if (typeof options.model === "string") return options.model;
+    return options.model?.[task] ?? (task === "next" ? options.model?.reconcile : undefined) ?? DEFAULT_ANTHROPIC_MODEL;
+  };
   return async (request) => {
     const model = modelFor(request.task);
     const format = jsonSchemaOutputFormat(request.schema as Parameters<typeof jsonSchemaOutputFormat>[0]);

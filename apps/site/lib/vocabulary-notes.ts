@@ -17,7 +17,9 @@ export const VOCABULARY_FIELD_NOTES: Record<string, string> = {
   promptFields: "The subset of `fields` shown beside a name, to the model and in a page's header.",
   charter: "Your instructions to the model, in markdown, sent with every extraction: what to keep and what never to record.",
   sourceLabels: "How the extraction prompt names an episode's source: `note` as “a note they wrote”.",
-  prompts: "Your own wording of the two task prompts, replacing `extract.v2` and `reconcile.v2`. Rarely needed.",
+  prompts: "Your own wording of the three task prompts, replacing `extract.v2`, `reconcile.v2` and `next.v1`. Rarely needed.",
+  directions:
+    "What to learn next, proposed by the model inside each dimension once a note is read and when an entity is added: how many may be open per dimension (2) and after how many days one nobody acted on lapses (180). `false` proposes none.",
   extractAttributeKeys: "The order of attribute keys in the extraction schema. Optional.",
   basedOn: "Written by `extendVocabulary`: the base it came from and every type or dimension changed or added.",
 };

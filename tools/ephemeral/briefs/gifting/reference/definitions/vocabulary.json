@@ -17,44 +17,13 @@
       "description": "Something said once, in passing, that would be worth asking about next time: a thing they meant to try, a worry, a hope.",
       "dimension": "ahead"
     },
-    "CIRCUMSTANCE": {
-      "description": "How their life is arranged for now: where they live, a schedule, a busy season, who they care for. It changes, so give a date when one was said.",
-      "dimension": "life",
-      "revisitAfterDays": 180
-    },
-    "LIFE_EVENT": {
-      "description": "A dated change in circumstance: a move, a new job, a retirement, a birth, an illness, a loss, a marriage, a separation.",
-      "dimension": "life",
-      "attributes": [
-        {
-          "name": "kind",
-          "kind": "enum",
-          "values": [
-            "moved",
-            "new_job",
-            "retired",
-            "new_baby",
-            "illness",
-            "bereavement",
-            "marriage",
-            "separation",
-            "other"
-          ]
-        }
-      ]
-    },
-    "RITUAL": {
-      "description": "A standing habit: the Sunday run, the monthly dinner, the annual trip.",
-      "dimension": "life",
-      "revisitAfterDays": 365
-    },
     "WORK": {
       "description": "What they do: their role, employer or field, and what they are working on.",
       "dimension": "work",
       "revisitAfterDays": 365
     },
     "RELATION": {
-      "description": "Someone in their life and how they relate: a partner, a child, a parent, a friend, a colleague.",
+      "description": "Someone in their life and how they relate: a partner, a child, a parent, a friend, a colleague, someone they care for.",
       "dimension": "people"
     },
     "INTEREST": {
@@ -64,6 +33,7 @@
     "SKILL": {
       "description": "A pursuit with a depth claim. Depth is skill and experience, never enthusiasm: someone obsessed after a month is a beginner.",
       "dimension": "pursuits",
+      "enduring": true,
       "attributes": [
         {
           "name": "level",
@@ -74,13 +44,17 @@
             "expert"
           ]
         }
-      ],
-      "enduring": true
+      ]
     },
     "TASTE": {
       "description": "What they like and dislike, in their own words: food, music, books, style.",
       "dimension": "pursuits",
       "enduring": true
+    },
+    "RITUAL": {
+      "description": "A standing habit: the Sunday run, the monthly dinner, the annual trip.",
+      "dimension": "pursuits",
+      "revisitAfterDays": 365
     },
     "HAS": {
       "description": "Something they already have, so nobody suggests what they own or gives it twice.",
@@ -102,9 +76,35 @@
       "dimension": "you"
     },
     "ORIGIN": {
-      "description": "Where they are from or have lived: a hometown, a country, where they grew up or studied.",
+      "description": "Where they are from or have lived before: a hometown, a country, where they grew up or studied.",
       "dimension": "background",
       "enduring": true
+    },
+    "HOME": {
+      "description": "Where they live now, and who with. It changes, so give a date when one was said.",
+      "dimension": "background",
+      "revisitAfterDays": 365
+    },
+    "LIFE_EVENT": {
+      "description": "A dated change in their life: a move, a new job, a retirement, a birth, an illness, a loss, a marriage, a separation.",
+      "dimension": "background",
+      "attributes": [
+        {
+          "name": "kind",
+          "kind": "enum",
+          "values": [
+            "moved",
+            "new_job",
+            "retired",
+            "new_baby",
+            "illness",
+            "bereavement",
+            "marriage",
+            "separation",
+            "other"
+          ]
+        }
+      ]
     },
     "OTHER": {
       "description": "A statement worth keeping that fits no other type.",
@@ -121,9 +121,6 @@
     },
     "ahead": {
       "label": "Coming up"
-    },
-    "life": {
-      "label": "How life is arranged"
     },
     "work": {
       "label": "Work"

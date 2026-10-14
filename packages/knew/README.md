@@ -6,9 +6,11 @@ For a goal, it reports:
 
 - **Current understanding**: dated facts, by dimension.
 - **Missing understanding**: what the goal needs that is not yet known.
-- **The next direction**: the most valuable need to learn more about, or understanding to revisit.
+- **The next directions**: specific things to learn, which the model proposes inside the
+  dimensions from what is known, and understanding to revisit.
 
-It writes no questions. What to do with a direction is your app's call.
+It names what to learn next; it writes no questions. What to do with a direction is your app's
+call.
 
 ## Concepts
 
@@ -42,10 +44,10 @@ await knew.addEpisode(scope, {
   entityHints: ["mia"],
   extract: "inline",
 });
-await knew.extractNow(scope, { maxEpisodes: 5 }); // two model calls, on your key
+await knew.extractNow(scope, { maxEpisodes: 5 }); // three model calls, on your key
 
 const brief = await knew.brief(scope, "mia"); // the page; null until something is known
-const readiness = await knew.readiness(scope, "mia"); // current, missing, next
+const readiness = await knew.readiness(scope, "mia"); // current, missing, and what to learn next
 ```
 
 Three ways to run it, one contract (`Intelligence`):
@@ -76,9 +78,9 @@ const lens = extendLens(person.lens(), { id: "know-them", version: 1, vocabulary
   `fallbackModel`.
 - Stateless mode: `statelessIntelligence(...).extract` (in your process) or
   `intelligenceClient(...).extract` (hosted) returns a `ReconciliationPlan` per entity to apply to
-  your own store.
+  your own store; `.next` returns a `DirectionPlan` of what to learn next about one entity.
 - Pure functions: `renderBrief`, `readinessFor`, `gapsFor`, `mustHonorFrom`,
-  `planReconciliation`, `factsKnownAt`, `factsTrueAt`.
+  `planReconciliation`, `planDirections`, `applyDirectionPlan`, `factsKnownAt`, `factsTrueAt`.
 - Definitions: `compileVocabulary`, `compileLens`, `extendVocabulary`, `extendLens`,
   `ENGINE_DEFAULTS`.
 - Presets in `./presets`: `person`, `place`, `product`.

@@ -1,7 +1,8 @@
 import type { Subject } from "./types.ts";
 import { z, type ZodTypeAny } from "zod";
+import { ENGINE_DEFAULTS } from "./defaults.ts";
 import { FIELD_RE, ID_RE, KEY_RE, TYPE_KEY_RE } from "./patterns.ts";
-import { EXTRACT_V2, RECONCILE_V2 } from "./prompts/index.ts";
+import { EXTRACT_V2, NEXT_V1, RECONCILE_V2 } from "./prompts/index.ts";
 
 /**
  * A VOCABULARY is what extraction writes in: the kinds of fact there are
@@ -95,7 +96,12 @@ export interface VocabularyDefinition {
   sourceLabels?: Record<string, string>;
   /** The client's own wording of the task prompts. Absent, the engine's
    *  defaults apply. */
-  prompts?: { extract?: string; reconcile?: string };
+  prompts?: { extract?: string; reconcile?: string; next?: string };
+  /** What to learn next, proposed by the model inside each dimension once a
+   *  note is read and when an entity is added: how many directions may be
+   *  open per dimension (default 2), and after how many days one nobody acted
+   *  on lapses (default 180). `false`: none are proposed. */
+  directions?: { perDimension?: number; lapseAfterDays?: number } | false;
   /** The order of attribute keys in the extraction schema. Default: the
    *  order they are first met walking `factTypes`. */
   extractAttributeKeys?: string[];
@@ -141,7 +147,10 @@ export const vocabularyDefinitionSchema: z.ZodType<VocabularyDefinition> = z
     promptFields: z.array(z.string()).optional(),
     charter: z.string().min(1),
     sourceLabels: z.record(z.string(), z.string()).optional(),
-    prompts: z.object({ extract: z.string().min(1).optional(), reconcile: z.string().min(1).optional() }).optional(),
+    prompts: z.object({ extract: z.string().min(1).optional(), reconcile: z.string().min(1).optional(), next: z.string().min(1).optional() }).optional(),
+    directions: z
+      .union([z.object({ perDimension: z.number().int().min(1).optional(), lapseAfterDays: z.number().int().min(1).optional() }), z.literal(false)])
+      .optional(),
     extractAttributeKeys: z.array(z.string()).optional(),
     basedOn: z
       .object({ preset: z.string().regex(ID_RE), version: z.number().int().min(1), changed: z.array(z.string()), added: z.array(z.string()) })
@@ -230,12 +239,14 @@ export interface Vocabulary {
   fields: readonly string[];
   promptFields: readonly string[];
   charter: string;
-  prompts: { extract: { ref: string; text: string }; reconcile: { ref: string; text: string } };
+  prompts: { extract: { ref: string; text: string }; reconcile: { ref: string; text: string }; next: { ref: string; text: string } };
+  /** How directions are kept, or null when this vocabulary proposes none. */
+  directions: { perDimension: number; lapseAfterDays: number } | null;
 }
 
 /** The engine's own task prompts, by ref. v1 stays embedded so an episode
  *  stamped with it can still say what read it. */
-export const DEFAULT_PROMPT_REFS = { extract: "extract.v2", reconcile: "reconcile.v2" } as const;
+export const DEFAULT_PROMPT_REFS = { extract: "extract.v2", reconcile: "reconcile.v2", next: "next.v1" } as const;
 
 function baseSchema(spec: AttributeSpec): ZodTypeAny {
   switch (spec.kind) {
@@ -302,7 +313,15 @@ export function compileVocabulary(definition: VocabularyDefinition): Vocabulary 
       reconcile: own.reconcile
         ? { ref: `vocabulary:${definition.id}@${definition.version}:reconcile`, text: own.reconcile }
         : { ref: DEFAULT_PROMPT_REFS.reconcile, text: RECONCILE_V2 },
+      next: own.next ? { ref: `vocabulary:${definition.id}@${definition.version}:next`, text: own.next } : { ref: DEFAULT_PROMPT_REFS.next, text: NEXT_V1 },
     },
+    directions:
+      definition.directions === false
+        ? null
+        : {
+            perDimension: definition.directions?.perDimension ?? ENGINE_DEFAULTS.directionsPerDimension,
+            lapseAfterDays: definition.directions?.lapseAfterDays ?? ENGINE_DEFAULTS.directionLapseDays,
+          },
   };
 }
 
@@ -399,10 +418,39 @@ export function factTypeGlossary(vocabulary: Vocabulary): Record<string, FactTyp
   );
 }
 
-/** The charter and the type list, as the system context both model calls
- *  carry beside the task prompt. */
+/** The charter and the type list, as the system context the extract and
+ *  reconcile calls carry beside the task prompt. */
 export function systemExtra(vocabulary: Vocabulary): string[] {
   return [vocabulary.charter, `## Fact types\n\n${factTypeVocabulary(vocabulary)}`];
+}
+
+/** How the dimension list tells the `next` call what each dimension is about. */
+const CONCERNS: Record<Subject, string> = {
+  entity: "about the entry",
+  relationship: "about the relationship between the writer and the entry",
+  knower: "about the writer",
+};
+
+/**
+ * The dimensions as the `next` call reads them: one line per dimension of the
+ * entity or the relationship, with what it is about and the types that inform
+ * it. The knower's dimensions are left out: there is nothing to learn about
+ * the writer from the entry, so no direction is ever proposed in one.
+ */
+export function dimensionVocabulary(vocabulary: Vocabulary): string {
+  return vocabulary.dimensions
+    .filter((dimension) => dimension.about !== "knower")
+    .map((dimension) => {
+      const types = vocabulary.factTypeKeys.filter((key) => vocabulary.factTypes[key]!.dimension === dimension.id);
+      return `- ${dimension.id}: ${dimension.label} (${CONCERNS[dimension.about]}). Informed by: ${types.join(", ")}.`;
+    })
+    .join("\n");
+}
+
+/** The system context the `next` call carries: the charter and the type list,
+ *  then the dimensions it proposes inside. */
+export function nextSystemExtra(vocabulary: Vocabulary): string[] {
+  return [...systemExtra(vocabulary), `## Dimensions\n\n${dimensionVocabulary(vocabulary)}`];
 }
 
 /** "Linda (mother)" — a name with the vocabulary's prompt fields, when any are set. */

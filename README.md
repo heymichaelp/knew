@@ -1,7 +1,9 @@
 # knew
 
-The attention engine. You write down what you noticed about someone; knew reads it into typed,
-dated facts, hands back the page you start from, and names the one thing still worth asking.
+The relationship engine. There's no substitute for paying attention; but when you do, knew
+invests it, and it pays dividends in your relationships. You write down what you noticed about
+something you are getting to know — a person, a place, a thing; knew reads it into typed, dated
+facts, hands back the page you start from, and names the direction most worth taking next.
 
 This repo holds two of the three pieces. The third, the Postgres service, lives in
 `heymichaelp/knew-service` and deploys on its own schedule.

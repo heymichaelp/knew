@@ -2,9 +2,20 @@
 
 ## Unreleased — 1.0.0
 
-knew reports understanding by dimension: what is understood, what a goal still needs, and the
-next direction. It writes no questions.
+knew reports understanding by dimension: what is understood, what a goal still needs, and what to
+learn next. It writes no questions.
 
+- **Directions.** Once a note is folded in, a third call, `next`, asks the model what to learn
+  about each entity the note changed, inside the vocabulary's dimensions and from what is known;
+  someone newly added gets first directions in the background. A `ProposedDirection` is a topic,
+  never a question, grounded in the facts it cites. `readiness().next` ranks the live ones through
+  the lens, at the need's value or at `dueCredit` in a need already met, and falls back to the
+  need itself (`id: null`) where none is proposed; `gaps()` lists those in needs still open or
+  thin. A later fact answers one, the model may withdraw one, `dismissDirection` waves one away
+  and refuses the model a repeat, a retraction withdraws what grew from it, and one nobody acts on
+  lapses after the vocabulary's `directions.lapseAfterDays` (180). Replay drops them, as derived.
+  `statelessIntelligence(...).next`, with `planDirections` and `applyDirectionPlan`, for an app
+  with its own store. The person preset's charter keeps a plain "no".
 - **Vocabularies and lenses are separate definitions.** A `VocabularyDefinition` holds the fact
   types, the dimensions they inform, `fields`, `promptFields`, the `charter` and the `kind`. A
   `LensDefinition` holds `objective`, `needs`, `pinned`, `sections`, `header`, `overHeading` and

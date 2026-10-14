@@ -30,7 +30,9 @@ export interface VocabularyOverrides {
   promptFields?: string[] | null;
   charter?: string;
   sourceLabels?: Record<string, string> | null;
-  prompts?: { extract?: string; reconcile?: string } | null;
+  prompts?: { extract?: string; reconcile?: string; next?: string } | null;
+  /** How directions are kept; `false` proposes none; `null` goes back to the defaults. */
+  directions?: { perDimension?: number; lapseAfterDays?: number } | false | null;
   extractAttributeKeys?: string[] | null;
 }
 
@@ -112,6 +114,7 @@ export function extendVocabulary(base: VocabularyDefinition, overrides: Vocabula
   replace(result, "charter", overrides.charter);
   replace(result, "sourceLabels", overrides.sourceLabels);
   replace(result, "prompts", overrides.prompts);
+  replace(result, "directions", overrides.directions);
   replace(result, "extractAttributeKeys", overrides.extractAttributeKeys);
   result.basedOn = {
     preset: base.basedOn?.preset ?? base.id,

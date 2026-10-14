@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import type { ReconcileDecisions } from "./reconcile.ts";
-import type { Extraction } from "./schemas.ts";
-import type { Fact, Gap, Intelligence, IntelligenceScope, NewFact, Readiness } from "./types.ts";
+import type { Extraction, NextAnswer } from "./schemas.ts";
+import type { Fact, Gap, Intelligence, IntelligenceScope, NewFact, ProposedDirection, Readiness } from "./types.ts";
 import { KNOWER_ID } from "./vocabulary.ts";
 
 /**
@@ -31,6 +31,12 @@ export interface ScriptedTurn {
    * summary is "About <name>.".
    */
   reconcile?: (entity: { name: string; current: Fact[] }, incoming: NewFact[]) => ReconcileDecisions;
+  /**
+   * What to learn next about an entity the note changed something about, given what the model
+   * is shown: its name, the facts just learned, the rest of what is known, and the directions
+   * open. Left out: nothing is answered, withdrawn or proposed.
+   */
+  next?: (shown: { name: string; learned: Fact[]; known: Fact[]; open: ProposedDirection[] }) => NextAnswer;
 }
 
 export interface ContractContext {
@@ -352,6 +358,111 @@ export function contractCases(): ContractCase[] {
         assert.equal((await i.episodes(scope, { sourceRefs: ["m-1"] }))[0]!.ingestedAt, null, "every episode is pending again");
         assert.deepEqual((await i.exportSubject(scope)).episodes.map((e) => e.said), ["Mom took up gardening"], "the words survive");
         assert.ok(await i.gaps(scope, "linda"), "so does the roster");
+      },
+    },
+    {
+      name: "what to learn next is proposed from what was just learned: grounded on the new fact, dated when it was said, ranked after an open need, never a gap in a met need, closed by a later fact, still open as of the days between, waved away by the knower and not proposed again, withdrawn with its ground, and gone on replay",
+      scripted: true,
+      async run({ intelligence: i, scope, script }) {
+        const t1 = at("2026-03-01T10:00:00Z");
+        const t2 = at("2026-03-08T10:00:00Z");
+        const askedAbout: string[] = [];
+        await i.upsertEntity(scope, { id: "linda", name: "Linda", fields: { relationship: "mother" } });
+        await i.addEpisode(scope, { source: "note", content: "Mom took up gardening; I can spend about £40", entityHints: ["linda"], referenceAt: t1, extract: "inline" });
+        script!({
+          extraction: extraction([extracted("linda", "LIKES", "Took up gardening"), extracted(KNOWER_ID, "MEANS", "Can spend about £40")]),
+          next: ({ name, learned }) => {
+            askedAbout.push(name);
+            return {
+              answered: [],
+              withdrawn: [],
+              proposed: [
+                { dimension: "likes", label: "Whether she sells what she grows", factIds: learned.map((fact) => fact.id) },
+                { dimension: "likes", label: "Is she entering the village show?", factIds: [] },
+              ],
+            };
+          },
+        });
+        const first = await i.extractNow(scope, { maxEpisodes: 1, deadlineMs: 30_000 });
+        const done = first.episodes[0]!;
+        assert.equal(done.status, "ingested");
+        if (done.status === "ingested") {
+          assert.deepEqual(done.facts, { added: 2, merged: 0, superseded: 0 }, "Linda's fact and the knower's");
+          assert.deepEqual(done.directions, { proposed: 1, answered: 0, withdrawn: 0, rejected: 1 }, "a question is refused");
+        }
+        assert.deepEqual(askedAbout, ["Linda"], "the model is asked about the entity, never about the knower");
+
+        // Read as of the days in question: a direction nobody acts on lapses, 180 days on.
+        const soon = at("2026-03-02T00:00:00Z");
+        const gardening = (await i.searchFacts(scope, "gardening"))[0]!;
+        const readiness = (await i.readiness(scope, "linda", { asOf: soon }))!;
+        assert.deepEqual(
+          readiness.next.map((d) => [d.kind, d.id === null ? "the need" : "proposed", d.need, d.label, d.value, d.dimension, d.factIds]),
+          [
+            ["learn", "the need", "how-the-days-go", "How their days go", 1, null, []],
+            ["learn", "proposed", "what-they-love", "Whether she sells what she grows", 0.5, "likes", [gardening.id]],
+          ],
+          "in a need already met, a thread is worth what a stale fact is",
+        );
+        assert.equal(readiness.next[1]!.proposedAt?.getTime(), t1.getTime(), "proposed when the note was said, not when it was read");
+        assert.deepEqual(standing(readiness, "what-they-love").state, "met", "a direction is never evidence");
+        assert.deepEqual(needs(await i.gaps(scope, "linda", { asOf: soon })), ["how-the-days-go"], "a thread in a met need is not a gap");
+        assert.deepEqual(needs((await i.brief(scope, "linda", { asOf: soon }))!.gaps), ["how-the-days-go"]);
+
+        await i.addEpisode(scope, { source: "note", content: "She sells her veg at the Saturday market now", entityHints: ["linda"], referenceAt: t2, extract: "inline" });
+        script!({
+          extraction: extraction([extracted("linda", "LIKES", "Sells her vegetables at the Saturday market")]),
+          next: ({ open, learned }) => ({ answered: [{ directionId: open[0]!.id, factId: learned[0]!.id }], withdrawn: [], proposed: [] }),
+        });
+        const second = await i.extractNow(scope, { maxEpisodes: 1, deadlineMs: 30_000 });
+        const again = second.episodes[0]!;
+        assert.equal(again.status, "ingested");
+        if (again.status === "ingested") assert.deepEqual(again.directions, { proposed: 0, answered: 1, withdrawn: 0, rejected: 0 });
+        const after = (await i.readiness(scope, "linda", { asOf: at("2026-03-09T00:00:00Z") }))!;
+        assert.deepEqual(after.next.map((d) => [d.id === null ? "the need" : "proposed", d.need]), [["the need", "how-the-days-go"]], "answered, it has left next");
+        const between = (await i.readiness(scope, "linda", { asOf: at("2026-03-05T00:00:00Z") }))!;
+        assert.equal(between.next.find((d) => d.id !== null)?.label, "Whether she sells what she grows", "as of the days between, it was still open");
+
+        // The knower waves one away; the model is refused a repeat of it; a retraction withdraws the other.
+        const t3 = at("2026-03-15T10:00:00Z");
+        await i.addEpisode(scope, { source: "note", content: "She's thinking of taking an allotment", entityHints: ["linda"], referenceAt: t3, extract: "inline" });
+        script!({
+          extraction: extraction([extracted("linda", "LIKES", "Thinking of taking an allotment")]),
+          next: ({ learned }) => ({
+            answered: [],
+            withdrawn: [],
+            proposed: [
+              { dimension: "likes", label: "Which allotment site she has her eye on", factIds: learned.map((fact) => fact.id) },
+              { dimension: "has", label: "Whether she would share the plot with anyone", factIds: [] },
+            ],
+          }),
+        });
+        await i.extractNow(scope, { maxEpisodes: 1, deadlineMs: 30_000 });
+        const proposed = (await i.readiness(scope, "linda", { asOf: at("2026-03-16T00:00:00Z") }))!.next.filter((d) => d.id !== null);
+        assert.deepEqual(proposed.map((d) => d.label).sort(), ["Whether she would share the plot with anyone", "Which allotment site she has her eye on"]);
+        const share = proposed.find((d) => d.label === "Whether she would share the plot with anyone")!;
+        await i.dismissDirection(scope, share.id!, { at: at("2026-03-16T12:00:00Z") });
+        await i.dismissDirection(scope, "nobody", { at: at("2026-03-16T12:00:00Z") });
+        const kept = (await i.readiness(scope, "linda", { asOf: at("2026-03-17T00:00:00Z") }))!.next.filter((d) => d.id !== null);
+        assert.deepEqual(kept.map((d) => d.label), ["Which allotment site she has her eye on"], "dismissed, it has left next; an unknown id is a no-op");
+        await i.addEpisode(scope, { source: "note", content: "Her neighbour Pat might go halves on the plot", entityHints: ["linda"], referenceAt: at("2026-03-20T10:00:00Z"), extract: "inline" });
+        script!({
+          extraction: extraction([extracted("linda", "PERSON", "Her neighbour, Pat")]),
+          next: () => ({ answered: [], withdrawn: [], proposed: [{ dimension: "has", label: "whether she would share the plot with anyone", factIds: [] }] }),
+        });
+        const repeat = (await i.extractNow(scope, { maxEpisodes: 1, deadlineMs: 30_000 })).episodes[0]!;
+        assert.equal(repeat.status, "ingested");
+        if (repeat.status === "ingested") assert.deepEqual(repeat.directions, { proposed: 0, answered: 0, withdrawn: 0, rejected: 1 }, "what the knower waved away is not proposed again");
+        const allotment = (await i.searchFacts(scope, "allotment"))[0]!;
+        await i.invalidateFact(scope, allotment.id, { at: at("2026-03-21T00:00:00Z") });
+        assert.deepEqual(
+          (await i.readiness(scope, "linda", { asOf: at("2026-03-22T00:00:00Z") }))!.next.filter((d) => d.id !== null),
+          [],
+          "with its ground retracted, the allotment thread is withdrawn",
+        );
+
+        await i.resetForReplay(scope);
+        assert.ok((await i.readiness(scope, "linda"))!.next.every((d) => d.id === null), "derived, a direction is gone on replay like a fact");
       },
     },
     {

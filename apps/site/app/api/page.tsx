@@ -41,7 +41,7 @@ export default function ApiPage() {
           <h2 className="display mt-2 text-3xl">The two headers</h2>
           <div className="mt-6 grid gap-6 md:grid-cols-2">
             <div className="card p-6">
-              <p className="code text-sm text-stamp">authorization</p>
+              <p className="code text-sm text-ink">authorization</p>
               <p className="mt-2 code text-[0.8125rem] text-ink-faint">
                 Bearer &lt;serviceKey&gt;
               </p>
@@ -52,7 +52,7 @@ export default function ApiPage() {
               </p>
             </div>
             <div className="card p-6">
-              <p className="code text-sm text-stamp">{SUBJECT_HEADER}</p>
+              <p className="code text-sm text-ink">{SUBJECT_HEADER}</p>
               <p className="mt-2 code text-[0.8125rem] text-ink-faint">
                 &lt;subjectId&gt;
               </p>

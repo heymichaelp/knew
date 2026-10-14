@@ -1,6 +1,12 @@
 import Link from "next/link";
 
+import { DRAWER_FOOTER, NAV } from "@/components/site/chrome";
+import { CopyCommand } from "@/components/site/copy-command";
+import { Mark } from "@/components/site/mark";
 import { TextLink } from "@/components/site/page-shell";
+import { ScrollHeader } from "@/components/site/scroll-header";
+import { ShowcaseCarousel } from "@/components/site/showcase-carousel";
+import { Wordmark } from "@/components/site/wordmark";
 import { contractCaseSummaries, presetOutlines } from "@/lib/engine";
 import {
   AT,
@@ -11,6 +17,7 @@ import {
   exampleReadiness,
 } from "@/lib/example";
 import { codeBlocks, packageManifest, readShipped } from "@/lib/package-docs";
+import { scenarios } from "@/lib/showcase";
 
 const day = (date: Date) => date.toISOString().slice(0, 10);
 
@@ -26,8 +33,7 @@ const listed = (items: string[]) => (items.length <= 1 ? items.join("") : `${ite
 const presetNames = presetOutlines().map((outline) => outline.name);
 
 const quickstart = codeBlocks(readShipped("README.md"));
-const install = quickstart.find((b) => b.lang === "sh")?.code ?? "npm install @popjoker/knew";
-const usage = quickstart.find((b) => b.lang === "ts")?.code ?? "";
+const install = (quickstart.find((b) => b.lang === "sh")?.code ?? "npm install @popjoker/knew").trim();
 
 const DOCS = [
   { href: "/lenses", label: "Lenses", blurb: "Every field of a vocabulary and a lens, generated from the schemas, and the defaults." },
@@ -47,22 +53,45 @@ const DOCS = [
 /** The last card stretches to the end of its row, so the grid never shows an empty cell. */
 const LAST_CARD = [DOCS.length % 2 === 1 ? "sm:col-span-2" : "", ["lg:col-span-1", "lg:col-span-3", "lg:col-span-2"][DOCS.length % 3]].join(" ");
 
-export default function Home() {
+export default async function Home() {
   return (
     <>
-      {/* ------------------------------------------------------------- hero */}
-      <section className="mx-auto max-w-6xl px-6 pt-20 pb-16 sm:pt-28">
-        <p className="clause rise">The attention engine</p>
-        <h1 className="display rise mt-5 max-w-4xl text-hero" style={{ animationDelay: "60ms" }}>
-          Understanding, by dimension, and where it should go next.
-        </h1>
-        <div className="mt-10 grid gap-10 lg:grid-cols-[minmax(0,34rem)_auto] lg:items-start lg:justify-between">
-          <p className="rise text-lg leading-relaxed text-ink-soft" style={{ animationDelay: "140ms" }}>
-            knew reads notes into typed, dated facts, organised by the dimensions of what someone understands about a
-            person, place or thing. For a goal, it reports the current understanding, what is missing, and the most
-            valuable direction to take next. It writes no questions: what to do with a direction is your app&apos;s
-            call.
+      <ScrollHeader nav={NAV} footer={DRAWER_FOOTER} />
+
+      {/*
+        The opening, after knewpeople's: the mark large in the middle of the screen,
+        settling to its size, then the name, the line, and how to install it.
+      */}
+      <section className="flex min-h-[100svh] flex-col items-center justify-center gap-5 px-6 py-24 text-center">
+        <div className="intro-mark">
+          <Mark shimmer className="size-20 text-ink sm:size-24" />
+        </div>
+        <p className="intro-word">
+          <Wordmark className="text-5xl sm:text-6xl" />
+        </p>
+        <div className="intro-line mt-4 flex flex-col items-center gap-6">
+          <h1 className="display text-title">Attention, invested.</h1>
+          <p className="max-w-xl text-lg leading-relaxed text-ink-soft italic sm:text-xl">
+            There&apos;s no substitute for paying attention. But when you do, knew invests it, and it pays dividends in
+            your relationships.
           </p>
+          <CopyCommand command={`npm install ${packageManifest.name}`} />
+        </div>
+      </section>
+
+      {/* ------------------------------------------------------------- hero */}
+      <section className="mx-auto max-w-6xl px-6 pt-16 pb-16 sm:pt-20">
+        <p className="clause">The relationship engine</p>
+        <div className="mt-5 grid gap-10 lg:grid-cols-[minmax(0,34rem)_auto] lg:items-start lg:justify-between">
+          <div className="flex flex-col gap-5">
+            <p className="rise text-lg leading-relaxed text-ink-soft" style={{ animationDelay: "180ms" }}>
+              A relationship is what you have with anything you are getting to know: a person, a place, a thing. knew
+              reads your notes into typed, dated facts, organised by the dimensions of that relationship, and for a goal
+              reports what you understand, what is missing, and what to learn next: specific directions the model
+              proposes from what you already know. It writes no questions: what to do with a direction is your
+              app&apos;s call.
+            </p>
+          </div>
           <p className="stamp press" style={{ animationDelay: "320ms" }}>
             <span>{packageManifest.license}</span>
             <span aria-hidden>·</span>
@@ -82,8 +111,32 @@ export default function Home() {
             Try it in the sandbox
           </Link>
           <a href="#quickstart" className="text-sm text-ink no-underline underline-offset-4 hover:text-stamp hover:underline">
-            Twenty lines to the first fact ↓
+            See it in code ↓
           </a>
+        </div>
+      </section>
+
+      {/* ---------------------------------------------------------- in code */}
+      <section id="quickstart" className="mx-auto max-w-6xl px-6 pb-20">
+        <div className="rule-t grid grid-cols-1 gap-6 pt-10 lg:grid-cols-[18rem_minmax(0,1fr)] lg:gap-10">
+          <div>
+            <p className="clause">In code</p>
+            <h2 className="display mt-2 text-3xl">What it does, in code.</h2>
+          </div>
+          <div className="flex min-w-0 flex-col gap-4 text-sm text-ink-soft lg:pt-6">
+            <p className="max-w-2xl">
+              Sketches, not the API: the calls are simplified to show the idea. The values are real. Each sketch runs
+              against the engine when this site builds, with the model&apos;s reading of each note, and what it proposes
+              learning next, scripted; everything under a line is knew&apos;s own output. The real calls are in{" "}
+              <TextLink href="/adopting">the guide</TextLink>.
+            </p>
+            <div className="max-w-full self-start">
+              <CopyCommand command={install} />
+            </div>
+          </div>
+        </div>
+        <div className="mt-10">
+          <ShowcaseCarousel scenarios={await scenarios()} />
         </div>
       </section>
 
@@ -96,7 +149,7 @@ export default function Home() {
             <p className="label mt-5">
               {exampleEpisode.sourceLabel} · {day(exampleEpisode.at)}
             </p>
-            <blockquote className="mt-4 font-[family-name:var(--font-display)] text-[1.0625rem] leading-relaxed italic">
+            <blockquote className="mt-4 text-[1.0625rem] leading-relaxed italic">
               “{exampleEpisode.words}”
             </blockquote>
             <p className="mt-6 text-sm text-ink-faint">
@@ -111,7 +164,7 @@ export default function Home() {
             <div className="mt-3">
               {exampleFacts.map((f) => (
                 <div key={f.id} className="ledger-row">
-                  <span className="code text-[0.6875rem] tracking-[0.12em] text-stamp">
+                  <span className="code text-[0.6875rem] tracking-[0.12em] text-ink">
                     {f.type}
                     {typeof f.attributes.level === "string" ? (
                       <span className="text-ink-faint"> [{f.attributes.level}]</span>
@@ -158,9 +211,10 @@ export default function Home() {
               <p className="mt-2 text-sm text-ink-soft">{missing.map((need) => need.label).join(" · ") || "Nothing"}</p>
             </div>
             {next.map((direction, index) => (
-              <div key={direction.need} className="mt-5 border-l-2 border-derived pl-4">
-                <p className="label" style={{ color: "var(--derived)" }}>
+              <div key={direction.id ?? direction.need} className={`mt-5 border-l-2 pl-4 ${index === 0 ? "border-stamp" : "border-rule-strong"}`}>
+                <p className="label" style={index === 0 ? { color: "var(--stamp)" } : undefined}>
                   {index === 0 ? "Next direction" : "Then"} · {direction.kind === "learn" ? "learn" : "revisit"}
+                  {direction.id ? " · proposed" : ""}
                 </p>
                 <p className="mt-1.5 text-[0.9375rem] leading-snug">
                   {direction.label}
@@ -173,8 +227,10 @@ export default function Home() {
             <p className="mt-6 text-sm text-ink-faint">
               Everything in this panel comes from <code className="code">renderBrief</code> and{" "}
               <code className="code">readinessFor</code>, run at build time through the{" "}
-              <TextLink href="/presets#the-person-preset">person preset</TextLink>, as of {day(AT)}.
-              Goal: “{exampleReadiness.objective}” <TextLink href="/sandbox#start=mum">Change it in the sandbox</TextLink>.
+              <TextLink href="/presets#the-person-preset">person preset</TextLink>, as of {day(AT)}. The directions
+              marked proposed are written out here the way the model&apos;s <code className="code">next</code> call
+              would have proposed them from these facts; the engine ranks them. Goal: “{exampleReadiness.objective}”{" "}
+              <TextLink href="/sandbox#start=mum">Change it in the sandbox</TextLink>.
             </p>
           </article>
         </div>
@@ -192,7 +248,7 @@ export default function Home() {
             <h3 className="display mt-3 text-2xl">Your code, your model key</h3>
             <p className="mt-4 text-ink-soft">
               The whole engine runs where your app does, keeping each person&apos;s notebook in a store you choose.
-              Reading a note is two calls to the model you supply: Claude on your own key, or any model that answers
+              Reading a note is three calls to the model you supply: Claude on your own key, or any model that answers
               with JSON.
             </p>
           </div>
@@ -213,31 +269,6 @@ export default function Home() {
               Register a vocabulary and lenses, then post episodes. The service stores the notebooks and reads the
               notes. Or keep your own store, and get back a plan to apply to it.
             </p>
-          </div>
-        </div>
-      </section>
-
-      {/* ------------------------------------------------------------ quickstart */}
-      <section id="quickstart" className="mx-auto max-w-6xl px-6 pb-20">
-        <div className="rule-t grid gap-10 pt-10 lg:grid-cols-[18rem_minmax(0,1fr)]">
-          <div>
-            <p className="clause">Quickstart</p>
-            <h2 className="display mt-2 text-3xl">Twenty lines to the first fact.</h2>
-            <p className="mt-4 text-sm text-ink-soft">
-              From the package&apos;s <code className="code">README.md</code>, read at build time.
-            </p>
-            <p className="mt-4 text-sm text-ink-faint">
-              Node 22 or later, React Native or the browser. The only dependency is zod 4; the Anthropic SDK only if you
-              use Claude.
-            </p>
-          </div>
-          <div className="min-w-0">
-            <pre className="overflow-x-auto border border-rule border-l-2 border-l-stamp bg-paper-sunken p-5 code text-[0.8125rem] leading-relaxed">
-              {install}
-            </pre>
-            <pre className="mt-4 overflow-x-auto border border-rule border-l-2 border-l-rule-strong bg-paper-sunken p-5 code text-[0.8125rem] leading-relaxed">
-              {usage}
-            </pre>
           </div>
         </div>
       </section>
