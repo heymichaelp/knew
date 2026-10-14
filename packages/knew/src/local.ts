@@ -86,10 +86,15 @@ export interface LocalIntelligenceOptions {
   maxAttempts?: number;
   /** How a new id is made. Default: a random UUID. */
   newId?: () => string;
+  /** Directions: whether someone newly added gets first directions in the
+   *  background, one `next` call each (`onAdd`, default true; off for a bulk
+   *  import). Only in background mode, and only when the vocabulary proposes
+   *  directions. */
+  directions?: { onAdd?: boolean };
 }
 
 export interface LocalIntelligence extends Intelligence {
-  /** Resolves when no background read is running. */
+  /** Resolves when no background read, and no background `next`, is running. */
   settled(): Promise<void>;
 }
 
@@ -359,6 +364,42 @@ export function createDriver(
     return did;
   }
 
+  /** Entities just added and not yet asked about, per knower, and the runs draining them. */
+  const pendingDirections = new Map<string, Set<string>>();
+  const directing = new Map<string, Promise<void>>();
+
+  /** First directions for someone just added, in the background, one knower at a time. */
+  function directSoon(scope: IntelligenceScope, entityId: string): void {
+    if (!background || !vocabulary.directions || options.directions?.onAdd === false) return;
+    const key = keyOf(scope);
+    const pending = pendingDirections.get(key) ?? new Set<string>();
+    pending.add(entityId);
+    pendingDirections.set(key, pending);
+    if (directing.has(key)) return;
+    const run = (async () => {
+      await Promise.resolve();
+      for (let next = pending.values().next(); !next.done; next = pending.values().next()) {
+        pending.delete(next.value);
+        try {
+          const target = await withState(scope, (s) => {
+            const record = s.roster.get(next.value);
+            // Gone, archived, the knower, or already asked about by a note that landed first: nothing to ask.
+            if (!record || !record.active || next.value === KNOWER_ID) return null;
+            const entity = entityFor(s, next.value)!;
+            return entity.directionsAt === null ? targetFor(s, entity, null, new Date()) : null;
+          });
+          if (target) await direct(scope, target, []);
+        } catch {
+          // Best effort: nothing throws out of the background, and the entity's first note asks again.
+        }
+      }
+    })().finally(() => {
+      directing.delete(key);
+      pendingDirections.delete(key);
+    });
+    directing.set(key, run);
+  }
+
   // ---------------------------------------------------------------- reading
 
   /** Knowers with a read running, and those asked for again while it ran. */
@@ -533,7 +574,7 @@ export function createDriver(
       if (input.kind !== undefined && input.kind !== kind) {
         throw new Error(`${input.id} is a ${input.kind}, and ${input.id === KNOWER_ID ? `${KNOWER_ID} is the knower` : `this vocabulary describes a ${vocabulary.kind}`}`);
       }
-      await withState(scope, (s) => {
+      const added = await withState(scope, (s) => {
         const existing = s.roster.get(input.id);
         s.roster.set(input.id, {
           id: input.id,
@@ -543,7 +584,9 @@ export function createDriver(
           // The knower is never archived: what they say about themselves always has somewhere to go.
           active: input.id === KNOWER_ID ? true : (input.active ?? existing?.active ?? true),
         });
+        return existing === undefined && input.id !== KNOWER_ID && input.active !== false;
       });
+      if (added) directSoon(scope, input.id);
     },
     async deleteEntity(scope, entityId) {
       return withState(scope, (s) => {
@@ -720,6 +763,8 @@ export function createDriver(
           if (fact && !fact.expiredAt) {
             fact.expiredAt = invalidateOptions.at ?? new Date();
             fact.invalidAt ??= fact.expiredAt;
+            // A direction that grew only from what was just retracted has no ground left.
+            withdrawUngrounded(entity.directions, (id) => entity.facts.some((f) => f.id === id && !f.expiredAt), fact.expiredAt);
           }
         }
       });
@@ -751,6 +796,17 @@ export function createDriver(
         }
       });
     },
+    async dismissDirection(scope, directionId, dismissOptions = {}) {
+      await withState(scope, (s) => {
+        for (const entity of s.entities.values()) {
+          const direction = entity.directions.find((d) => d.id === directionId);
+          if (direction && direction.status === "open") {
+            direction.status = "dismissed";
+            direction.resolvedAt = dismissOptions.at ?? new Date();
+          }
+        }
+      });
+    },
     async exportSubject(scope) {
       return read(scope, (s) => ({
         episodes: [...s.episodes]
@@ -774,7 +830,7 @@ export function createDriver(
       });
     },
     async settled() {
-      while (sweeping.size > 0) await Promise.all([...sweeping.values()]);
+      while (sweeping.size > 0 || directing.size > 0) await Promise.all([...sweeping.values(), ...directing.values()]);
     },
   };
   return driver;

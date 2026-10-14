@@ -452,7 +452,8 @@ export interface Intelligence {
    *  on the roster. */
   gaps(scope: IntelligenceScope, entityId: string, options?: ReadOptions): Promise<Gap[] | null>;
   /** Current understanding, what the lens's objective still needs, and the
-   *  next directions. Null when the entity is not on the roster. */
+   *  next directions: what the model proposed learning, inside the dimensions,
+   *  and what to revisit. Null when the entity is not on the roster. */
   readiness(scope: IntelligenceScope, entityId: string, options?: ReadOptions): Promise<Readiness | null>;
   searchFacts(scope: IntelligenceScope, query: string, options?: SearchFactsOptions): Promise<Fact[]>;
   /** What the engine kept from the given source refs — current facts only. */
@@ -465,6 +466,11 @@ export interface Intelligence {
 
   listProposals(scope: IntelligenceScope, options?: { entityId?: string; status?: Proposal["status"] }): Promise<Proposal[]>;
   resolveProposal(scope: IntelligenceScope, proposalId: string, resolution: "accepted" | "dismissed"): Promise<void>;
+
+  /** The knower waves a direction away: it leaves `next` as of `at` (default
+   *  now), and the model is refused a repeat of it. A no-op for an id that is
+   *  not an open direction. */
+  dismissDirection(scope: IntelligenceScope, directionId: string, options?: { at?: Date }): Promise<void>;
 
   exportSubject(scope: IntelligenceScope): Promise<SubjectExport>;
   /** Ordered explicit deletes of everything under the scope. */
@@ -548,6 +554,31 @@ export interface StatelessExtraction {
   promptVersions: { extract: string; reconcile: string | null };
 }
 
+export interface StatelessNextRequest {
+  /** The entity as the roster has it. */
+  entity: RosterEntry;
+  /** The entity's facts; only the current ones ground anything. */
+  facts: Fact[];
+  /** The facts a note just added or retold, by id; left out for an entity just added. */
+  learned?: string[];
+  /** The knower's facts, shown beside the relationship dimensions. */
+  knowerFacts?: Fact[];
+  /** The entity's directions, every status. */
+  directions: ProposedDirection[];
+  /** When this was learned. Default now. */
+  referenceAt?: Date;
+  callTimeoutMs?: number;
+}
+
+export interface StatelessNext {
+  /** What to do to the entity's directions: `applyDirectionPlan` applies it to your own store. */
+  plan: DirectionPlan;
+  calls: ModelCall[];
+  promptVersion: string;
+}
+
 export interface StatelessIntelligence {
   extract(request: StatelessExtractRequest): Promise<StatelessExtraction>;
+  /** What to learn next about one entity, from what the app holds. Nothing is kept. */
+  next(request: StatelessNextRequest): Promise<StatelessNext>;
 }

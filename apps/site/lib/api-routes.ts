@@ -81,6 +81,14 @@ export const ROUTE_GROUPS: RouteGroup[] = [
     ],
   },
   {
+    title: "Directions",
+    blurb:
+      "What to learn next, proposed by the model inside the vocabulary's dimensions once a note is read. Read through `readiness().next`; the knower may wave one away.",
+    routes: [
+      { method: "POST", path: "/v1/directions/:id/dismiss", client: "dismissDirection", budget: "write", summary: "Dismiss an open direction. It leaves next, and a repeat of it is refused." },
+    ],
+  },
+  {
     title: "The knower",
     blurb: "One knower's whole record.",
     routes: [
@@ -94,6 +102,7 @@ export const ROUTE_GROUPS: RouteGroup[] = [
     blurb: "One call, nothing stored.",
     routes: [
       { method: "POST", path: "/v1/stateless/extract", client: "extract", budget: "stateless", summary: "Send an episode and the facts you hold; get a reconciliation plan." },
+      { method: "POST", path: "/v1/stateless/next", client: "next", budget: "stateless", summary: "Send an entity's facts and open directions; get a plan of what to learn next." },
     ],
   },
   {

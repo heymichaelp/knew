@@ -251,6 +251,33 @@ describe("Scenario: Once a note is folded in, the model is asked what to learn n
     if (priced.status === "ingested") assert.deepEqual([priced.calls, priced.costUsd, priced.directions.proposed], [3, 0.03, 0]);
   });
 
+  it("asks once about someone just added, in the background, from the dimensions alone, and settles", async () => {
+    const { model, asked } = cannedModel({
+      next: [{ answered: [], withdrawn: [], proposed: [{ dimension: "likes", label: "What she does with her weekends", factIds: [] }] }],
+    });
+    const knew = localIntelligence({ lenses: [fixtureLens()], model });
+    await knew.upsertEntity(scope, { id: "linda", name: "Linda", fields: { relationship: "mother" } });
+    await knew.settled();
+    assert.deepEqual(asked.map((request) => request.task), ["next"]);
+    assert.match(asked[0]!.prompt, /Just learned \(id \| type \| fact \| dates\):\n\(nothing yet: this entry was just added\)/);
+    const first = (await knew.readiness(scope, "linda"))!.next[0]!;
+    assert.deepEqual([first.label, first.need, first.value, first.factIds, first.proposedAt instanceof Date], ["What she does with her weekends", "what-they-love", 1, [], true]);
+
+    await knew.upsertEntity(scope, { id: "linda", name: "Linda", fields: { city: "Leeds" } });
+    await knew.upsertEntity(scope, { id: KNOWER_ID, name: "Ana" });
+    await knew.upsertEntity(scope, { id: "old", name: "An old friend", active: false });
+    await knew.settled();
+    assert.equal(asked.length, 1, "asked once: not again for a change to her fields, never for the knower, never for someone archived");
+  });
+
+  it("asks about nobody on add when told not to, as for a bulk import", async () => {
+    const { model, asked } = cannedModel({});
+    const knew = localIntelligence({ lenses: [fixtureLens()], model, directions: { onAdd: false } });
+    await knew.upsertEntity(scope, { id: "linda", name: "Linda" });
+    await knew.settled();
+    assert.deepEqual(asked, []);
+  });
+
   it("makes no next call for a vocabulary that proposes no directions", async () => {
     const quiet = compileLens(fixtureLensDefinition(), compileVocabulary({ ...fixtureVocabularyDefinition(), directions: false }));
     const { model, asked } = cannedModel({ extract: [gardening()], reconcile: [{ decisions: [], summary: "" }] });

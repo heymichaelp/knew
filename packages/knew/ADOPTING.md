@@ -22,9 +22,9 @@ For an entity and a lens, knew reports three things:
 |---|---|
 | Current understanding | `brief().text`, and `readiness().dimensions`, across all three subjects |
 | Missing understanding | `gaps()`, and `readiness().needs` that are not `met` |
-| The next directions | `readiness().next` |
+| The next directions | `readiness().next`: what the model proposed learning, inside the dimensions, and what to revisit |
 
-knew names directions; it writes no questions.
+knew names what to learn next; it writes no questions.
 
 ## 2. Run it
 
@@ -52,15 +52,19 @@ export const intelligence = localIntelligence({
 ```
 
 - **The model** is a function: `(request) => Promise<{ output, model?, usage? }>`. A request has
-  `task` (`extract` or `reconcile`), `system`, `prompt`, a JSON `schema` the answer must match, and
-  a `signal`. Any provider works; knew checks every answer against the schema and refuses one that
-  doesn't match.
+  `task` (`extract`, `reconcile` or `next`), `system`, `prompt`, a JSON `schema` the answer must
+  match, and a `signal`. Any provider works; knew checks every answer against the schema and
+  refuses one that doesn't match.
 - **`anthropicModel`** (`./anthropic`, with `@anthropic-ai/sdk` installed) answers with Claude:
-  `claude-opus-5-5` by default, or `model: { extract, reconcile }` for one per call, and `effort`.
-  The system block is cached, so the second note onward costs less.
-- **Cost**: each note is one extract call, plus one reconcile call per entry it touches (at most
-  three). `extractNow` returns `calls`, each with its model and usage; a cost the provider didn't
-  report is `null`, never zero.
+  `claude-opus-5-5` by default, or `model: { extract, reconcile, next }` for one per call, and
+  `effort`. The system block is cached, so the second note onward costs less.
+- **Cost**: each note is one extract call, one reconcile call per entry it touches (at most
+  three), and one `next` call per entry it changed, the knower aside. `extractNow` returns
+  `calls`, each with its model and usage; a cost the provider didn't report is `null`, never zero.
+- **Directions**: once a note is folded in, the model is asked what to learn next about each
+  entity it changed, and what it proposes is kept on the entity (section 5). Someone newly added
+  gets first directions in the background; pass `directions: { onAdd: false }` for a bulk import.
+  A `next` call that fails costs nothing but its proposals: the facts are already in.
 - **The store** keeps each knower's notebook as one JSON-safe record (`ScopeRecord`, dates as ISO
   strings). `memoryStore()` holds it in memory. Your own is three calls: `get(scope)`,
   `put(scope, record)` and `delete(scope)`, over a SQLite row, AsyncStorage, a file or your
@@ -75,7 +79,7 @@ export const intelligence = localIntelligence({
 ### On the device
 
 With `appleModel` (`./apple`), Apple's on-device model (iOS 26 and macOS 26, with Apple
-Intelligence) answers both calls. There's no key, and nothing leaves the phone. The engine is
+Intelligence) answers all three calls. There's no key, and nothing leaves the phone. The engine is
 plain TypeScript and runs in React Native as it is.
 
 ```ts
@@ -188,8 +192,9 @@ A vocabulary and a lens written from nothing, complete:
 **Vocabulary.** `factTypes`, each informing one of the `dimensions`. On a type: `pinned` (always
 on the page, returned as `mustHonor`), `enduring` (only its own type replaces it),
 `revisitAfterDays` (when an unrepeated fact is due for a revisit), `attributes`. Also `fields`
-(entity fields you own; extraction may only propose values), `promptFields`, and a `charter`
-telling the model what to keep.
+(entity fields you own; extraction may only propose values), `promptFields`, a `charter`
+telling the model what to keep, and `directions`: how many directions the model may hold open
+per dimension (2) and after how many days one nobody acted on lapses (180), or `false` for none.
 
 **Subjects.** Give a dimension `about: "relationship"` or `about: "knower"`. A gift lens can then
 need what they love (the entity), how you know each other (the relationship) and what you can
@@ -219,6 +224,7 @@ and as tables at knew.dev/lenses. Parsing and compiling refuse, naming the field
 - a `fallbackType` that isn't one of your types;
 - `revisitAfterDays` on an `enduring` type;
 - `promptFields` that aren't among `fields`;
+- `directions` with `perDimension` or `lapseAfterDays` below 1;
 - a `weight` outside 0 (exclusive) to 1,000;
 - a need naming both a `dimension` and `types`, or neither, or `types` with no `label`;
 - a need waiting on itself or in a circle;
@@ -277,11 +283,12 @@ Every read that renders takes `lens`; without it, the default lens.
   - `dimensions`: per dimension, its `about`, current facts, how many are due, when last said.
   - `needs`: per need, `state` (`met`, `waiting`, `due`, `thin`, `open`) and `strength` (0 to 1).
   - `next`: directions, most valuable first, across all three subjects. Each has `kind` (`learn`
-    where a need is open or thin, `revisit` where facts have gone stale), `need`, `label`, `about`,
-    `dimension`, `types`, `value`, and `factIds`: the facts it builds on, in any subject, readable
-    through `getEntity` (the knower's through `getEntity(scope, "self")`). A need about the knower
+    or `revisit`), `need`, `label`, `about`, `dimension`, `types`, `value`, `factIds` (the facts it
+    builds on, in any subject, readable through `getEntity`; the knower's through
+    `getEntity(scope, "self")`), and `id` with `proposedAt`: set for a direction the model
+    proposed, null for a need with none yet, whose label is the need's. A need about the knower
     met once is met for every entity.
-- `gaps(scope, entityId, { lens })`: the `learn` directions only.
+- `gaps(scope, entityId, { lens })`: the `learn` directions of the needs still open or thin.
 - `getEntity(scope, entityId, { asOf })`: the entity and its facts as believed at `asOf`, with no
   facts when nothing is known yet; null only when it isn't on the roster. Believed is not true: a
   fact past its own end date is still listed. `factsTrueAt(view.facts, asOf)` keeps only what is
@@ -299,19 +306,45 @@ follow the lens's order. A fact is due once `revisitAfterDays` days have passed 
 said (or recorded); on that day, it is due. Weights order directions only: the page is never
 reweighted.
 
+**What to learn next.** A direction the model proposed is one specific thing to learn about the
+entity, inside one dimension of the vocabulary: "whether she has a partner", "which gym he trains
+at", "whether she follows the Broncos" once you know she grew up in Denver. The `next` call makes
+them once a note is folded in, instructed with every dimension's definition and the charter, and
+shown what was just learned, the rest of what is known, and the directions already open; the
+engine keeps what fits (a topic, not a question; inside a dimension offered; citing facts that are
+current; no repeat of one open or dismissed; within the room) and counts the rest as refused
+(`directions.rejected` on the episode's outcome).
+
+- A direction belongs to the need of its dimension, or to the first need whose types reach into
+  it. In a need still open or thin it is worth what the need is worth; in a need already met, what
+  a stale fact is (`dueCredit`), so the basics come first and the threads follow. A need the lens
+  has waiting hides its directions until they are unblocked; nothing is proposed about the knower.
+- A later fact answers it (a plain "no" included) and it leaves `next`; as of a day before that,
+  it was still open. The model may withdraw one that no longer fits. `invalidateFact` withdraws
+  one whose every ground is gone; a supersession moves it to the replacement.
+- `dismissDirection(scope, directionId, { at })`: the knower waves it away, and the model is
+  refused a repeat of it.
+- One nobody acts on lapses from `next` after `directions.lapseAfterDays` (180), without being
+  written to.
+- Derived like a fact: `resetForReplay` drops them, and the next read proposes afresh.
+
 **Stateless.** If your app keeps its own store, read each note with
 `statelessIntelligence({ vocabulary, model }).extract({ roster, entities, episode })` in your
 process (or `intelligenceClient(...).extract` hosted). Each returns a `ReconciliationPlan` per entry
 for you to apply. Pass `self` in the roster and its facts in `entities` to reconcile what the
 knower says about themselves. When you apply a plan's merge, set `lastSaidAt` to the plan's
-`knownAt` if later. Run `readinessFor(lens, entity, factsKnownAt(facts, at), at,
-factsKnownAt(knowerFacts, at))` yourself.
+`knownAt` if later. Then, per entity the note changed, `.next({ entity, facts, learned, directions
+})` returns a `DirectionPlan`; apply it with `applyDirectionPlan(directions, plan, { entityId, at,
+episodeId, newId })`. Run `readinessFor(lens, entity, factsKnownAt(facts, at), at,
+factsKnownAt(knowerFacts, at), directions)` yourself.
 
 ## 6. Corrections, proposals, deletion
 
 - `invalidateFact(scope, factId, { at })`: the knower's correction. The fact ends; its history stays.
 - `listProposals` and `resolveProposal`: names not on the roster, and field values the engine
   would set. Accepting a field update means your own write, then `upsertEntity`.
+- `dismissDirection(scope, directionId, { at })`: a direction the knower waves away. It leaves
+  `next`, and the model is refused a repeat of it.
 - `deleteEntity(scope, entityId)` removes the entity, its facts and its episodes.
   `deleteSubject(scope)` removes everything in the scope. `exportSubject(scope)` returns the
   knower's episodes. `resetForReplay(scope)` drops derived facts so extraction can rerun.
@@ -334,7 +367,9 @@ fake.script({ extraction: extraction([extracted("linda", "AVOID", "Vegan")]) });
 
 `script` queues what the next `extractNow` reads an episode into. The queue is shared across
 scopes: each episode read takes the next turn, earliest said first, and an episode with no turn
-left stays pending.
+left stays pending. A turn's `next` answers the `next` call for each entity the episode changed,
+given its name, the facts just learned, the rest of what is known and the directions open; left
+out, nothing is proposed, so a test that says nothing about directions reads as before.
 
 **Proving a driver.** An in-process driver passes the same suite the service runs:
 
