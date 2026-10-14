@@ -1,7 +1,17 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { KNOWER_ID, localIntelligence, memoryStore, type LocalStore, type Model, type ModelRequest, type ScopeRecord } from "../src/index.ts";
-import { extracted, extraction, fixtureGiftLens, fixtureLens } from "../src/testing.ts";
+import {
+  compileLens,
+  compileVocabulary,
+  KNOWER_ID,
+  localIntelligence,
+  memoryStore,
+  type LocalStore,
+  type Model,
+  type ModelRequest,
+  type ScopeRecord,
+} from "../src/index.ts";
+import { extracted, extraction, fixtureGiftLens, fixtureLens, fixtureLensDefinition, fixtureVocabularyDefinition } from "../src/testing.ts";
 
 /**
  * The engine in your process: a note read with the app's own model function,
@@ -11,12 +21,18 @@ import { extracted, extraction, fixtureGiftLens, fixtureLens } from "../src/test
 
 type Answer = unknown | Error | ((request: ModelRequest) => unknown);
 
-function cannedModel(answers: Record<ModelRequest["task"], Answer[]>, usage = { inputTokens: 1_000, outputTokens: 100, costUsd: 0.01 }) {
+const NOTHING_NEXT = { answered: [], withdrawn: [], proposed: [] };
+
+function cannedModel(answers: Partial<Record<ModelRequest["task"], Answer[]>>, usage = { inputTokens: 1_000, outputTokens: 100, costUsd: 0.01 }) {
   const asked: ModelRequest[] = [];
   const model: Model = async (request) => {
     asked.push(request);
-    const next = answers[request.task].shift();
-    if (next === undefined) throw new Error(`unscripted ${request.task}`);
+    const next = answers[request.task]?.shift();
+    if (next === undefined) {
+      // What to learn next is asked after every note; a test that says nothing about it has nothing proposed.
+      if (request.task === "next") return { output: NOTHING_NEXT, model: "canned", usage };
+      throw new Error(`unscripted ${request.task}`);
+    }
     if (next instanceof Error) throw next;
     return { output: typeof next === "function" ? (next as (r: ModelRequest) => unknown)(request) : next, model: "canned", usage };
   };
@@ -38,10 +54,15 @@ describe("Scenario: A note is read with the app's own model and kept in its own 
     const now = await knew.extractNow(scope, { maxEpisodes: 5 });
 
     assert.equal(now.outcome, "extracted");
-    assert.deepEqual(now.calls.map((call) => [call.method, call.model, call.usage?.costUsd]), [["extract", "canned", 0.01], ["reconcile", "canned", 0.01], ["reconcile", "canned", 0.01]]);
+    assert.deepEqual(now.calls.map((call) => [call.method, call.model, call.usage?.costUsd]), [
+      ["extract", "canned", 0.01],
+      ["reconcile", "canned", 0.01],
+      ["reconcile", "canned", 0.01],
+      ["next", "canned", 0.01],
+    ]);
     const done = now.episodes[0]!;
     assert.equal(done.status, "ingested");
-    if (done.status === "ingested") assert.equal(done.costUsd, 0.03);
+    if (done.status === "ingested") assert.equal(done.costUsd, 0.04);
 
     const [extract] = asked;
     assert.match(extract!.system, /# Charter/, "the charter rides with the task");
@@ -126,7 +147,11 @@ describe("Scenario: A note is read with the app's own model and kept in its own 
       put: async (s, record) => void saved.set(s.subjectId, JSON.stringify(record)),
       delete: async (s) => void saved.delete(s.subjectId),
     };
-    const { model } = cannedModel({ extract: [extraction([extracted("linda", "LIKES", "Gardening")])], reconcile: [{ decisions: [], summary: "Gardens." }] });
+    const { model } = cannedModel({
+      extract: [extraction([extracted("linda", "LIKES", "Gardening")])],
+      reconcile: [{ decisions: [], summary: "Gardens." }],
+      next: [{ answered: [], withdrawn: [], proposed: [{ dimension: "likes", label: "Whether she sells what she grows", factIds: [] }] }],
+    });
     const first = localIntelligence({ lenses: [fixtureLens()], model, store: jsonStore, background: false });
     await first.upsertEntity(scope, { id: "linda", name: "Linda" });
     await first.addEpisode(scope, { source: "note", sourceRef: "n-1", content: "Mom gardens", entityHints: ["linda"], referenceAt: said });
@@ -136,6 +161,8 @@ describe("Scenario: A note is read with the app's own model and kept in its own 
     const view = (await second.getEntity(scope, "linda"))!;
     assert.deepEqual([view.summary, view.facts.map((f) => f.fact), view.facts[0]!.createdAt.getTime()], ["Gardens.", ["Gardening"], said.getTime()]);
     assert.equal((await second.episodes(scope))[0]!.ingestedAt instanceof Date, true);
+    const direction = (await second.readiness(scope, "linda"))!.next.find((d) => d.id !== null)!;
+    assert.deepEqual([direction.label, direction.proposedAt?.getTime()], ["Whether she sells what she grows", said.getTime()], "a direction travels in the record with its dates");
     assert.equal(JSON.parse(saved.get("ana")!).format, 1);
 
     await second.deleteSubject(scope);
@@ -149,5 +176,89 @@ describe("Scenario: A note is read with the app's own model and kept in its own 
     await knew.upsertEntity({ clientId: "app", subjectId: "a" }, { id: "linda", name: "Linda" });
     assert.equal(await knew.getEntity({ clientId: "app", subjectId: "b" }, "linda"), null);
     assert.deepEqual(store.scopes(), [{ clientId: "app", subjectId: "a" }]);
+  });
+});
+
+describe("Scenario: Once a note is folded in, the model is asked what to learn next", () => {
+  const gardening = () => extraction([extracted("linda", "LIKES", "Gardening")]);
+
+  it("asks with the dimensions, shows what was just learned and the writer, keeps what it proposed, counts what it refused, and never asks about the knower", async () => {
+    const { model, asked } = cannedModel({
+      extract: [extraction([extracted("linda", "LIKES", "Gardening"), extracted(KNOWER_ID, "MEANS", "Can spend about £40")])],
+      reconcile: [{ decisions: [], summary: "Linda gardens." }, { decisions: [], summary: "Ana budgets." }],
+      next: [
+        (request: ModelRequest) => {
+          const learned = /^- (\S+) \| LIKES \| Gardening/m.exec(request.prompt)![1]!;
+          return {
+            answered: [],
+            withdrawn: [],
+            proposed: [
+              { dimension: "likes", label: "Whether she sells what she grows", factIds: [learned] },
+              { dimension: "likes", label: "Does she keep bees?", factIds: [] },
+            ],
+          };
+        },
+      ],
+    });
+    const knew = localIntelligence({ lenses: [fixtureLens(), fixtureGiftLens()], model, background: false });
+    await knew.upsertEntity(scope, { id: "linda", name: "Linda", fields: { relationship: "mother" } });
+    await knew.addEpisode(scope, { source: "note", content: "Mom loves gardening; I can spend about £40.", entityHints: ["linda"], referenceAt: said });
+    const now = await knew.extractNow(scope, { maxEpisodes: 1 });
+    assert.deepEqual(now.calls.map((call) => call.method), ["extract", "reconcile", "reconcile", "next"], "one next call, for Linda; none for the knower");
+    const done = now.episodes[0]!;
+    assert.equal(done.status, "ingested");
+    if (done.status === "ingested") assert.deepEqual([done.directions, done.calls, done.costUsd], [{ proposed: 1, answered: 0, withdrawn: 0, rejected: 1 }, 4, 0.04]);
+
+    const next = asked.find((request) => request.task === "next")!;
+    assert.match(next.system, /# Task: Name what to learn next/);
+    assert.match(next.system, /## Dimensions\n\n- never-cross: Never cross \(about the entry\)\. Informed by: LINE\./);
+    assert.ok(next.prompt.startsWith("Directions for this person: Linda (mother)\n\nToday (when this was learned): 2026-10-01"));
+    assert.match(next.prompt, /Just learned \(id \| type \| fact \| dates\):\n- \S+ \| LIKES \| Gardening \| told us 2026-10-01\n\nAlso known \(id \| type \| fact \| dates\):\n\(nothing else\)/);
+    assert.match(next.prompt, /About the writer \(id \| type \| fact \| dates\):\n- \S+ \| MEANS \| Can spend about £40/);
+    assert.match(next.prompt, /Open directions \(id \| dimension \| label \| grew from\):\n\(none yet\)\n\nRoom for new directions/);
+    assert.deepEqual((next.schema as { required: string[] }).required, ["answered", "withdrawn", "proposed"]);
+
+    const fact = (await knew.searchFacts(scope, "gardening"))[0]!;
+    const readiness = (await knew.readiness(scope, "linda"))!;
+    assert.deepEqual(
+      readiness.next.map((d) => [d.id === null ? "the need" : "proposed", d.need, d.label, d.value, d.factIds, d.proposedAt?.getTime() ?? null]),
+      [
+        ["the need", "how-the-days-go", "How their days go", 1, [], null],
+        ["proposed", "what-they-love", "Whether she sells what she grows", 0.5, [fact.id], said.getTime()],
+      ],
+    );
+  });
+
+  it("keeps the facts when the next call fails, and counts the call: thrown, it leaves the note unpriced; answered wrongly, it is priced", async () => {
+    const thrown = cannedModel({ extract: [gardening()], reconcile: [{ decisions: [], summary: "" }], next: [new Error("provider down")] });
+    const knew = localIntelligence({ lenses: [fixtureLens()], model: thrown.model, background: false });
+    await knew.upsertEntity(scope, { id: "linda", name: "Linda" });
+    await knew.addEpisode(scope, { source: "note", content: "Mom gardens", entityHints: ["linda"], referenceAt: said });
+    const now = await knew.extractNow(scope, { maxEpisodes: 1 });
+    assert.equal(now.outcome, "extracted", "a failed next never fails the note");
+    const done = now.episodes[0]!;
+    assert.equal(done.status, "ingested");
+    if (done.status === "ingested") assert.deepEqual([done.calls, done.costUsd, done.directions], [3, null, { proposed: 0, answered: 0, withdrawn: 0, rejected: 0 }]);
+    assert.deepEqual((await knew.getEntity(scope, "linda"))!.facts.map((f) => f.fact), ["Gardening"]);
+    assert.deepEqual((await knew.readiness(scope, "linda"))!.next, [], "the one need that applies is met, and nothing was proposed in it");
+
+    const wrong = cannedModel({ extract: [gardening()], reconcile: [{ decisions: [], summary: "" }], next: [{ proposed: "nope" }] });
+    const other = localIntelligence({ lenses: [fixtureLens()], model: wrong.model, background: false });
+    await other.upsertEntity(scope, { id: "linda", name: "Linda" });
+    await other.addEpisode(scope, { source: "note", content: "Mom gardens", entityHints: ["linda"], referenceAt: said });
+    const priced = (await other.extractNow(scope, { maxEpisodes: 1 })).episodes[0]!;
+    assert.equal(priced.status, "ingested");
+    if (priced.status === "ingested") assert.deepEqual([priced.calls, priced.costUsd, priced.directions.proposed], [3, 0.03, 0]);
+  });
+
+  it("makes no next call for a vocabulary that proposes no directions", async () => {
+    const quiet = compileLens(fixtureLensDefinition(), compileVocabulary({ ...fixtureVocabularyDefinition(), directions: false }));
+    const { model, asked } = cannedModel({ extract: [gardening()], reconcile: [{ decisions: [], summary: "" }] });
+    const knew = localIntelligence({ lenses: [quiet], model, background: false });
+    await knew.upsertEntity(scope, { id: "linda", name: "Linda" });
+    await knew.addEpisode(scope, { source: "note", content: "Mom gardens", entityHints: ["linda"], referenceAt: said });
+    const done = (await knew.extractNow(scope, { maxEpisodes: 1 })).episodes[0]!;
+    assert.deepEqual(asked.map((request) => request.task), ["extract", "reconcile"]);
+    if (done.status === "ingested") assert.deepEqual(done.directions, { proposed: 0, answered: 0, withdrawn: 0, rejected: 0 });
   });
 });

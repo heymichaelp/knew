@@ -1,24 +1,24 @@
 import { z } from "zod";
-import { extractInput, reconcileInput, type NewFactForReconcile } from "./extract-io.ts";
+import { extractInput, nextInput, reconcileInput, type NewFactForReconcile } from "./extract-io.ts";
 import type { ReconcileDecisions } from "./reconcile.ts";
-import { extractSchemaFor, reconcileSchema, type Extraction } from "./schemas.ts";
-import type { Fact, ModelCall, ModelUsage, RosterEntry } from "./types.ts";
-import { systemExtra, type Vocabulary } from "./vocabulary.ts";
+import { extractSchemaFor, nextSchemaFor, reconcileSchema, type Extraction, type NextAnswer } from "./schemas.ts";
+import type { Fact, ModelCall, ModelUsage, ProposedDirection, RosterEntry } from "./types.ts";
+import { nextSystemExtra, systemExtra, type Vocabulary } from "./vocabulary.ts";
 
 /**
- * THE MODEL IS THE APP'S. knew makes two kinds of call — EXTRACT (what was
- * just said, and what it is about) and RECONCILE (how that changes what is
- * known about one entry) — and an app supplies the function that answers
- * them: its own key with a provider's SDK (`@popjoker/knew/anthropic`), a
- * model on the device (`@popjoker/knew/apple`), or anything else that can
- * answer a prompt with JSON matching a schema. knew holds no key and opens no
- * connection of its own.
+ * THE MODEL IS THE APP'S. knew makes three kinds of call — EXTRACT (what was
+ * just said, and what it is about), RECONCILE (how that changes what is known
+ * about one entry) and NEXT (what to learn about that entry now) — and an app
+ * supplies the function that answers them: its own key with a provider's SDK
+ * (`@popjoker/knew/anthropic`), a model on the device (`@popjoker/knew/apple`),
+ * or anything else that can answer a prompt with JSON matching a schema. knew
+ * holds no key and opens no connection of its own.
  */
 
 export interface ModelRequest {
   /** Which call: an adapter may route each to its own model. */
-  task: "extract" | "reconcile";
-  /** The task's instructions, the vocabulary's charter and its fact types. The same for every call of a task, so worth caching. */
+  task: "extract" | "reconcile" | "next";
+  /** The task's instructions, the vocabulary's charter and its fact types (and, for `next`, its dimensions). The same for every call of a task, so worth caching. */
   system: string;
   /** What was said, or what is known and what is new. */
   prompt: string;
@@ -79,7 +79,7 @@ function usageOf(usage: Partial<ModelUsage> | undefined): ModelUsage {
   };
 }
 
-/** What the two calls are given, besides the vocabulary. */
+/** What the calls are given, besides the vocabulary. */
 export interface ExtractArgs {
   content: string;
   observed?: string | null;
@@ -98,12 +98,29 @@ export interface ReconcileArgs {
   summary: string;
 }
 
-/** The two calls, answered and checked. Each call is recorded in `calls`, whether or not it came back. */
+export interface NextArgs {
+  entity: { name: string; fields: Readonly<Record<string, string | null>> };
+  /** When this was learned: the note's date, or now for an entity just added. */
+  referenceAt: Date;
+  /** The entity's current facts. */
+  facts: Fact[];
+  /** The knower's current facts. */
+  knower: Fact[];
+  /** The facts this note added or retold, by id; empty when the entity was just added. */
+  learned: readonly string[];
+  /** The entity's directions, every status. */
+  directions: ProposedDirection[];
+  perDimension: number;
+  lapseAfterDays: number;
+}
+
+/** The three calls, answered and checked. Each call is recorded in `calls`, whether or not it came back. */
 export interface Reader {
   extract(args: ExtractArgs, calls: ModelCall[], signal?: AbortSignal): Promise<Extraction>;
   reconcile(args: ReconcileArgs, calls: ModelCall[], signal?: AbortSignal): Promise<ReconcileDecisions>;
+  next(args: NextArgs, calls: ModelCall[], signal?: AbortSignal): Promise<NextAnswer>;
   /** The prompt refs, for what read an episode. */
-  refs: { extract: string; reconcile: string };
+  refs: { extract: string; reconcile: string; next: string };
   /** Whether it can answer now; a scripted reader with nothing left says no, and the read stops quietly. */
   ready?(): boolean;
 }
@@ -111,11 +128,13 @@ export interface Reader {
 /** The reader that asks a model: the vocabulary's prompts, the engine's inputs, the schemas checked. */
 export function readerFor(vocabulary: Vocabulary, model: Model): Reader {
   const extractSchema = extractSchemaFor(vocabulary);
-  const schemas = { extract: asJsonSchema(extractSchema), reconcile: asJsonSchema(reconcileSchema) };
+  const nextSchema = nextSchemaFor(vocabulary);
+  const schemas = { extract: asJsonSchema(extractSchema), reconcile: asJsonSchema(reconcileSchema), next: asJsonSchema(nextSchema) };
   const extra = systemExtra(vocabulary);
   const system = {
     extract: [vocabulary.prompts.extract.text, ...extra].join("\n\n---\n\n"),
     reconcile: [vocabulary.prompts.reconcile.text, ...extra].join("\n\n---\n\n"),
+    next: [vocabulary.prompts.next.text, ...nextSystemExtra(vocabulary)].join("\n\n---\n\n"),
   };
   async function ask<T>(task: ModelRequest["task"], prompt: string, parser: z.ZodType<T>, calls: ModelCall[], signal?: AbortSignal): Promise<T> {
     let answer: ModelAnswer;
@@ -134,8 +153,9 @@ export function readerFor(vocabulary: Vocabulary, model: Model): Reader {
     return parsed.data;
   }
   return {
-    refs: { extract: vocabulary.prompts.extract.ref, reconcile: vocabulary.prompts.reconcile.ref },
+    refs: { extract: vocabulary.prompts.extract.ref, reconcile: vocabulary.prompts.reconcile.ref, next: vocabulary.prompts.next.ref },
     extract: (args, calls, signal) => ask("extract", extractInput(vocabulary, args), extractSchema, calls, signal),
     reconcile: (args, calls, signal) => ask("reconcile", reconcileInput(vocabulary, args), reconcileSchema, calls, signal),
+    next: (args, calls, signal) => ask("next", nextInput(vocabulary, args), nextSchema, calls, signal),
   };
 }

@@ -345,7 +345,7 @@ export interface ModelUsage {
 }
 
 export interface ModelCall {
-  method: "extract" | "reconcile";
+  method: "extract" | "reconcile" | "next";
   model: string | null;
   /** Null when the call threw. */
   usage: ModelUsage | null;
@@ -365,6 +365,11 @@ export type EpisodeOutcome =
       misattributed: number;
       /** Facts about entities past the per-episode cap, dropped. */
       droppedForCap: number;
+      /** What the `next` call did for the entities this note touched: the
+       *  directions proposed, the open ones it answered or withdrew, and the
+       *  rows the engine refused. All zero when the call failed. */
+      directions: { proposed: number; answered: number; withdrawn: number; rejected: number };
+      /** Every model call the note took, the `next` calls included, whether or not each came back. */
       calls: number;
       costUsd: number | null;
     }

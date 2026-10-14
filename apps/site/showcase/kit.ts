@@ -56,6 +56,8 @@ export function scriptedModel(readings: Reading[]): Model {
       };
       return { output, model: "scripted" };
     }
+    // What to learn next: nothing proposed, until a sketch scripts it.
+    if (request.task === "next") return { output: { answered: [], withdrawn: [], proposed: [] }, model: "scripted" };
     const incoming = request.prompt.split("New facts")[1]?.split("\n\n")[0] ?? "";
     const decisions = [...incoming.matchAll(/^- (\d+) \|/gm)].map(([, index]) => ({
       newIndex: Number(index),
