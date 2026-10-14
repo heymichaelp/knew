@@ -11,6 +11,12 @@ export default async function example(show: Show) { // hidden
         { type: "AVOID", fact: "Allergic to shellfish." },
         { type: "PLAN", fact: "Coming in Friday for her mum's 70th.", validAt: "2026-10-16" },
       ],
+      directions: [
+        { dimension: "pursuits", label: "What she likes to drink with dinner" },
+        { dimension: "people", label: "Who's coming to the 70th", from: ["Coming in Friday for her mum's 70th."] },
+        { dimension: "work", label: "What she does for work" },
+        { dimension: "between", label: "How she first found the place" },
+      ],
     },
   ]);
   // hidden:end

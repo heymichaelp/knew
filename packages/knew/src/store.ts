@@ -1,4 +1,4 @@
-import type { Entity, Episode, Fact, IntelligenceScope, Proposal } from "./types.ts";
+import type { Entity, Episode, Fact, IntelligenceScope, Proposal, ProposedDirection } from "./types.ts";
 
 /**
  * Where the local driver keeps one knower's notebook: the roster, the
@@ -39,10 +39,18 @@ export interface StoredEpisode extends Episode {
   extractionVersion: string | null;
 }
 
+/** An entity as the driver keeps it: the contract's, with its facts, its
+ *  directions, and when the model was last asked what to learn about it. */
+export interface StoredEntity extends Entity {
+  facts: Fact[];
+  directions: ProposedDirection[];
+  directionsAt: Date | null;
+}
+
 /** The working state of one scope. */
 export interface ScopeState {
   roster: Map<string, RosterRecord>;
-  entities: Map<string, Entity & { facts: Fact[] }>;
+  entities: Map<string, StoredEntity>;
   episodes: StoredEpisode[];
   proposals: Proposal[];
 }
@@ -62,7 +70,7 @@ export interface ScopeRecord {
   /** Bumped if the shape ever changes. */
   format: 1;
   roster: RosterRecord[];
-  entities: Array<Json<Entity & { facts: Fact[] }>>;
+  entities: Array<Json<StoredEntity>>;
   episodes: Array<Json<StoredEpisode>>;
   proposals: Array<Json<Proposal>>;
 }
@@ -93,6 +101,13 @@ export function toScopeRecord(state: ScopeState): ScopeRecord {
         lastSaidAt: iso(fact.lastSaidAt),
         expiredAt: iso(fact.expiredAt),
       })),
+      directions: entity.directions.map((direction) => ({
+        ...direction,
+        factIds: [...direction.factIds],
+        proposedAt: direction.proposedAt.toISOString(),
+        resolvedAt: iso(direction.resolvedAt),
+      })),
+      directionsAt: iso(entity.directionsAt),
     })),
     episodes: state.episodes.map((episode) => ({
       ...episode,
@@ -129,6 +144,13 @@ export function fromScopeRecord(record: ScopeRecord): ScopeState {
             lastSaidAt: day(fact.lastSaidAt),
             expiredAt: day(fact.expiredAt),
           })),
+          directions: entity.directions.map((direction) => ({
+            ...direction,
+            factIds: [...direction.factIds],
+            proposedAt: dayRequired(direction.proposedAt),
+            resolvedAt: day(direction.resolvedAt),
+          })),
+          directionsAt: day(entity.directionsAt),
         },
       ]),
     ),

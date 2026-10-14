@@ -19,12 +19,13 @@ import {
   type LensDefinition,
   type NeedSpec,
   type NeedState,
+  type ProposedDirection,
   type Subject,
   type Vocabulary,
 } from "@popjoker/knew";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 
-import { EXAMPLES, type DraftFact, type SandboxExample } from "@/lib/sandbox-examples";
+import { EXAMPLES, type DraftDirection, type DraftFact, type SandboxExample } from "@/lib/sandbox-examples";
 import { SUBJECTS } from "@/lib/subjects";
 
 /*
@@ -44,6 +45,7 @@ interface SandboxState {
   vocabText: string;
   lensText: string;
   facts: DraftFact[];
+  directions: DraftDirection[];
 }
 
 const json = (value: unknown) => JSON.stringify(value, null, 2);
@@ -59,6 +61,7 @@ function stateOf(example: SandboxExample): SandboxState {
     vocabText: json(example.vocabulary),
     lensText: json(example.lens),
     facts: example.facts.map((fact) => ({ ...fact, attributes: { ...fact.attributes } })),
+    directions: example.directions.map((direction) => ({ ...direction, factIds: [...direction.factIds] })),
   };
 }
 
@@ -83,6 +86,7 @@ function encodeState(state: SandboxState): string {
     fields: state.fields,
     at: state.at,
     facts: state.facts,
+    directions: state.directions,
     ...(state.vocabText === base.vocabText ? {} : { vocab: state.vocabText }),
     ...(state.lensText === base.lensText ? {} : { lens: state.lensText }),
   };
@@ -104,6 +108,7 @@ function decodeState(hash: string): SandboxState | null {
     const shared = JSON.parse(new TextDecoder().decode(Uint8Array.from(binary, (c) => c.charCodeAt(0)))) as Record<string, unknown>;
     const base = stateOf(exampleById(asText(shared.base, EXAMPLES[0]!.id)));
     const facts = Array.isArray(shared.facts) ? (shared.facts as Array<Record<string, unknown>>) : [];
+    const directions = Array.isArray(shared.directions) ? (shared.directions as Array<Record<string, unknown>>) : [];
     const fields = typeof shared.fields === "object" && shared.fields !== null ? (shared.fields as Record<string, unknown>) : {};
     return {
       base: base.base,
@@ -125,6 +130,16 @@ function decodeState(hash: string): SandboxState | null {
             typeof fact.attributes === "object" && fact.attributes !== null
               ? (Object.fromEntries(Object.entries(fact.attributes).filter(([, value]) => typeof value === "string")) as Record<string, string>)
               : {},
+        })),
+      directions: directions
+        .filter((direction) => typeof direction.dimension === "string" && typeof direction.label === "string")
+        .map((direction, index) => ({
+          id: asText(direction.id, `shared-direction-${index + 1}`),
+          dimension: direction.dimension as string,
+          label: direction.label as string,
+          factIds: Array.isArray(direction.factIds) ? (direction.factIds as unknown[]).filter((id): id is string => typeof id === "string") : [],
+          proposedOn: isDay(direction.proposedOn) ? direction.proposedOn : base.at,
+          dismissedOn: isDay(direction.dismissedOn) ? direction.dismissedOn : "",
         })),
     };
   } catch {
@@ -177,6 +192,22 @@ function factOf(vocabulary: Vocabulary, draft: DraftFact): Fact {
     expiredAt: null,
     supersededById: null,
     episodeIds: [draft.id],
+  };
+}
+
+/** A draft direction as the engine holds it: open, or dismissed on the day the knower waved it away. */
+function directionOf(draft: DraftDirection): ProposedDirection {
+  return {
+    id: draft.id,
+    entityId: "entity",
+    dimension: draft.dimension,
+    label: draft.label,
+    factIds: [...draft.factIds],
+    episodeId: null,
+    proposedAt: dateOf(draft.proposedOn),
+    status: draft.dismissedOn ? "dismissed" : "open",
+    answeredBy: null,
+    resolvedAt: draft.dismissedOn ? dateOf(draft.dismissedOn) : null,
   };
 }
 
@@ -299,10 +330,10 @@ export function Sandbox() {
       ledger: new Map(ledger.map((fact) => [fact.id, fact])),
       known: new Set(known.map((fact) => fact.id)),
       page: renderBrief(lens.value, { entity, summary: "", facts: ofEntity, knower: ofKnower, at }),
-      readiness: readinessFor(lens.value, entity, ofEntity, at, ofKnower),
+      readiness: readinessFor(lens.value, entity, ofEntity, at, ofKnower, state.directions.map(directionOf)),
       mustHonor: mustHonorFrom(lens.value, ofEntity, at, ofKnower),
     };
-  }, [vocabulary, lens, state.facts, state.name, state.fields, state.at]);
+  }, [vocabulary, lens, state.facts, state.directions, state.name, state.fields, state.at]);
 
   const change = (patch: Partial<SandboxState>) => setState((current) => ({ ...current, ...patch }));
 
@@ -495,6 +526,43 @@ export function Sandbox() {
                     </div>
                   );
                 })}
+              </div>
+            ) : null}
+
+            {/* what the model proposed learning */}
+            {vocabulary.ok && report && state.directions.length > 0 ? (
+              <div className="mt-6">
+                <p className="label">What the model proposed learning</p>
+                <p className="mt-1 text-xs text-ink-faint">
+                  Written out the way the <code className="code">next</code> call would have proposed them from these facts. The sandbox has no
+                  model, so a fact you add proposes nothing new; a direction you dismiss leaves the report as of that day.
+                </p>
+                {state.directions.map((draft) => (
+                  <div key={draft.id} className={`ledger-row ${draft.dismissedOn ? "opacity-50" : ""}`}>
+                    <span className="code text-[0.6875rem] tracking-[0.12em] break-all text-ink">{draft.dimension}</span>
+                    <span className="text-[0.9375rem] leading-snug">
+                      {draft.label}
+                      <span className="mt-0.5 block text-xs text-ink-faint">
+                        proposed {draft.proposedOn}
+                        {draft.factIds.length > 0 ? ` · from: ${draft.factIds.map((id) => report.ledger.get(id)?.fact ?? id).join(" · ")}` : ""}
+                        {draft.dismissedOn ? <span className="text-stamp"> · dismissed {draft.dismissedOn}</span> : null}
+                      </span>
+                    </span>
+                    <span className="flex gap-3 text-xs">
+                      <button
+                        type="button"
+                        className={BUTTON}
+                        onClick={() =>
+                          change({
+                            directions: state.directions.map((d) => (d.id === draft.id ? { ...d, dismissedOn: d.dismissedOn ? "" : state.at } : d)),
+                          })
+                        }
+                      >
+                        {draft.dismissedOn ? "Restore" : "Dismiss"}
+                      </button>
+                    </span>
+                  </div>
+                ))}
               </div>
             ) : null}
             <p className="mt-6 lg:hidden">
@@ -807,10 +875,10 @@ function Results({ report, lens }: { report: Report; lens: Lens }) {
         ) : (
           <ol className="space-y-4">
             {readiness.next.map((direction, index) => (
-              <li key={direction.need} className={`border-l-2 pl-4 ${index === 0 ? "border-stamp" : "border-rule-strong"}`}>
+              <li key={direction.id ?? direction.need} className={`border-l-2 pl-4 ${index === 0 ? "border-stamp" : "border-rule-strong"}`}>
                 <p className="label" style={index === 0 ? { color: "var(--stamp)" } : undefined}>
-                  {index === 0 ? "Next" : `Then, ${index + 1}`} · {direction.kind} · {SUBJECT_HEADING[direction.about].toLowerCase()} · value{" "}
-                  {direction.value}
+                  {index === 0 ? "Next" : `Then, ${index + 1}`} · {direction.kind}
+                  {direction.id ? " · proposed" : ""} · {SUBJECT_HEADING[direction.about].toLowerCase()} · value {direction.value}
                 </p>
                 <p className={`mt-1 leading-snug ${index === 0 ? "text-lg" : "text-[0.9375rem]"}`}>{direction.label}</p>
                 {direction.factIds.length > 0 ? (

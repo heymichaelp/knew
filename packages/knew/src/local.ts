@@ -1,11 +1,24 @@
 import { factsKnownAt, lastSaidOf, mustHonorFrom, renderBrief } from "./brief.ts";
+import { applyDirectionPlan, planDirections, regroundDirections, withdrawUngrounded } from "./directions.ts";
 import type { Lens } from "./lens.ts";
 import { readerFor, type Model, type Reader } from "./model.ts";
 import { ENTITIES_PER_NOTE, KNOWER_NAME, readNote } from "./read.ts";
 import { gapsFor, readinessFor } from "./readiness.ts";
-import { emptyState, fromScopeRecord, memoryStore, toScopeRecord, type LocalStore, type RosterRecord, type ScopeState, type StoredEpisode } from "./store.ts";
+import type { NextAnswer } from "./schemas.ts";
+import {
+  emptyState,
+  fromScopeRecord,
+  memoryStore,
+  toScopeRecord,
+  type LocalStore,
+  type RosterRecord,
+  type ScopeState,
+  type StoredEntity,
+  type StoredEpisode,
+} from "./store.ts";
 import { deadlineSignal, randomId } from "./timers.ts";
 import type {
+  DirectionPlan,
   Entity,
   EpisodeOutcome,
   ExtractNowOutcome,
@@ -14,6 +27,7 @@ import type {
   IntelligenceScope,
   ModelCall,
   NewFact,
+  ProposedDirection,
   ReconciliationPlan,
   RosterEntry,
 } from "./types.ts";
@@ -35,14 +49,32 @@ import { KNOWER_ID, parseFactAttributes, type Vocabulary } from "./vocabulary.ts
  * `maxAttempts` times is set aside (`gave-up:`) so the ones after it are not
  * held hostage; no lock is held across a model call, so reads answer while a
  * note is being read.
+ *
+ * Once a note's plan is applied to an entity, the model is asked what to
+ * learn about it next (`next`), and the directions it proposes are kept on
+ * the entity. That call is best effort: the facts are already in, so a `next`
+ * that fails costs nothing but the directions it would have proposed, and the
+ * next note about the entity asks again.
  */
+
+/** One entity whose directions the model is asked about, as it stood when the note was applied. */
+interface DirectTarget {
+  entityId: string;
+  episodeId: string | null;
+  at: Date;
+  entity: { name: string; fields: Readonly<Record<string, string | null>> };
+  facts: Fact[];
+  knower: Fact[];
+  learned: string[];
+  directions: ProposedDirection[];
+}
 
 export interface LocalIntelligenceOptions {
   /** The lenses it reads through, all over one vocabulary — the one it writes in. The first is the default. */
   lenses: Lens[];
   /** The lens a read without one uses. Default: the first. */
   defaultLens?: string;
-  /** What answers the two calls. */
+  /** What answers the three calls. */
   model: Model;
   /** Where each knower's notebook is kept. Default: in memory. */
   store?: LocalStore;
@@ -54,10 +86,15 @@ export interface LocalIntelligenceOptions {
   maxAttempts?: number;
   /** How a new id is made. Default: a random UUID. */
   newId?: () => string;
+  /** Directions: whether someone newly added gets first directions in the
+   *  background, one `next` call each (`onAdd`, default true; off for a bulk
+   *  import). Only in background mode, and only when the vocabulary proposes
+   *  directions. */
+  directions?: { onAdd?: boolean };
 }
 
 export interface LocalIntelligence extends Intelligence {
-  /** Resolves when no background read is running. */
+  /** Resolves when no background read, and no background `next`, is running. */
   settled(): Promise<void>;
 }
 
@@ -163,10 +200,16 @@ export function createDriver(
     if (!record) return null;
     let entity = s.entities.get(entityId);
     if (!entity) {
-      entity = { id: entityId, kind: record.kind, name: record.name, aliases: [], summary: "", summaryUpdatedAt: null, facts: [] };
+      entity = { id: entityId, kind: record.kind, name: record.name, aliases: [], summary: "", summaryUpdatedAt: null, facts: [], directions: [], directionsAt: null };
       s.entities.set(entityId, entity);
     }
     return entity;
+  };
+  const currentOf = (facts: Fact[]) => facts.filter((fact) => !fact.expiredAt);
+  /** The most a call may take: the caller's deadline, its call timeout, or the smaller. */
+  const boundFor = (deadlineAt: number | null, callTimeoutMs: number | null): number | null => {
+    const left = deadlineAt === null ? null : deadlineAt - Date.now();
+    return left === null ? callTimeoutMs : callTimeoutMs === null ? left : Math.min(left, callTimeoutMs);
   };
   const claimable = (s: ScopeState) =>
     s.episodes.filter((e) => !e.ingestedAt && !(e.held && e.entityHints.length === 0)).sort((a, b) => a.referenceAt.getTime() - b.referenceAt.getTime());
@@ -176,7 +219,7 @@ export function createDriver(
       .map((record) => ({ id: record.id, name: record.name, fields: record.fields, aliases: s.entities.get(record.id)?.aliases ?? [] }));
 
   /** A plan applied, the way the service's `applyPlan` applies it. */
-  const applyPlan = (entity: Entity & { facts: Fact[] }, episodeId: string, plan: ReconciliationPlan, changed: { added: number; merged: number; superseded: number }) => {
+  const applyPlan = (entity: StoredEntity, episodeId: string, plan: ReconciliationPlan, changed: { added: number; merged: number; superseded: number }) => {
     const insert = (fact: NewFact): Fact => {
       const type = fact.type in vocabulary.factTypes ? fact.type : vocabulary.fallbackType;
       const row: Fact = {
@@ -221,9 +264,12 @@ export function createDriver(
     for (const supersession of plan.supersessions) {
       const replacement = insert(supersession.replacement);
       retire(supersession.factId, supersession.invalidAt ?? supersession.replacement.validAt ?? plan.knownAt, replacement.id);
+      // A direction that grew from the old fact grows from its replacement now.
+      regroundDirections(entity.directions, supersession.factId, replacement.id);
       changed.superseded += 1;
     }
     for (const retraction of plan.retractions) retire(retraction.factId, retraction.invalidAt ?? plan.knownAt, null);
+    if (plan.retractions.length > 0) withdrawUngrounded(entity.directions, (id) => entity.facts.some((f) => f.id === id && !f.expiredAt), plan.knownAt);
     if (plan.summary != null) {
       entity.summary = plan.summary;
       entity.summaryUpdatedAt = new Date();
@@ -239,6 +285,120 @@ export function createDriver(
       }
     }
   };
+
+  // ------------------------------------------------------------- directions
+
+  /** What the `next` call is shown about an entity, taken under the lock. */
+  const targetFor = (s: ScopeState, entity: StoredEntity, episodeId: string | null, at: Date): DirectTarget => {
+    const record = recordOf(s, entity.id);
+    return {
+      entityId: entity.id,
+      episodeId,
+      at,
+      entity: { name: record?.name ?? entity.name, fields: record?.fields ?? {} },
+      facts: currentOf(entity.facts),
+      knower: currentOf(s.entities.get(KNOWER_ID)?.facts ?? []),
+      learned: episodeId === null ? [] : currentOf(entity.facts).filter((fact) => fact.episodeIds.includes(episodeId)).map((fact) => fact.id),
+      directions: [...entity.directions],
+    };
+  };
+
+  /**
+   * Ask the model what to learn next about one entity, and keep what it may:
+   * best effort, with no lock held across the call. The plan is made against
+   * the entity as it stands when the answer arrives, so a note or a dismissal
+   * that landed meanwhile is honoured, and the rows that no longer fit count
+   * as rejected. A call that fails leaves the directions as they were.
+   */
+  async function direct(scope: IntelligenceScope, target: DirectTarget, calls: ModelCall[], signal?: AbortSignal): Promise<DirectionPlan | null> {
+    const settings = vocabulary.directions;
+    if (!settings) return null;
+    let answer: NextAnswer;
+    try {
+      answer = await reader.next(
+        {
+          entity: target.entity,
+          referenceAt: target.at,
+          facts: target.facts,
+          knower: target.knower,
+          learned: target.learned,
+          directions: target.directions,
+          perDimension: settings.perDimension,
+          lapseAfterDays: settings.lapseAfterDays,
+        },
+        calls,
+        signal,
+      );
+    } catch {
+      return null;
+    }
+    return withState(scope, (s) => {
+      const entity = s.entities.get(target.entityId);
+      if (!entity) return null; // removed while the model was answering
+      const plan = planDirections({ vocabulary, facts: entity.facts, directions: entity.directions, answer, at: target.at });
+      applyDirectionPlan(entity.directions, plan, { entityId: entity.id, at: target.at, episodeId: target.episodeId, newId });
+      entity.directionsAt = new Date();
+      return plan;
+    });
+  }
+
+  /** The `next` call for each target in turn, until the deadline; what the calls did, in all. */
+  async function directAll(scope: IntelligenceScope, targets: DirectTarget[], calls: ModelCall[], deadlineAt: number | null, callTimeoutMs: number | null) {
+    const did = { proposed: 0, answered: 0, withdrawn: 0, rejected: 0 };
+    for (const target of targets) {
+      // Past the deadline the facts are in, and what to learn next waits for the next read.
+      if (deadlineAt !== null && Date.now() >= deadlineAt) break;
+      const timer = deadlineSignal(boundFor(deadlineAt, callTimeoutMs));
+      try {
+        const plan = await direct(scope, target, calls, timer.signal);
+        if (plan) {
+          did.proposed += plan.proposed.length;
+          did.answered += plan.answered.length;
+          did.withdrawn += plan.withdrawn.length;
+          did.rejected += plan.rejected;
+        }
+      } finally {
+        timer.release();
+      }
+    }
+    return did;
+  }
+
+  /** Entities just added and not yet asked about, per knower, and the runs draining them. */
+  const pendingDirections = new Map<string, Set<string>>();
+  const directing = new Map<string, Promise<void>>();
+
+  /** First directions for someone just added, in the background, one knower at a time. */
+  function directSoon(scope: IntelligenceScope, entityId: string): void {
+    if (!background || !vocabulary.directions || options.directions?.onAdd === false) return;
+    const key = keyOf(scope);
+    const pending = pendingDirections.get(key) ?? new Set<string>();
+    pending.add(entityId);
+    pendingDirections.set(key, pending);
+    if (directing.has(key)) return;
+    const run = (async () => {
+      await Promise.resolve();
+      for (let next = pending.values().next(); !next.done; next = pending.values().next()) {
+        pending.delete(next.value);
+        try {
+          const target = await withState(scope, (s) => {
+            const record = s.roster.get(next.value);
+            // Gone, archived, the knower, or already asked about by a note that landed first: nothing to ask.
+            if (!record || !record.active || next.value === KNOWER_ID) return null;
+            const entity = entityFor(s, next.value)!;
+            return entity.directionsAt === null ? targetFor(s, entity, null, new Date()) : null;
+          });
+          if (target) await direct(scope, target, []);
+        } catch {
+          // Best effort: nothing throws out of the background, and the entity's first note asks again.
+        }
+      }
+    })().finally(() => {
+      directing.delete(key);
+      pendingDirections.delete(key);
+    });
+    directing.set(key, run);
+  }
 
   // ---------------------------------------------------------------- reading
 
@@ -269,9 +429,7 @@ export function createDriver(
     if ("gaveUp" in claim) return claim.gaveUp!;
     const { episode } = claim;
 
-    const left = deadlineAt === null ? null : deadlineAt - Date.now();
-    const bound = left === null ? callTimeoutMs : callTimeoutMs === null ? left : Math.min(left, callTimeoutMs);
-    const timer = deadlineSignal(bound);
+    const timer = deadlineSignal(boundFor(deadlineAt, callTimeoutMs));
     let note: Awaited<ReturnType<typeof readNote>>;
     try {
       note = await readNote(reader, {
@@ -303,17 +461,21 @@ export function createDriver(
       timer.release();
     }
 
-    return withState(scope, (s) => {
+    const applied = await withState(scope, (s) => {
       const stored = s.episodes.find((e) => e.id === episode.id);
       // Deleted or read by someone else while the model was answering: nothing to apply.
       if (!stored || stored.ingestedAt) return "none" as const;
       const changed = { added: 0, merged: 0, superseded: 0 };
       let entities = 0;
+      // The entities this note changed something about, the knower aside, are asked about next.
+      const touched: Array<{ entity: StoredEntity; at: Date }> = [];
       for (const plan of note.plans) {
         const entity = entityFor(s, plan.entityId);
         if (!entity) continue; // removed from the roster since it was read
+        const before = changed.added + changed.merged + changed.superseded;
         applyPlan(entity, stored.id, plan, changed);
         entities += 1;
+        if (entity.id !== KNOWER_ID && changed.added + changed.merged + changed.superseded > before) touched.push({ entity, at: plan.knownAt });
       }
       for (const { entityId, alias } of note.aliases) {
         const entity = entityFor(s, entityId);
@@ -330,19 +492,24 @@ export function createDriver(
       stored.held = false;
       stored.extractionVersion = extractionVersion;
       return {
-        episodeId: stored.id,
-        status: "ingested" as const,
-        facts: changed,
-        entities,
-        unresolvedNames: note.unresolvedNames,
-        offRoster: note.offRoster,
-        misattributed: note.misattributed,
-        droppedForCap: note.droppedForCap,
-        calls: note.calls.length,
-        costUsd: costOf(note.calls),
-        modelCalls: note.calls,
+        report: {
+          episodeId: stored.id,
+          status: "ingested" as const,
+          facts: changed,
+          entities,
+          unresolvedNames: note.unresolvedNames,
+          offRoster: note.offRoster,
+          misattributed: note.misattributed,
+          droppedForCap: note.droppedForCap,
+        },
+        targets: vocabulary.directions ? touched.map(({ entity, at }) => targetFor(s, entity, stored.id, at)) : [],
       };
     });
+    if (applied === "none") return "none";
+    const calls = [...note.calls];
+    const directions = await directAll(scope, applied.targets, calls, deadlineAt, callTimeoutMs);
+    const outcome: EpisodeOutcome & { modelCalls: ModelCall[] } = { ...applied.report, directions, calls: calls.length, costUsd: costOf(calls), modelCalls: calls };
+    return outcome;
   }
 
   /** Read what is waiting, up to `max`, until the deadline. */
@@ -407,7 +574,7 @@ export function createDriver(
       if (input.kind !== undefined && input.kind !== kind) {
         throw new Error(`${input.id} is a ${input.kind}, and ${input.id === KNOWER_ID ? `${KNOWER_ID} is the knower` : `this vocabulary describes a ${vocabulary.kind}`}`);
       }
-      await withState(scope, (s) => {
+      const added = await withState(scope, (s) => {
         const existing = s.roster.get(input.id);
         s.roster.set(input.id, {
           id: input.id,
@@ -417,7 +584,9 @@ export function createDriver(
           // The knower is never archived: what they say about themselves always has somewhere to go.
           active: input.id === KNOWER_ID ? true : (input.active ?? existing?.active ?? true),
         });
+        return existing === undefined && input.id !== KNOWER_ID && input.active !== false;
       });
+      if (added) directSoon(scope, input.id);
     },
     async deleteEntity(scope, entityId) {
       return withState(scope, (s) => {
@@ -534,7 +703,7 @@ export function createDriver(
         });
         return {
           ...view,
-          brief: text ? { text, mustHonor: mustHonorFrom(lens, facts, at, knower), gaps: gapsFor(lens, record, facts, at, knower) } : null,
+          brief: text ? { text, mustHonor: mustHonorFrom(lens, facts, at, knower), gaps: gapsFor(lens, record, facts, at, knower, entity?.directions ?? []) } : null,
         };
       });
     },
@@ -549,7 +718,8 @@ export function createDriver(
         // The knower is read beside every entity, never through a lens of their own.
         if (!record || entityId === KNOWER_ID) return null;
         const at = readOptions.asOf ?? new Date();
-        return gapsFor(lens, record, factsKnownAt(s.entities.get(entityId)?.facts ?? [], readOptions.asOf), at, knowerFacts(s, readOptions.asOf));
+        const entity = s.entities.get(entityId);
+        return gapsFor(lens, record, factsKnownAt(entity?.facts ?? [], readOptions.asOf), at, knowerFacts(s, readOptions.asOf), entity?.directions ?? []);
       });
     },
     async readiness(scope, entityId, readOptions = {}) {
@@ -558,7 +728,8 @@ export function createDriver(
         const record = s.roster.get(entityId);
         if (!record || entityId === KNOWER_ID) return null;
         const at = readOptions.asOf ?? new Date();
-        return readinessFor(lens, record, factsKnownAt(s.entities.get(entityId)?.facts ?? [], readOptions.asOf), at, knowerFacts(s, readOptions.asOf));
+        const entity = s.entities.get(entityId);
+        return readinessFor(lens, record, factsKnownAt(entity?.facts ?? [], readOptions.asOf), at, knowerFacts(s, readOptions.asOf), entity?.directions ?? []);
       });
     },
     async searchFacts(scope, query, searchOptions = {}) {
@@ -592,6 +763,8 @@ export function createDriver(
           if (fact && !fact.expiredAt) {
             fact.expiredAt = invalidateOptions.at ?? new Date();
             fact.invalidAt ??= fact.expiredAt;
+            // A direction that grew only from what was just retracted has no ground left.
+            withdrawUngrounded(entity.directions, (id) => entity.facts.some((f) => f.id === id && !f.expiredAt), fact.expiredAt);
           }
         }
       });
@@ -623,6 +796,17 @@ export function createDriver(
         }
       });
     },
+    async dismissDirection(scope, directionId, dismissOptions = {}) {
+      await withState(scope, (s) => {
+        for (const entity of s.entities.values()) {
+          const direction = entity.directions.find((d) => d.id === directionId);
+          if (direction && direction.status === "open") {
+            direction.status = "dismissed";
+            direction.resolvedAt = dismissOptions.at ?? new Date();
+          }
+        }
+      });
+    },
     async exportSubject(scope) {
       return read(scope, (s) => ({
         episodes: [...s.episodes]
@@ -646,7 +830,7 @@ export function createDriver(
       });
     },
     async settled() {
-      while (sweeping.size > 0) await Promise.all([...sweeping.values()]);
+      while (sweeping.size > 0 || directing.size > 0) await Promise.all([...sweeping.values(), ...directing.values()]);
     },
   };
   return driver;

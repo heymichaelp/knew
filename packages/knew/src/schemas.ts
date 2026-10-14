@@ -2,7 +2,7 @@ import { z } from "zod";
 import type { Vocabulary } from "./vocabulary.ts";
 
 /**
- * The two model calls' output schemas. Deliberately permissive — no length
+ * The model calls' output schemas. Deliberately permissive — no length
  * caps, nullable rather than optional — because one over-long string must
  * never void a whole episode. Length discipline is the prompt's job; the
  * planner trims at use.
@@ -66,6 +66,31 @@ export const reconcileSchema = z.object({
 });
 
 export type Reconciliation = z.infer<typeof reconcileSchema>;
+
+/**
+ * The `next` call's answer: which open directions the new facts answered,
+ * which to withdraw, and what to learn next, each inside one dimension of the
+ * entity or the relationship. The knower's dimensions are not offered. The
+ * enum is never empty: the fallback type's dimension is about the entity.
+ */
+export function nextSchemaFor(vocabulary: Vocabulary) {
+  const dimensions = vocabulary.dimensions.filter((dimension) => dimension.about !== "knower").map((dimension) => dimension.id);
+  return z.object({
+    answered: z.array(z.object({ directionId: z.string(), factId: z.string() })),
+    withdrawn: z.array(z.string()),
+    proposed: z.array(
+      z.object({
+        dimension: z.enum(dimensions as [string, ...string[]]),
+        /** A topic, never a question: the planner refuses a label ending in `?`. */
+        label: z.string(),
+        /** The facts it grows from, by id; empty for a basic. */
+        factIds: z.array(z.string()),
+      }),
+    ),
+  });
+}
+
+export type NextAnswer = z.infer<ReturnType<typeof nextSchemaFor>>;
 
 /** Keywords a structured-output endpoint may refuse. A vocabulary whose
  *  compiled schema carries one would fail every live episode: `not` is what

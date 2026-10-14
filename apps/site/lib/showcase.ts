@@ -41,14 +41,14 @@ const SHOWCASE = [
   {
     id: "friend",
     title: "Remember a friend",
-    blurb: "One note becomes a page of dated facts, and what's still worth learning about her.",
+    blurb: "One note becomes a page of dated facts and specific things to learn next. A second note answers two of them and opens a thread.",
     file: "friend.ts",
     run: friend,
   },
   {
     id: "regular",
     title: "Greet a regular",
-    blurb: "A restaurant's goal for the same person: the allergy on every page, and something different to learn next.",
+    blurb: "A restaurant's goal for the same person: the allergy on every page, and a different first thing to learn.",
     file: "regular.ts",
     run: regular,
   },

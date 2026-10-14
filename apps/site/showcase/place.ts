@@ -15,6 +15,10 @@ export default async function example(show: Show) { // hidden
         { type: "ATMOSPHERE", fact: "Dark, loud, and everyone faces the stage." },
         { type: "VISIT", fact: "First went for the Tuesday jam.", validAt: "2026-03-03" },
       ],
+      directions: [
+        { dimension: "when", label: "Which night the regulars come" },
+        { dimension: "people", label: "Who runs the bar" },
+      ],
     },
     {
       note: "Sam behind the bar",
@@ -24,6 +28,10 @@ export default async function example(show: Show) { // hidden
         { type: "BUSY", fact: "Thursday is the night: the trio, and a full room by nine." },
         { type: "OFFER", fact: "The Thursday trio." },
       ],
+      answers: {
+        "Which night the regulars come": "Thursday is the night: the trio, and a full room by nine.",
+        "Who runs the bar": "Sam, behind the bar, saves you a stool by the piano.",
+      },
     },
   ]);
   const yourApp = {

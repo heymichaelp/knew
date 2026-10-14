@@ -1,7 +1,8 @@
 import { endedByDate, lastSaidOf } from "./brief.ts";
 import { ENGINE_DEFAULTS } from "./defaults.ts";
+import { liveDirectionsAt } from "./directions.ts";
 import type { CompiledNeed, Lens } from "./lens.ts";
-import type { DimensionEvidence, Direction, Fact, Gap, NeedStanding, Readiness, Subject } from "./types.ts";
+import type { DimensionEvidence, Direction, Fact, Gap, NeedStanding, ProposedDirection, Readiness, Subject } from "./types.ts";
 import { factType, type Vocabulary } from "./vocabulary.ts";
 
 /**
@@ -15,13 +16,14 @@ import { factType, type Vocabulary } from "./vocabulary.ts";
  *    on the knower, and the same beside every entity).
  *  - MISSING UNDERSTANDING belongs to the lens: per need, a strength against
  *    its `enough` and a state.
- *  - THE NEXT DIRECTIONS, in order of value: a need to learn more about, or
- *    understanding gone stale to revisit. knew names the direction; the
- *    client decides what to do with it.
+ *  - THE NEXT DIRECTIONS, in order of value: the specific things the model
+ *    proposed learning, each inside a dimension a need covers; a need with
+ *    none proposed yet, as itself; and understanding gone stale to revisit.
+ *    knew names the direction; the client decides what to do with it.
  *
  * Weights order directions; they never weigh what is believed. The page stays
- * dated and unweighted, and a fact due for a revisit is still on it exactly
- * as before.
+ * dated and unweighted, a fact due for a revisit is still on it exactly as
+ * before, and a proposed direction is never evidence of anything.
  *
  * Pure and deterministic. Strength, value and overall are worked out exactly
  * and rounded to three places only on the way out, so every driver answers the
@@ -57,6 +59,8 @@ function counts(vocabulary: Vocabulary, need: CompiledNeed, fact: Fact): boolean
 
 const newestSaidFirst = (a: Fact, b: Fact): number => lastSaidOf(b).getTime() - lastSaidOf(a).getTime() || a.id.localeCompare(b.id);
 const oldestSaidFirst = (a: Fact, b: Fact): number => lastSaidOf(a).getTime() - lastSaidOf(b).getTime() || a.id.localeCompare(b.id);
+const newestProposedFirst = (a: ProposedDirection, b: ProposedDirection): number => b.proposedAt.getTime() - a.proposedAt.getTime() || a.id.localeCompare(b.id);
+const kindRank = (kind: Direction["kind"]): number => (kind === "revisit" ? 0 : 1);
 
 /**
  * What is known about one entity through one lens, at `at`.
@@ -78,12 +82,23 @@ const oldestSaidFirst = (a: Fact, b: Fact): number => lastSaidOf(a).getTime() - 
  *    does not match this entity counts as met); `due` when n ≥ enough;
  *    `thin` when n > 0; and `open` otherwise.
  *
- * An open or thin need is a direction of kind "learn", built on its own facts,
- * newest said first, or, when it has none, on the facts of the needs it comes
- * after. A due need is a direction of kind "revisit" carrying the facts due,
- * oldest said first. A direction's value is weight · (1 − strength);
- * directions run from the highest value, ties in the lens's order, or, for a
- * lens whose `order` is `listed`, in the lens's order alone.
+ * `directions` are the entity's proposed directions, any status; the ones
+ * live at `at` (proposed by then, not resolved by then, not lapsed) each go to
+ * one applicable need: the need of their dimension, else the first need in the
+ * lens's order whose types include one of that dimension. A direction matched
+ * only by a waiting need waits with it; one matched by no need, or by a need
+ * about the knower, is not this lens's to show.
+ *
+ * An open or thin need is a direction of kind "learn" per direction proposed
+ * in it or, with none, as itself, built on its own facts, newest said first,
+ * or, when it has none, on the facts of the needs it comes after. A due need is
+ * a direction of kind "revisit" carrying the facts due, oldest said first,
+ * followed by its proposed directions. A met need shows only its proposed
+ * directions. A direction's value is weight · (1 − strength), or, in a need
+ * already met, weight · dueCredit: a thread there is worth what a stale fact
+ * is. Directions run from the highest value, ties in the lens's order, a
+ * revisit before what was proposed, newest proposal first; for a lens whose
+ * `order` is `listed`, in the lens's order alone.
  */
 export function readinessFor(
   lens: Lens,
@@ -91,6 +106,7 @@ export function readinessFor(
   facts: Fact[],
   at: Date = new Date(),
   knower: Fact[] = [],
+  directions: ProposedDirection[] = [],
 ): Readiness {
   const vocabulary = lens.vocabulary;
   // One row per fact id, however the caller assembled the ledger; what is current at `at`.
@@ -155,25 +171,62 @@ export function readinessFor(
     };
   });
 
+  // Each live proposed direction goes to one need: the need of its dimension,
+  // else the first in the lens's order whose types reach into it. A direction
+  // cites only facts the reader can see, so a re-grounded one never names an
+  // id that this view does not hold.
+  const lapseAfterDays = vocabulary.directions?.lapseAfterDays ?? ENGINE_DEFAULTS.directionLapseDays;
+  const visible = new Set(ofEntity.map((fact) => fact.id));
+  const ownerOf = (dimension: string): CompiledNeed | undefined =>
+    applicable.find((need) => need.dimension === dimension) ??
+    applicable.find((need) => need.dimension === null && need.types.some((type) => factType(vocabulary, type).dimension === dimension));
+  const proposed = new Map<string, ProposedDirection[]>();
+  for (const direction of liveDirectionsAt(directions, at, lapseAfterDays).sort(newestProposedFirst)) {
+    const owner = ownerOf(direction.dimension);
+    if (!owner || owner.about === "knower") continue;
+    proposed.set(owner.id, [...(proposed.get(owner.id) ?? []), direction]);
+  }
+
   const order = new Map(lens.needs.map((need, index) => [need.id, index]));
-  const next: Direction[] = needs
-    .filter((standing) => standing.state === "open" || standing.state === "thin" || standing.state === "due")
-    .map((standing): Direction => {
-      const value = round(standing.weight * (1 - exact.get(standing.id)!));
-      const about = { need: standing.id, label: standing.label, about: standing.about, dimension: standing.dimension, types: [...standing.types], value };
-      if (standing.state === "due") {
-        const dueFacts = [...heard.get(standing.id)!.due].sort(oldestSaidFirst);
-        return { kind: "revisit", ...about, factIds: dueFacts.map((fact) => fact.id) };
-      }
-      let builtOn = standing.factIds;
-      if (builtOn.length === 0) {
-        const need = applicable.find((candidate) => candidate.id === standing.id)!;
-        const before = need.after.flatMap((id) => heard.get(id)?.held ?? []);
-        builtOn = [...new Map(before.map((fact) => [fact.id, fact])).values()].sort(newestSaidFirst).map((fact) => fact.id);
-      }
-      return { kind: "learn", ...about, factIds: builtOn };
-    })
-    .sort((a, b) => (lens.order === "listed" ? 0 : b.value - a.value) || order.get(a.need)! - order.get(b.need)!);
+  const next: Direction[] = needs.flatMap((standing): Direction[] => {
+    if (standing.state === "waiting") return [];
+    const serves = { need: standing.id, about: standing.about, types: [...standing.types] };
+    // In a need not yet met, a proposed direction is worth what the need is;
+    // in one already met, what a stale fact is: a thread, not a gap.
+    const value = round(standing.state === "met" ? standing.weight * ENGINE_DEFAULTS.dueCredit : standing.weight * (1 - exact.get(standing.id)!));
+    const grown: Direction[] = (proposed.get(standing.id) ?? []).map((direction) => ({
+      id: direction.id,
+      kind: "learn",
+      ...serves,
+      label: direction.label,
+      dimension: direction.dimension,
+      value,
+      factIds: direction.factIds.filter((id) => visible.has(id)),
+      proposedAt: direction.proposedAt,
+    }));
+    if (standing.state === "met") return grown;
+    const itself = { id: null, ...serves, label: standing.label, dimension: standing.dimension, value, proposedAt: null };
+    if (standing.state === "due") {
+      const dueFacts = [...heard.get(standing.id)!.due].sort(oldestSaidFirst);
+      return [{ kind: "revisit", ...itself, factIds: dueFacts.map((fact) => fact.id) }, ...grown];
+    }
+    if (grown.length > 0) return grown;
+    let builtOn = standing.factIds;
+    if (builtOn.length === 0) {
+      const need = applicable.find((candidate) => candidate.id === standing.id)!;
+      const before = need.after.flatMap((id) => heard.get(id)?.held ?? []);
+      builtOn = [...new Map(before.map((fact) => [fact.id, fact])).values()].sort(newestSaidFirst).map((fact) => fact.id);
+    }
+    return [{ kind: "learn", ...itself, factIds: builtOn }];
+  });
+  next.sort(
+    (a, b) =>
+      (lens.order === "listed" ? 0 : b.value - a.value) ||
+      order.get(a.need)! - order.get(b.need)! ||
+      kindRank(a.kind) - kindRank(b.kind) ||
+      (b.proposedAt?.getTime() ?? 0) - (a.proposedAt?.getTime() ?? 0) ||
+      (a.id ?? "").localeCompare(b.id ?? ""),
+  );
 
   const totalWeight = needs.reduce((sum, standing) => sum + standing.weight, 0);
   return {
@@ -189,8 +242,9 @@ export function readinessFor(
 
 /**
  * The gaps: the missing understanding, in order of value — the "learn"
- * directions of `readinessFor`. A need waiting on another, one met, and one
- * whose facts are only due for a revisit are not gaps.
+ * directions of `readinessFor` in the needs that are open or thin. A need
+ * waiting on another, one met (whatever is proposed in it), and one whose
+ * facts are only due for a revisit are not gaps.
  */
 export function gapsFor(
   lens: Lens,
@@ -198,8 +252,11 @@ export function gapsFor(
   facts: Fact[],
   at: Date = new Date(),
   knower: Fact[] = [],
+  directions: ProposedDirection[] = [],
 ): Gap[] {
-  return readinessFor(lens, entity, facts, at, knower)
-    .next.filter((direction) => direction.kind === "learn")
-    .map(({ need, label, about, dimension, types }) => ({ need, label, about, dimension, types }));
+  const readiness = readinessFor(lens, entity, facts, at, knower, directions);
+  const missing = new Set(readiness.needs.filter((need) => need.state === "open" || need.state === "thin").map((need) => need.id));
+  return readiness.next
+    .filter((direction) => direction.kind === "learn" && missing.has(direction.need))
+    .map(({ id, need, label, about, dimension, types }) => ({ id, need, label, about, dimension, types }));
 }

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { z } from "zod";
 import { appleModel, appleSchemaOf, withNulls, type AppleCall, type AppleSchema } from "../src/apple.ts";
-import { localIntelligence, ModelContextError, ModelUnavailableError, extractSchemaFor, reconcileSchema } from "../src/index.ts";
+import { localIntelligence, ModelContextError, ModelUnavailableError, extractSchemaFor, nextSchemaFor, reconcileSchema } from "../src/index.ts";
 import { extracted, extraction, fixtureLens, fixtureVocabulary } from "../src/testing.ts";
 
 /**
@@ -33,6 +33,17 @@ describe("Scenario: knew's schemas, in the shape Apple's guided generation takes
     assert.equal(property(decision, "factId").optional, true);
   });
 
+  it("offers the next call the dimensions as choices, the knower's left out", () => {
+    const next = appleSchemaOf(jsonSchema(nextSchemaFor(fixtureVocabulary())));
+    const proposal = (property(next, "proposed").schema as Extract<AppleSchema, { kind: "array" }>).items;
+    assert.deepEqual(property(proposal, "dimension").schema, {
+      kind: "string",
+      choices: ["never-cross", "has", "likes", "life", "people", "between", "other"],
+      name: "Answer_proposed_item_dimension",
+    });
+    assert.deepEqual([property(proposal, "factIds").schema.kind, property(proposal, "label").optional], ["array", false]);
+  });
+
   it("puts back as null every field Apple left out that knew allows to be null, so the answer passes knew's own check", () => {
     const schema = jsonSchema(reconcileSchema);
     const answer = withNulls(schema, { decisions: [{ newIndex: 0, action: "add" }], summary: "Linda." });
@@ -51,6 +62,7 @@ describe("Scenario: A note read on the device", () => {
         // What Apple would give: no nulls, the optional fields left out.
         return JSON.stringify({ facts: facts.map(({ attributes: _a, validAt: _v, invalidAt: _i, ...rest }) => rest), aliases: [], unresolvedNames: [], fieldUpdates: [] });
       }
+      if (call.prompt.startsWith("Directions")) return JSON.stringify({ answered: [], withdrawn: [], proposed: [] });
       return JSON.stringify({ decisions: [], summary: "Linda gardens." });
     };
     const knew = localIntelligence({ lenses: [fixtureLens()], model: appleModel({ respond }), background: false });
@@ -59,7 +71,11 @@ describe("Scenario: A note read on the device", () => {
     await knew.addEpisode(scope, { source: "note", content: "Mom gardens", entityHints: ["linda"] });
     const now = await knew.extractNow(scope, { maxEpisodes: 1 });
     assert.equal(now.outcome, "extracted");
-    assert.deepEqual(now.calls.map((call) => [call.method, call.model, call.usage?.costUsd]), [["extract", "apple-foundation-models", 0], ["reconcile", "apple-foundation-models", 0]]);
+    assert.deepEqual(now.calls.map((call) => [call.method, call.model, call.usage?.costUsd]), [
+      ["extract", "apple-foundation-models", 0],
+      ["reconcile", "apple-foundation-models", 0],
+      ["next", "apple-foundation-models", 0],
+    ]);
     assert.deepEqual((await knew.getEntity(scope, "linda"))!.facts.map((f) => f.fact), ["Gardening"]);
     assert.match(calls[0]!.instructions, /# Charter/);
     assert.equal(calls[0]!.schema.kind, "object");
