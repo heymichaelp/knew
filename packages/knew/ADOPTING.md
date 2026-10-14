@@ -15,16 +15,21 @@
   - **the knower**, kept on `self`, and the same beside every entity.
 - **Lens**: one goal over a vocabulary: its **needs** (what the goal needs understood), and how
   its page reads.
+- **Adapter**: one kind of **move** an app may make about an entity — a moment to mark, a search
+  to run — as instructions and fields for the model. Once a note is read, the model proposes what
+  that kind calls for, resting on the facts; the app decides what to do with it.
 
-For an entity and a lens, knew reports three things:
+For an entity and a lens, knew reports three things, and a fourth under each adapter:
 
 | | Where |
 |---|---|
 | Current understanding | `brief().text`, and `readiness().dimensions`, across all three subjects |
 | Missing understanding | `gaps()`, and `readiness().needs` that are not `met` |
 | The next directions | `readiness().next`: what the model proposed learning, inside the dimensions, and what to revisit |
+| Moves | `moves()`: what each adapter's kind calls for now, resting on facts, newest first |
 
-knew names what to learn next; it writes no questions.
+knew names what to learn next and what a move calls for; it writes no questions and performs no
+action.
 
 ## 2. Run it
 
@@ -46,25 +51,31 @@ import { anthropicModel } from "@popjoker/knew/anthropic"; // npm install @anthr
 
 export const intelligence = localIntelligence({
   lenses: [lens], // compiled, over one vocabulary (section 3); the first is the default
+  adapters: [moments], // compiled, over the same vocabulary; optional
   model: anthropicModel({ apiKey: process.env.ANTHROPIC_API_KEY }),
   store: memoryStore(), // the default; see below
 });
 ```
 
 - **The model** is a function: `(request) => Promise<{ output, model?, usage? }>`. A request has
-  `task` (`extract`, `reconcile` or `next`), `system`, `prompt`, a JSON `schema` the answer must
-  match, and a `signal`. Any provider works; knew checks every answer against the schema and
-  refuses one that doesn't match.
+  `task` (`extract`, `reconcile`, `next` or `move`), `system`, `prompt`, a JSON `schema` the
+  answer must match, and a `signal`. Any provider works; knew checks every answer against the
+  schema and refuses one that doesn't match.
 - **`anthropicModel`** (`./anthropic`, with `@anthropic-ai/sdk` installed) answers with Claude:
-  `claude-opus-5-5` by default, or `model: { extract, reconcile, next }` for one per call, and
-  `effort`. The system block is cached, so the second note onward costs less.
+  `claude-opus-5-5` by default, or `model: { extract, reconcile, next, move }` for one per call,
+  and `effort`. The system block is cached, so the second note onward costs less.
 - **Cost**: each note is one extract call, one reconcile call per entry it touches (at most
-  three), and one `next` call per entry it changed, the knower aside. `extractNow` returns
-  `calls`, each with its model and usage; a cost the provider didn't report is `null`, never zero.
+  three), and, per entry it changed, the knower aside, one `next` call and one `move` call per
+  adapter. `extractNow` returns `calls`, each with its model and usage; a cost the provider didn't
+  report is `null`, never zero.
 - **Directions**: once a note is folded in, the model is asked what to learn next about each
   entity it changed, and what it proposes is kept on the entity (section 5). Someone newly added
   gets first directions in the background; pass `directions: { onAdd: false }` for a bulk import.
   A `next` call that fails costs nothing but its proposals: the facts are already in.
+- **Moves**: then, under each adapter in `adapters`, the model is asked what that kind of move
+  calls for about the entity, and what it proposes is kept the same way (section 5). Never on
+  add: a move rests on facts a note brought. A `move` call that fails costs nothing but its
+  proposals either.
 - **The store** keeps each knower's notebook as one JSON-safe record (`ScopeRecord`, dates as ISO
   strings). `memoryStore()` holds it in memory. Your own is three calls: `get(scope)`,
   `put(scope, record)` and `delete(scope)`, over a SQLite row, AsyncStorage, a file or your
@@ -79,7 +90,7 @@ export const intelligence = localIntelligence({
 ### On the device
 
 With `appleModel` (`./apple`), Apple's on-device model (iOS 26 and macOS 26, with Apple
-Intelligence) answers all three calls. There's no key, and nothing leaves the phone. The engine is
+Intelligence) answers every call. There's no key, and nothing leaves the phone. The engine is
 plain TypeScript and runs in React Native as it is.
 
 ```ts
@@ -131,13 +142,13 @@ Every call takes a scope, `{ clientId, subjectId }`. Scopes never share data.
 
 ## 3. Define
 
-Start from a preset (`person`, `place`, `product`) or write your own. `extendVocabulary` and
-`extendLens` take a base and your overrides: a key given replaces or merges, `null` removes, a
-key left out is kept. The vocabulary records `basedOn`: the base, its version, and what changed
-or was added.
+Start from a preset (`person`, `place`, `product`) or write your own. `extendVocabulary`,
+`extendLens` and `extendAdapter` take a base and your overrides: a key given replaces or merges,
+`null` removes, a key left out is kept. The vocabulary records `basedOn`: the base, its version,
+and what changed or was added.
 
 ```ts
-import { compileLens, compileVocabulary, extendLens, extendVocabulary } from "@popjoker/knew";
+import { compileAdapter, compileLens, compileVocabulary, extendAdapter, extendLens, extendVocabulary } from "@popjoker/knew";
 import { person } from "@popjoker/knew/presets";
 
 export const vocabulary = extendVocabulary(person.vocabulary(), {
@@ -155,7 +166,18 @@ export const prep = extendLens(person.lens(), {
   needs: { ahead: { weight: 3 }, pursuits: { enough: 2, after: ["work"] } },
 });
 
-compileLens(prep, compileVocabulary(vocabulary)); // throws, naming every problem
+// A host's moments: the preset's kind of move, with its own instructions and a field more.
+export const hospitality = extendAdapter(person.moments(), {
+  id: "hospitality",
+  version: 1,
+  vocabulary: "my-app",
+  instructions: "**A moment** is a small kindness at the table: a dish they mentioned, a seat by the window, a word about the thing they are training for.\n\nTheir words only…",
+  fields: { gesture: { description: "What the host does.", kind: "enum", values: ["dish", "table", "word"] } },
+});
+
+const compiled = compileVocabulary(vocabulary);
+compileLens(prep, compiled); // throws, naming every problem
+compileAdapter(hospitality, compiled);
 ```
 
 A vocabulary and a lens written from nothing, complete:
@@ -222,8 +244,21 @@ section and one need per dimension, and the vocabulary's pinned types. A need na
 `when`. A lens that names no needs can be extended by need id if you pass the vocabulary as
 `extendLens`'s third argument.
 
-**Every field** is documented where it is declared: `dist/vocabulary.d.ts` and `dist/lens.d.ts`,
-and as tables at knew.dev/lenses. Parsing and compiling refuse, naming the field:
+**Adapter.** `id` (stored on every move it proposes, so never renamed), `vocabulary`, a `noun`
+for one move of its kind ("moment", "search"), `instructions` for the model in the charter's
+voice (what to propose, and what never to), `fields` a move carries beside its label (each
+`text`, a `date` or an `enum` of `values`, filled by the model from the facts or left null; at
+most six), `perEntity` (open moves per entity, 3), `lapse` (`afterDays` from when a move was
+proposed, 90; or, naming a `date` field in `field`, the day after the day the move names, when it
+has one) and `dimensions` (what a move may rest on; left out, every dimension about the entity or
+the relationship). Nothing is proposed about the knower, and nothing rests on a pinned fact. The
+person preset ships two: `moments` (a small thing to do for them at the right time, with `when`)
+and `watches` (something in the world around them to keep an eye on, as a search `query` and a
+`why`, for the app to run or not).
+
+**Every field** is documented where it is declared: `dist/vocabulary.d.ts`, `dist/lens.d.ts`
+and `dist/adapter.d.ts`, and as tables at knew.dev/lenses. Parsing and compiling refuse, naming
+the field:
 - a type informing a dimension that doesn't exist, or a dimension with no type;
 - a `fallbackType` that isn't one of your types;
 - `revisitAfterDays` on an `enduring` type;
@@ -232,15 +267,19 @@ and as tables at knew.dev/lenses. Parsing and compiling refuse, naming the field
 - a `weight` outside 0 (exclusive) to 1,000;
 - a need naming both a `dimension` and `types`, or neither, or `types` with no `label`;
 - a need waiting on itself or in a circle;
-- a section list that misses a dimension or holds one twice.
+- a section list that misses a dimension or holds one twice;
+- an adapter's `enum` field without `values` (or `values` on another kind), a `lapse.field` that
+  is not one of its `date` fields, more than six fields, or a dimension that doesn't exist or is
+  about the knower.
 
 Extraction can only write your types: its output schema lists them.
 
-**In your process**, pass the compiled lenses to `localIntelligence`. **Hosted**, register with
-`PUT /v1/vocabulary`, then `PUT /v1/lens` for each lens, or the service CLI's
-`vocabulary set` and `lens set`. A registered version is immutable; change the `version`. The
-first lens registered is the default. Changing a lens touches no stored data; changing what a
-vocabulary's types mean may call for `resetForReplay`.
+**In your process**, pass the compiled lenses and adapters to `localIntelligence`. **Hosted**,
+register with `PUT /v1/vocabulary`, then `PUT /v1/lens` for each lens and `PUT /v1/adapter` for
+each adapter, or the service CLI's `vocabulary set` and `lens set`. A registered version is
+immutable; change the `version`. The first lens registered is the default. Changing a lens or an
+adapter touches no stored data; changing what a vocabulary's types mean may call for
+`resetForReplay`.
 
 ## 4. Write
 
@@ -293,6 +332,10 @@ Every read that renders takes `lens`; without it, the default lens.
     proposed, null for a need with none yet, whose label is the need's. A need about the knower
     met once is met for every entity.
 - `gaps(scope, entityId, { lens })`: the `learn` directions of the needs still open or thin.
+- `moves(scope, { entityId, adapter, status, asOf })`: the moves proposed under your adapters,
+  newest first and never ranked. Left to itself, the open ones live at `asOf`; with a `status`,
+  every move of that status as of then (`open` including the lapsed). Each has `adapter`,
+  `label`, `fields`, `factIds`, `episodeId`, `proposedAt`, `status` and `resolvedAt`.
 - `getEntity(scope, entityId, { asOf })`: the entity and its facts as believed at `asOf`, with no
   facts when nothing is known yet; null only when it isn't on the roster. Believed is not true: a
   fact past its own end date is still listed. `factsTrueAt(view.facts, asOf)` keeps only what is
@@ -332,15 +375,42 @@ current; no repeat of one open or dismissed; within the room) and counts the res
   written to.
 - Derived like a fact: `resetForReplay` drops them, and the next read proposes afresh.
 
+**Moves.** A move is what one adapter's kind calls for about the entity, in one line, with the
+adapter's fields: "wish her luck at the village show" with `when: 2026-03-14` under `moments`;
+"Kraków earthquake" with a `why` under `watches`, once you know her family is from there. The
+`move` call makes them once a note is folded in, after `next`, under each adapter in turn:
+instructed with the adapter's instructions, the charter, the fact types and the adapter's
+dimensions, and shown the pinned facts to keep clear of, what was just learned, the rest of what
+is known, the adapter's fields, and the moves of that kind already open. The engine keeps what
+fits (resting on facts that are current, not pinned, and inside the adapter's dimensions; a line,
+not a question; no repeat of one open or dismissed, judged on the label and the date field;
+within `perEntity`) and counts the rest as refused (`moves.rejected` on the episode's outcome).
+
+- The model may close an open move: `done` when the new facts show it happened, `answered` when
+  they make it unnecessary, or `stale`, which withdraws it. `invalidateFact` withdraws one whose
+  every ground is gone; a supersession moves it to the replacement.
+- `resolveMove(scope, moveId, "done" | "dismissed", { at })`: the app did it, or the knower
+  waved it away. Either leaves the list as of `at`; a dismissed move is refused the model as a
+  repeat, while one done or answered may come round again.
+- One nobody acts on lapses from the list the day after the day its `date` field names, or, with
+  none, `lapse.afterDays` after it was proposed, without being written to; by `status: "open"` it
+  is still listed, and still open for the model to close.
+- knew performs nothing: it sends no message, books nothing, runs no search. A watch is
+  parameters, and whether and when to search is the app's decision.
+- Derived like a fact: `resetForReplay` drops them.
+
 **Stateless.** If your app keeps its own store, read each note with
-`statelessIntelligence({ vocabulary, model }).extract({ roster, entities, episode })` in your
-process (or `intelligenceClient(...).extract` hosted). Each returns a `ReconciliationPlan` per entry
-for you to apply. Pass `self` in the roster and its facts in `entities` to reconcile what the
-knower says about themselves. When you apply a plan's merge, set `lastSaidAt` to the plan's
-`knownAt` if later. Then, per entity the note changed, `.next({ entity, facts, learned, directions
-})` returns a `DirectionPlan`; apply it with `applyDirectionPlan(directions, plan, { entityId, at,
-episodeId, newId })`. Run `readinessFor(lens, entity, factsKnownAt(facts, at), at,
-factsKnownAt(knowerFacts, at), directions)` yourself.
+`statelessIntelligence({ vocabulary, model, adapters }).extract({ roster, entities, episode })`
+in your process (or `intelligenceClient(...).extract` hosted). Each returns a `ReconciliationPlan`
+per entry for you to apply. Pass `self` in the roster and its facts in `entities` to reconcile
+what the knower says about themselves. When you apply a plan's merge, set `lastSaidAt` to the
+plan's `knownAt` if later. Then, per entity the note changed, `.next({ entity, facts, learned,
+directions })` returns a `DirectionPlan`; apply it with `applyDirectionPlan(directions, plan, {
+entityId, at, episodeId, newId })`. And, per adapter, `.move({ adapter, entity, facts, learned,
+moves })` returns a `MovePlan`; apply it with `applyMovePlan(moves, plan, { adapter, entityId,
+at, episodeId, newId })`, and list with `liveMovesAt(moves, adapter, at)`. Run
+`readinessFor(lens, entity, factsKnownAt(facts, at), at, factsKnownAt(knowerFacts, at),
+directions)` yourself.
 
 ## 6. Corrections, proposals, deletion
 
@@ -349,6 +419,8 @@ factsKnownAt(knowerFacts, at), directions)` yourself.
   would set. Accepting a field update means your own write, then `upsertEntity`.
 - `dismissDirection(scope, directionId, { at })`: a direction the knower waves away. It leaves
   `next`, and the model is refused a repeat of it.
+- `resolveMove(scope, moveId, "done" | "dismissed", { at })`: a move the app did, or the knower
+  waved away. It leaves `moves()`, and a dismissed one is refused the model as a repeat.
 - `deleteEntity(scope, entityId)` removes the entity, its facts and its episodes.
   `deleteSubject(scope)` removes everything in the scope. `exportSubject(scope)` returns the
   knower's episodes. `resetForReplay(scope)` drops derived facts so extraction can rerun.
@@ -357,13 +429,15 @@ factsKnownAt(knowerFacts, at), directions)` yourself.
 ## 7. Testing
 
 `fakeIntelligence()` from `@popjoker/knew/testing` passes the contract suite. Bind it where
-`intelligenceClient` would go, with your own lenses (one vocabulary; the first lens is the default):
+`intelligenceClient` would go, with your own lenses and adapters (one vocabulary; the first lens
+is the default):
 
 ```ts
-import { compileLens, compileVocabulary } from "@popjoker/knew";
+import { compileAdapter, compileLens, compileVocabulary } from "@popjoker/knew";
 import { extraction, extracted, fakeIntelligence } from "@popjoker/knew/testing";
 
-const fake = fakeIntelligence({ lenses: [compileLens(prep, compileVocabulary(vocabulary))] });
+const compiled = compileVocabulary(vocabulary);
+const fake = fakeIntelligence({ lenses: [compileLens(prep, compiled)], adapters: [compileAdapter(hospitality, compiled)] });
 await fake.upsertEntity(scope, { id: "linda", name: "Linda" });
 fake.seedFacts(scope, "linda", [{ type: "INTEREST", fact: "Gardening" }]);
 fake.script({ extraction: extraction([extracted("linda", "AVOID", "Vegan")]) });
@@ -372,8 +446,10 @@ fake.script({ extraction: extraction([extracted("linda", "AVOID", "Vegan")]) });
 `script` queues what the next `extractNow` reads an episode into. The queue is shared across
 scopes: each episode read takes the next turn, earliest said first, and an episode with no turn
 left stays pending. A turn's `next` answers the `next` call for each entity the episode changed,
-given its name, the facts just learned, the rest of what is known and the directions open; left
-out, nothing is proposed, so a test that says nothing about directions reads as before.
+given its name, the facts just learned, the rest of what is known and the directions open; a
+turn's `move` answers the `move` call under each adapter, given the adapter's id and the same,
+with the moves of that kind open. Left out, nothing is proposed, so a test that says nothing about
+directions or moves reads as before.
 
 **Proving a driver.** An in-process driver passes the same suite the service runs:
 
@@ -385,7 +461,7 @@ contractSuite({
   test,
   scripted: true,
   open: async () => ({
-    intelligence: myDriver, // a fresh store with the fixture vocabulary and the three fixture lenses
+    intelligence: myDriver, // a fresh store with the fixture vocabulary, the three fixture lenses and the fixture adapter
     scope: { clientId: "c", subjectId: fresh() },
     otherScope: { clientId: "c", subjectId: fresh() },
     script: (turn) => myScriptedModel.queue(turn),

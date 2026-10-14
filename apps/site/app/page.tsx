@@ -248,7 +248,7 @@ export default async function Home() {
             <h3 className="display mt-3 text-2xl">Your code, your model key</h3>
             <p className="mt-4 text-ink-soft">
               The whole engine runs where your app does, keeping each person&apos;s notebook in a store you choose.
-              Reading a note is three calls to the model you supply: Claude on your own key, or any model that answers
+              Reading a note is a few calls to the model you supply: Claude on your own key, or any model that answers
               with JSON.
             </p>
           </div>

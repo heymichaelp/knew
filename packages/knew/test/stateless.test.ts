@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { KNOWER_ID, statelessIntelligence, type Fact, type Model } from "../src/index.ts";
-import { extracted, extraction, fixtureVocabulary } from "../src/testing.ts";
+import { extracted, extraction, fixtureAdapter, fixtureVocabulary } from "../src/testing.ts";
 
 /**
  * Stateless mode in the app's process: the note and the facts the app holds
@@ -92,5 +92,43 @@ describe("Scenario: An app with its own store asks for a plan, in its own proces
       rejected: 1,
     });
     assert.deepEqual([answer.calls.map((call) => call.method), answer.promptVersion], [["next"], "next.v1"]);
+  });
+
+  it("plans what one adapter's kind of move calls for, from the facts and the moves the app holds, for the app to apply", async () => {
+    const gardening = fact("00000000-0000-4000-8000-0000000000bb", "linda", "LIKES", "Gardening");
+    const show = fact("00000000-0000-4000-8000-0000000000cc", "linda", "EVENT", "Entering the village show");
+    let prompt = "";
+    const model: Model = async (request) => {
+      assert.equal(request.task, "move");
+      prompt = request.prompt;
+      return {
+        output: {
+          closed: [],
+          proposed: [
+            { label: "Wish her luck at the village show", factIds: [show.id], fields: { when: "2026-10-14", why: "She is entering" } },
+            { label: "Is she entering again?", factIds: [show.id], fields: { when: null, why: null } },
+          ],
+        },
+      };
+    };
+    const request = {
+      adapter: "fixture-moment",
+      entity: { id: "linda", name: "Linda", fields: { relationship: "mother" }, aliases: [] },
+      facts: [gardening, show],
+      learned: [show.id],
+      moves: [],
+      referenceAt: said,
+    };
+    const engine = statelessIntelligence({ vocabulary: fixtureVocabulary(), model, adapters: [fixtureAdapter()] });
+    const answer = await engine.move(request);
+    assert.ok(prompt.startsWith("Moves of kind fixture-moment for this person: Linda (mother)\n\nToday (when this was learned): 2026-10-01"));
+    assert.deepEqual(answer.plan, {
+      closed: [],
+      proposed: [{ label: "Wish her luck at the village show", fields: { when: "2026-10-14", why: "She is entering" }, factIds: [show.id] }],
+      rejected: 1,
+    });
+    assert.deepEqual([answer.calls.map((call) => call.method), answer.promptVersion], [["move"], "move.v1"]);
+    await assert.rejects(engine.move({ ...request, adapter: "nobody" }), /no adapter nobody is registered/);
+    await assert.rejects(statelessIntelligence({ vocabulary: fixtureVocabulary(), model }).move(request), /no adapter fixture-moment is registered/, "an engine given no adapters proposes no moves");
   });
 });

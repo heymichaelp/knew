@@ -352,6 +352,19 @@ export interface EntityInput {
   active?: boolean;
 }
 
+export interface MovesOptions {
+  /** Narrow to one entity's moves. */
+  entityId?: string;
+  /** Narrow to one adapter's, by id. */
+  adapter?: string;
+  /** Which to list. Left out: the open ones live at `asOf`, a lapsed one
+   *  excluded. With a status: every move of that status as of `asOf`,
+   *  `open` including the lapsed. */
+  status?: Move["status"];
+  /** As of T. Default: now. */
+  asOf?: Date;
+}
+
 export interface SearchFactsOptions {
   /** Narrow to one entity's facts. */
   entityId?: string;
@@ -528,6 +541,15 @@ export interface Intelligence {
    *  not an open direction. */
   dismissDirection(scope: IntelligenceScope, directionId: string, options?: { at?: Date }): Promise<void>;
 
+  /** The moves proposed under the client's adapters, newest first and never
+   *  ranked: the open ones live at `asOf`, or every move of a `status` as of
+   *  then. Each is the app's to act on; knew performs none of them. */
+  moves(scope: IntelligenceScope, options?: MovesOptions): Promise<Move[]>;
+  /** The app did a move (`done`), or the knower waved it away (`dismissed`):
+   *  it leaves the list as of `at` (default now), and a dismissed one is
+   *  refused the model as a repeat. A no-op for an id that is not an open move. */
+  resolveMove(scope: IntelligenceScope, moveId: string, resolution: "done" | "dismissed", options?: { at?: Date }): Promise<void>;
+
   exportSubject(scope: IntelligenceScope): Promise<SubjectExport>;
   /** Ordered explicit deletes of everything under the scope. */
   deleteSubject(scope: IntelligenceScope): Promise<void>;
@@ -633,8 +655,35 @@ export interface StatelessNext {
   promptVersion: string;
 }
 
+export interface StatelessMoveRequest {
+  /** The adapter to ask under, by id: one the engine was given. */
+  adapter: string;
+  /** The entity as the roster has it. */
+  entity: RosterEntry;
+  /** The entity's facts; only the current ones ground anything. */
+  facts: Fact[];
+  /** The facts a note just added or retold, by id. */
+  learned: string[];
+  /** The knower's facts, shown beside the relationship dimensions. */
+  knowerFacts?: Fact[];
+  /** The entity's moves under this adapter, every status. */
+  moves: Move[];
+  /** When this was learned. Default now. */
+  referenceAt?: Date;
+  callTimeoutMs?: number;
+}
+
+export interface StatelessMove {
+  /** What to do to the entity's moves under the adapter: `applyMovePlan` applies it to your own store. */
+  plan: MovePlan;
+  calls: ModelCall[];
+  promptVersion: string;
+}
+
 export interface StatelessIntelligence {
   extract(request: StatelessExtractRequest): Promise<StatelessExtraction>;
   /** What to learn next about one entity, from what the app holds. Nothing is kept. */
   next(request: StatelessNextRequest): Promise<StatelessNext>;
+  /** What one adapter's kind of move calls for about one entity, from what the app holds. Nothing is kept. */
+  move(request: StatelessMoveRequest): Promise<StatelessMove>;
 }

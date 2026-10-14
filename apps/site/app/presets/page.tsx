@@ -156,7 +156,7 @@ function Preset({ outline, clause }: { readonly outline: PresetOutline; readonly
           {adapters.map(({ name: adapterName, adapter }) => (
             <div key={adapter.id} className="mt-8">
               <div className="flex flex-wrap items-baseline gap-x-3">
-                <h4 className="display text-lg">{adapterName}</h4>
+                <h4 className="display text-lg">{adapterName.charAt(0).toUpperCase() + adapterName.slice(1)}</h4>
                 <code className="code text-[0.75rem] text-derived">{adapter.id}</code>
               </div>
               <dl className="mt-3">

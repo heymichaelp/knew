@@ -1,9 +1,10 @@
 import type { Adapter } from "./adapter.ts";
 import { factsKnownAt, lastSaidOf, mustHonorFrom, renderBrief } from "./brief.ts";
+import { ENGINE_DEFAULTS } from "./defaults.ts";
 import { applyDirectionPlan, planDirections, regroundDirections, withdrawUngrounded } from "./directions.ts";
 import type { Lens } from "./lens.ts";
 import { readerFor, type Model, type Reader } from "./model.ts";
-import { applyMovePlan, planMoves } from "./moves.ts";
+import { applyMovePlan, isMoveLapsed, planMoves, type LapseRule } from "./moves.ts";
 import { ENTITIES_PER_NOTE, KNOWER_NAME, readNote } from "./read.ts";
 import { gapsFor, readinessFor } from "./readiness.ts";
 import type { MoveAnswer, NextAnswer } from "./schemas.ts";
@@ -184,6 +185,9 @@ export function createDriver(
 ): LocalIntelligence {
   const { vocabulary, lensFor } = checkedLenses(options.lenses, options.defaultLens);
   const adapters = checkedAdapters(options.adapters ?? [], vocabulary);
+  const adapterById = new Map(adapters.map((adapter) => [adapter.id, adapter]));
+  // A move under an adapter no longer registered lapses by the engine's defaults.
+  const lapseOf = (adapterId: string): LapseRule => adapterById.get(adapterId) ?? { lapse: { afterDays: ENGINE_DEFAULTS.moveLapseDays, field: null } };
   const { reader, states } = internals;
   const newId = options.newId ?? randomId;
   const background = options.background ?? true;
@@ -885,6 +889,37 @@ export function createDriver(
           if (direction && direction.status === "open") {
             direction.status = "dismissed";
             direction.resolvedAt = dismissOptions.at ?? new Date();
+          }
+        }
+      });
+    },
+    async moves(scope, listOptions = {}) {
+      return read(scope, (s) => {
+        const at = listOptions.asOf ?? new Date();
+        const wanted = listOptions.status;
+        // As of `at`: proposed by then; open then if not resolved by then, whatever happened since.
+        const listed = (item: Move): boolean => {
+          if (item.proposedAt > at) return false;
+          const openThen = item.resolvedAt === null || item.resolvedAt > at;
+          if (wanted === undefined) return openThen && !isMoveLapsed(item, lapseOf(item.adapter), at);
+          if (wanted === "open") return openThen;
+          return item.status === wanted && !openThen;
+        };
+        return [...s.entities.values()]
+          .filter((entity) => !listOptions.entityId || entity.id === listOptions.entityId)
+          .flatMap((entity) => entity.moves)
+          .filter((item) => (!listOptions.adapter || item.adapter === listOptions.adapter) && listed(item))
+          .sort((a, b) => b.proposedAt.getTime() - a.proposedAt.getTime())
+          .map((item) => ({ ...item, fields: { ...item.fields }, factIds: [...item.factIds] }));
+      });
+    },
+    async resolveMove(scope, moveId, resolution, resolveOptions = {}) {
+      await withState(scope, (s) => {
+        for (const entity of s.entities.values()) {
+          const item = entity.moves.find((m) => m.id === moveId);
+          if (item && item.status === "open") {
+            item.status = resolution;
+            item.resolvedAt = resolveOptions.at ?? new Date();
           }
         }
       });

@@ -474,6 +474,123 @@ export function contractCases(): ContractCase[] {
       },
     },
     {
+      name: "a move is proposed under an adapter from what was just learned: resting on the new fact and dated when it was said, listed newest first and never ranked, empty as of before, done by the app and kept under its status, waved away and refused the model again, unlisted past its day, withdrawn with its ground, and gone on replay",
+      scripted: true,
+      async run({ intelligence: i, scope, script }) {
+        const t1 = at("2026-03-01T10:00:00Z");
+        const askedUnder: string[] = [];
+        await i.upsertEntity(scope, { id: "linda", name: "Linda", fields: { relationship: "mother" } });
+        await i.addEpisode(scope, {
+          source: "note",
+          content: "Mom took up gardening and is entering the village show on the 14th; I can spend about £40",
+          entityHints: ["linda"],
+          referenceAt: t1,
+          extract: "inline",
+        });
+        script!({
+          extraction: extraction([
+            extracted("linda", "LIKES", "Took up gardening"),
+            extracted("linda", "EVENT", "Entering the village show", { validAt: "2026-03-14" }),
+            extracted(KNOWER_ID, "MEANS", "Can spend about £40"),
+          ]),
+          move: (adapter, { name, learned }) => {
+            askedUnder.push(`${adapter}:${name}`);
+            const show = learned.find((fact) => fact.type === "EVENT")!;
+            const gardening = learned.find((fact) => fact.type === "LIKES")!;
+            return {
+              closed: [],
+              proposed: [
+                { label: "Wish her luck at the village show", factIds: [show.id], fields: { when: "2026-03-14", why: "She is entering" } },
+                { label: "Send seeds", factIds: [gardening.id], fields: { when: null, why: null } },
+                { label: "Is she entering again next year?", factIds: [show.id], fields: { when: null, why: null } },
+              ],
+            };
+          },
+        });
+        const first = (await i.extractNow(scope, { maxEpisodes: 1, deadlineMs: 30_000 })).episodes[0]!;
+        assert.equal(first.status, "ingested");
+        if (first.status === "ingested") assert.deepEqual(first.moves, { proposed: 2, closed: 0, rejected: 1 }, "a question is refused");
+        assert.deepEqual(askedUnder, ["fixture-moment:Linda"], "asked under the one adapter, about the entity, never about the knower");
+
+        const soon = at("2026-03-02T00:00:00Z");
+        const show = (await i.searchFacts(scope, "village show"))[0]!;
+        const gardening = (await i.searchFacts(scope, "gardening"))[0]!;
+        const listed = await i.moves(scope, { entityId: "linda", asOf: soon });
+        assert.deepEqual(
+          listed.map((m) => [m.adapter, m.label, m.fields, m.factIds, m.status, m.resolvedAt]),
+          [
+            ["fixture-moment", "Wish her luck at the village show", { when: "2026-03-14", why: "She is entering" }, [show.id], "open", null],
+            ["fixture-moment", "Send seeds", { when: null, why: null }, [gardening.id], "open", null],
+          ],
+          "resting on the facts cited, with the fields as the adapter defines them",
+        );
+        assert.equal(listed[0]!.proposedAt.getTime(), t1.getTime(), "proposed when the note was said, not when it was read");
+        assert.equal(listed[0]!.episodeId, first.episodeId);
+        assert.deepEqual(await i.moves(scope, { entityId: "linda", asOf: at("2026-02-28T00:00:00Z") }), [], "as of before the note, nothing");
+        assert.deepEqual(await i.moves(scope, { adapter: "nobody", asOf: soon }), []);
+        assert.equal((await i.moves(scope, { asOf: soon })).length, 2, "the whole scope at once");
+
+        // The app does one: it leaves the list as of then and is kept under its status; as of the days before, it was still open.
+        const [wish, seeds] = listed;
+        const did = at("2026-03-13T18:00:00Z");
+        await i.resolveMove(scope, wish!.id, "done", { at: did });
+        await i.resolveMove(scope, "nobody", "done", { at: did });
+        assert.deepEqual((await i.moves(scope, { entityId: "linda", asOf: at("2026-03-14T00:00:00Z") })).map((m) => m.label), ["Send seeds"]);
+        assert.deepEqual(
+          (await i.moves(scope, { entityId: "linda", asOf: at("2026-03-12T00:00:00Z") })).map((m) => m.label),
+          ["Wish her luck at the village show", "Send seeds"],
+          "as of the days between, it was still open",
+        );
+        const done = await i.moves(scope, { entityId: "linda", status: "done", asOf: at("2026-03-14T00:00:00Z") });
+        assert.deepEqual(done.map((m) => [m.id, m.status, m.resolvedAt?.getTime()]), [[wish!.id, "done", did.getTime()]]);
+
+        // The knower waves the other away: gone from the list, and the model is refused a repeat of it.
+        await i.resolveMove(scope, seeds!.id, "dismissed", { at: at("2026-03-15T00:00:00Z") });
+        assert.deepEqual(await i.moves(scope, { entityId: "linda", asOf: at("2026-03-16T00:00:00Z") }), []);
+        const t2 = at("2026-03-20T10:00:00Z");
+        await i.addEpisode(scope, { source: "note", content: "She's bought a greenhouse", entityHints: ["linda"], referenceAt: t2, extract: "inline" });
+        script!({
+          extraction: extraction([extracted("linda", "LIKES", "Bought a greenhouse")]),
+          move: (_adapter, { learned, open }) => {
+            assert.deepEqual(open, [], "nothing of this kind is open: one done, one dismissed");
+            return {
+              closed: [],
+              proposed: [
+                { label: "send seeds", factIds: [learned[0]!.id], fields: { when: null, why: null } },
+                { label: "Ask how the greenhouse is coming along", factIds: [learned[0]!.id], fields: { when: "2026-04-01", why: "She just bought it" } },
+              ],
+            };
+          },
+        });
+        const second = (await i.extractNow(scope, { maxEpisodes: 1, deadlineMs: 30_000 })).episodes[0]!;
+        assert.equal(second.status, "ingested");
+        if (second.status === "ingested") assert.deepEqual(second.moves, { proposed: 1, closed: 0, rejected: 1 }, "what the knower waved away is not proposed again");
+
+        // A move with a day stands until that day and is unlisted after it, though still open to be closed.
+        const greenhouse = (await i.moves(scope, { entityId: "linda", asOf: at("2026-04-01T12:00:00Z") }))[0]!;
+        assert.deepEqual([greenhouse.label, greenhouse.fields, greenhouse.proposedAt.getTime()], ["Ask how the greenhouse is coming along", { when: "2026-04-01", why: "She just bought it" }, t2.getTime()]);
+        assert.deepEqual(await i.moves(scope, { entityId: "linda", asOf: at("2026-04-02T00:00:00Z") }), [], "the day after its day, it has lapsed");
+        assert.deepEqual(
+          (await i.moves(scope, { entityId: "linda", status: "open", asOf: at("2026-04-02T00:00:00Z") })).map((m) => m.id),
+          [greenhouse.id],
+          "asked for by status, a lapsed move is still open",
+        );
+
+        // The ground is retracted: the move resting on it alone is withdrawn, as of the retraction.
+        const bought = (await i.searchFacts(scope, "greenhouse"))[0]!;
+        const retracted = at("2026-04-05T00:00:00Z");
+        await i.invalidateFact(scope, bought.id, { at: retracted });
+        assert.deepEqual(
+          (await i.moves(scope, { entityId: "linda", status: "withdrawn", asOf: at("2026-04-06T00:00:00Z") })).map((m) => [m.id, m.resolvedAt?.getTime()]),
+          [[greenhouse.id, retracted.getTime()]],
+        );
+        assert.deepEqual((await i.moves(scope, { entityId: "linda", asOf: at("2026-04-01T12:00:00Z") })).map((m) => m.id), [greenhouse.id], "as of a day before the retraction, it stood");
+
+        await i.resetForReplay(scope);
+        assert.deepEqual(await i.moves(scope, { entityId: "linda", status: "done" }), [], "derived, a move is gone on replay like a fact");
+      },
+    },
+    {
       name: "a correction supersedes and a retelling merges, each dated by when it was said, and what was known then stays answerable",
       scripted: true,
       async run({ intelligence: i, scope, script }) {

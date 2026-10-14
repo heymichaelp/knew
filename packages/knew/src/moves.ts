@@ -29,15 +29,18 @@ function strictDay(value: string | null | undefined): Date | null {
   return date && dayOf(date) === value ? date : null;
 }
 
+/** How an adapter's moves lapse: all that the read-time arithmetic needs of it. */
+export type LapseRule = Pick<Adapter, "lapse">;
+
 /** The day a move's date field names, when the adapter names one and the move has it. */
-export function dayOfMove(move: Move, adapter: Adapter): Date | null {
+export function dayOfMove(move: Move, adapter: LapseRule): Date | null {
   return adapter.lapse.field ? strictDay(move.fields[adapter.lapse.field]) : null;
 }
 
 /** Whether a move has lapsed at `at`: its own day has passed, or, with none,
  *  the adapter's window since it was proposed. On the day itself a move with a
  *  day still stands; it lapses the day after. */
-export function isMoveLapsed(move: Move, adapter: Adapter, at: Date): boolean {
+export function isMoveLapsed(move: Move, adapter: LapseRule, at: Date): boolean {
   const day = dayOfMove(move, adapter);
   if (day) return at.getTime() >= day.getTime() + DAY_MS;
   return at.getTime() - move.proposedAt.getTime() >= adapter.lapse.afterDays * DAY_MS;
@@ -45,7 +48,7 @@ export function isMoveLapsed(move: Move, adapter: Adapter, at: Date): boolean {
 
 /** The moves live at `at`: proposed by then, not resolved by then (one closed
  *  later was, at `at`, still open), and not lapsed. */
-export function liveMovesAt(moves: Move[], adapter: Adapter, at: Date): Move[] {
+export function liveMovesAt(moves: Move[], adapter: LapseRule, at: Date): Move[] {
   return moves.filter((move) => move.proposedAt <= at && (move.resolvedAt === null || move.resolvedAt > at) && !isMoveLapsed(move, adapter, at));
 }
 

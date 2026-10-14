@@ -21,32 +21,40 @@ knew.dev site. The Postgres service is `heymichaelp/knew-service`.
   what to do with it, are the client's. Understanding has three subjects: the entity, the
   relationship with it (kept on the entity, one to each), and the knower (kept on `self`, the
   same beside every entity). Keep the knower separate, never move relationship facts off their
-  entity, and never propose a direction about the knower.
-- **Nothing client-specific lives in the package.** The core ships no vocabulary and no lens: no
-  fact type, no dimension, no heading, no charter. Vocabularies and lenses are data a client
-  registers. The one exception is `@popjoker/knew/presets`: opt-in, generic starter vocabularies
-  and lenses per kind (`person`, `place` and `product` today). A product's own content —
-  knewpeople's `relationships` lens, Sweeket's gifting charter — stays in its repo, and
-  `test/presets.test.ts` fails if any preset's type key appears in the core's code.
-  The site's worked example is the person preset; the fixture vocabulary and its three lenses in
-  `@popjoker/knew/testing` back the contract suite.
+  entity, and never propose a direction about the knower. With an adapter the client registers,
+  it also proposes moves of that kind (the `move` call, after `next`): each grounded in fact ids,
+  each a proposal the app acts on. knew never performs an action, sends anything or runs a
+  search. A move is never evidence, never on the page, never about the knower, and is listed,
+  not ranked.
+- **Nothing client-specific lives in the package.** The core ships no vocabulary, no lens and no
+  adapter: no fact type, no dimension, no heading, no charter, no kind of move. Vocabularies,
+  lenses and adapters are data a client registers. The one exception is `@popjoker/knew/presets`:
+  opt-in, generic starter vocabularies and lenses per kind (`person`, `place` and `product`
+  today), and for `person` two adapters (`moments`, `watches`). A product's own content —
+  knewpeople's `relationships` lens, Sweeket's gifting charter, a host's hospitality moments —
+  stays in its repo, and `test/presets.test.ts` fails if any preset's type key appears in the
+  core's code. The site's worked example is the person preset; the fixture vocabulary, its three
+  lenses and its adapter in `@popjoker/knew/testing` back the contract suite.
 - **Weights order directions; they never weigh what is believed.** Readiness ranks needs,
   proposed directions and revisits; it never reorders, filters or annotates a page, a proposed
   direction is never evidence, and a fact due for a revisit is still printed exactly as before.
+  Moves are outside readiness altogether: `moves()` lists them newest first and never ranks.
   Revisit windows are opt-in per fact type and refused on enduring types.
 - **The site imports the engine; it never transcribes it.** Long-form pages render the package's
-  own `ADOPTING.md`/`CHANGELOG.md`, read from the installed tarball at build time. The vocabulary
-  and lens tables come from `vocabularyDefinitionSchema` and `lensDefinitionSchema` via
-  `z.toJSONSchema`, the defaults table from `ENGINE_DEFAULTS`, the presets page from every export
-  of `@popjoker/knew/presets` (its example of extending one from `ADOPTING.md`), the contract list
+  own `ADOPTING.md`/`CHANGELOG.md`, read from the installed tarball at build time. The vocabulary,
+  lens and adapter tables come from `vocabularyDefinitionSchema`, `lensDefinitionSchema` and
+  `adapterDefinitionSchema` via `z.toJSONSchema`, the defaults table from `ENGINE_DEFAULTS`, the
+  presets page from every export of `@popjoker/knew/presets` (its adapters included; its example
+  of extending one from `ADOPTING.md`), the contract list
   from `contractCases()`, the API surface check from the client's runtime keys, and the front
   page's example from `renderBrief` and `readinessFor`. If you find yourself typing a fact the
   package already knows, stop and import it instead.
 - **The drift guards live in `apps/site/test/drift.test.ts`** and are the reason the above holds.
-  Adding a vocabulary or lens field — top-level, or inside a fact type, a dimension, an ask or a
-  section — without a note in `apps/site/lib/vocabulary-notes.ts` or `lens-notes.ts`, an engine
-  default without a note in `default-notes.ts`, or a client method without a row in
-  `apps/site/lib/api-routes.ts`, fails the build. Do not loosen them to get green.
+  Adding a vocabulary, lens or adapter field — top-level, or inside a fact type, a dimension, an
+  ask, a section or a move field — without a note in `apps/site/lib/vocabulary-notes.ts`,
+  `lens-notes.ts` or `adapter-notes.ts`, an engine default without a note in `default-notes.ts`,
+  or a client method without a row in `apps/site/lib/api-routes.ts`, fails the build. Do not
+  loosen them to get green.
 - **A monospace is for code only.** Geist Mono appears in `<pre>` blocks and in `.code` spans that
   wrap something you would actually type — an identifier, a route, a header, a regex. Labels,
   dates, counts and HTTP verbs are set in Lato. This is a deliberate softening; it reverts easily
@@ -59,7 +67,7 @@ knew.dev site. The Postgres service is `heymichaelp/knew-service`.
   `apps/site/lib/package-docs.ts`, which also explains why `require.resolve` cannot be used to
   find the package directory: the bundler rewrites it to a module id.
 - **The model is the app's.** The package opens no connection and holds no key. Its root, its
-  store and its on-device adapter run in React Native and the browser as well as Node:
+  store and its on-device model (`./apple`) run in React Native and the browser as well as Node:
   `test/portable.test.ts` fails on a Node-only API in them. `@anthropic-ai/sdk` is an optional
   peer, imported only by `./anthropic`. Every test answers with a script or a stand-in; no test
   calls a real model. `apple/KnewFoundationModels.swift` is a reference the package can't
