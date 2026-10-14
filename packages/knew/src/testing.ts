@@ -204,6 +204,10 @@ export interface FakeIntelligenceOptions {
   lenses?: Lens[];
   /** The lens a read without one uses. Default: the first. */
   defaultLens?: string;
+  /** The adapters it proposes moves under. Default: the fixture adapter when
+   *  `lenses` is left to the fixtures too, since a client's own lenses read
+   *  a vocabulary the fixture adapter does not; none otherwise. */
+  adapters?: Adapter[];
 }
 
 /**
@@ -214,10 +218,11 @@ export interface FakeIntelligenceOptions {
  */
 export function fakeIntelligence(options: FakeIntelligenceOptions = {}): FakeIntelligence {
   const lenses = options.lenses ?? [fixtureLens(), fixtureVisitLens(), fixtureGiftLens()];
+  const adapters = options.adapters ?? (options.lenses ? [] : [fixtureAdapter()]);
   const turns: ScriptedTurn[] = [];
   let current: ScriptedTurn | undefined;
   const reader: Reader = {
-    refs: { extract: "fake", reconcile: "fake", next: "fake" },
+    refs: { extract: "fake", reconcile: "fake", next: "fake", move: "fake" },
     ready: () => turns.length > 0,
     async extract() {
       current = turns.shift();
@@ -237,6 +242,16 @@ export function fakeIntelligence(options: FakeIntelligenceOptions = {}): FakeInt
       };
       // Unscripted, nothing is proposed: every case that says nothing about directions reads as before.
       return current?.next?.(shown) ?? { answered: [], withdrawn: [], proposed: [] };
+    },
+    async move(adapter, args) {
+      const learned = new Set(args.learned);
+      const shown = {
+        name: args.entity.name,
+        learned: args.facts.filter((fact) => learned.has(fact.id)),
+        known: args.facts.filter((fact) => !learned.has(fact.id)),
+        open: args.moves.filter((item) => item.status === "open"),
+      };
+      return current?.move?.(adapter.id, shown) ?? { closed: [], proposed: [] };
     },
   };
 
@@ -258,7 +273,7 @@ export function fakeIntelligence(options: FakeIntelligenceOptions = {}): FakeInt
       states.delete(`${scope.clientId}/${scope.subjectId}`);
     },
   };
-  const driver = createDriver({ lenses, ...(options.defaultLens ? { defaultLens: options.defaultLens } : {}), background: false, newId: nextId }, { reader, states: store });
+  const driver = createDriver({ lenses, adapters, ...(options.defaultLens ? { defaultLens: options.defaultLens } : {}), background: false, newId: nextId }, { reader, states: store });
 
   const entityFor = (scope: IntelligenceScope, entityId: string) => {
     const s = stateOf(scope);
@@ -266,7 +281,7 @@ export function fakeIntelligence(options: FakeIntelligenceOptions = {}): FakeInt
     if (!record) throw new Error(`fakeIntelligence: no entity ${entityId} on the roster`);
     let entity = s.entities.get(entityId);
     if (!entity) {
-      entity = { id: entityId, kind: record.kind, name: record.name, aliases: [], summary: "", summaryUpdatedAt: null, facts: [], directions: [], directionsAt: null };
+      entity = { id: entityId, kind: record.kind, name: record.name, aliases: [], summary: "", summaryUpdatedAt: null, facts: [], directions: [], directionsAt: null, moves: [] };
       s.entities.set(entityId, entity);
     }
     return entity;

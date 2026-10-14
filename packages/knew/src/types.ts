@@ -396,7 +396,7 @@ export interface ModelUsage {
 }
 
 export interface ModelCall {
-  method: "extract" | "reconcile" | "next";
+  method: "extract" | "reconcile" | "next" | "move";
   model: string | null;
   /** Null when the call threw. */
   usage: ModelUsage | null;
@@ -420,7 +420,12 @@ export type EpisodeOutcome =
        *  directions proposed, the open ones it answered or withdrew, and the
        *  rows the engine refused. All zero when the call failed. */
       directions: { proposed: number; answered: number; withdrawn: number; rejected: number };
-      /** Every model call the note took, the `next` calls included, whether or not each came back. */
+      /** What the `move` calls did, under each adapter, for the entities this
+       *  note touched: the moves proposed, the open ones the model closed, and
+       *  the rows the engine refused. All zero with no adapter registered, or
+       *  when the calls failed. */
+      moves: { proposed: number; closed: number; rejected: number };
+      /** Every model call the note took, the `next` and `move` calls included, whether or not each came back. */
       calls: number;
       costUsd: number | null;
     }

@@ -106,19 +106,18 @@ export interface MoveAnswer {
  * An adapter with no fields leaves the key out, since an empty object is
  * untested on the device.
  */
-export function moveSchemaFor(adapter: Adapter) {
-  const shape: Record<string, z.ZodTypeAny> = {};
+export function moveSchemaFor(adapter: Adapter): z.ZodType<MoveAnswer> {
+  const shape: Record<string, z.ZodType<string | null>> = {};
   for (const field of adapter.fields) shape[field.name] = (field.values ? z.enum(field.values as [string, ...string[]]) : z.string()).nullable();
-  const row = {
+  const row = z.object({
     /** A topic or a gesture in one line, never a question: the planner refuses a label ending in `?`. */
     label: z.string(),
     /** The facts it rests on, by id; never empty. */
     factIds: z.array(z.string()),
-    ...(adapter.fields.length > 0 ? { fields: z.object(shape) } : {}),
-  };
+  });
   return z.object({
     closed: z.array(z.object({ moveId: z.string(), reason: z.enum(["done", "answered", "stale"]) })),
-    proposed: z.array(z.object(row)),
+    proposed: z.array(adapter.fields.length > 0 ? row.extend({ fields: z.object(shape) }) : row),
   });
 }
 

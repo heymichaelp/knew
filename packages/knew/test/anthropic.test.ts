@@ -46,8 +46,10 @@ describe("Scenario: The app's own key reads its notes", () => {
     assert.deepEqual(answer, { output: '{"ok":true}', model: "claude-sonnet-5-5", usage: { inputTokens: 900, outputTokens: 40, cacheReadTokens: 800, cacheWriteTokens: 0 } });
     assert.equal((await anthropicModel({ client: fake })(request("extract"))).model, "claude-opus-5-5", "the default model");
     assert.equal((await model(request("next"))).model, "claude-sonnet-5-5", "next takes the reconcile model when none is named for it");
-    const routed = anthropicModel({ client: fake, model: { extract: "claude-opus-5-5", reconcile: "claude-sonnet-5-5", next: "claude-haiku-4-5-20251001" } });
+    assert.equal((await model(request("move"))).model, "claude-sonnet-5-5", "so does move");
+    const routed = anthropicModel({ client: fake, model: { extract: "claude-opus-5-5", reconcile: "claude-sonnet-5-5", next: "claude-haiku-4-5-20251001", move: "claude-haiku-4-5-20251001" } });
     assert.equal((await routed(request("next"))).model, "claude-haiku-4-5-20251001");
+    assert.equal((await routed(request("move"))).model, "claude-haiku-4-5-20251001");
   });
 
   it("refuses a refusal, a cut-off answer and an overlong request rather than reading half an answer", async () => {

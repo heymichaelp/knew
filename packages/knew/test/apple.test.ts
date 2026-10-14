@@ -78,9 +78,10 @@ describe("Scenario: A note read on the device", () => {
         return JSON.stringify({ facts: facts.map(({ attributes: _a, validAt: _v, invalidAt: _i, ...rest }) => rest), aliases: [], unresolvedNames: [], fieldUpdates: [] });
       }
       if (call.prompt.startsWith("Directions")) return JSON.stringify({ answered: [], withdrawn: [], proposed: [] });
+      if (call.prompt.startsWith("Moves of kind")) return JSON.stringify({ closed: [], proposed: [] });
       return JSON.stringify({ decisions: [], summary: "Linda gardens." });
     };
-    const knew = localIntelligence({ lenses: [fixtureLens()], model: appleModel({ respond }), background: false });
+    const knew = localIntelligence({ lenses: [fixtureLens()], adapters: [fixtureAdapter()], model: appleModel({ respond }), background: false });
     const scope = { clientId: "phone", subjectId: "me" };
     await knew.upsertEntity(scope, { id: "linda", name: "Linda" });
     await knew.addEpisode(scope, { source: "note", content: "Mom gardens", entityHints: ["linda"] });
@@ -90,10 +91,13 @@ describe("Scenario: A note read on the device", () => {
       ["extract", "apple-foundation-models", 0],
       ["reconcile", "apple-foundation-models", 0],
       ["next", "apple-foundation-models", 0],
+      ["move", "apple-foundation-models", 0],
     ]);
     assert.deepEqual((await knew.getEntity(scope, "linda"))!.facts.map((f) => f.fact), ["Gardening"]);
     assert.match(calls[0]!.instructions, /# Charter/);
     assert.equal(calls[0]!.schema.kind, "object");
+    assert.match(calls[3]!.instructions, /## This kind of move/);
+    assert.equal(property(calls[3]!.schema, "proposed").schema.kind, "array", "the adapter's schema went through the same translation");
   });
 
   it("refuses a request too long for the model before calling it, and maps the bridge's errors", async () => {

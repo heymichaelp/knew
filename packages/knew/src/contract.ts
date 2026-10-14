@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import type { ReconcileDecisions } from "./reconcile.ts";
-import type { Extraction, NextAnswer } from "./schemas.ts";
-import type { Fact, Gap, Intelligence, IntelligenceScope, NewFact, ProposedDirection, Readiness } from "./types.ts";
+import type { Extraction, MoveAnswer, NextAnswer } from "./schemas.ts";
+import type { Fact, Gap, Intelligence, IntelligenceScope, Move, NewFact, ProposedDirection, Readiness } from "./types.ts";
 import { KNOWER_ID } from "./vocabulary.ts";
 
 /**
@@ -10,8 +10,9 @@ import { KNOWER_ID } from "./vocabulary.ts";
  * from its own test file, so "it implements the contract" means one thing.
  *
  * A driver's test file supplies `open`: a fresh, empty pair of scopes under one client whose
- * vocabulary is `fixtureVocabularyDefinition()` and whose lenses are `fixtureLensDefinition()`
- * (the default), `fixtureVisitLensDefinition()` and `fixtureGiftLensDefinition()`, and a way to tell the engine what the next
+ * vocabulary is `fixtureVocabularyDefinition()`, whose lenses are `fixtureLensDefinition()`
+ * (the default), `fixtureVisitLensDefinition()` and `fixtureGiftLensDefinition()`, and whose
+ * one adapter is `fixtureAdapterDefinition()`, and a way to tell the engine what the next
  * extraction finds when the driver has one (a scripted model behind the service; the fake's own
  * script). Without a script, the cases that need facts are withheld rather than run: a driver
  * that can extract nothing can still prove its roster, its episodes, its scopes and its
@@ -37,6 +38,13 @@ export interface ScriptedTurn {
    * open. Left out: nothing is answered, withdrawn or proposed.
    */
   next?: (shown: { name: string; learned: Fact[]; known: Fact[]; open: ProposedDirection[] }) => NextAnswer;
+  /**
+   * What one adapter's kind of move calls for about an entity the note changed something about,
+   * given the adapter's id and what the model is shown: the entity's name, the facts just learned,
+   * the rest of what is known, and the moves of that kind open. Left out: nothing is closed or
+   * proposed.
+   */
+  move?: (adapter: string, shown: { name: string; learned: Fact[]; known: Fact[]; open: Move[] }) => MoveAnswer;
 }
 
 export interface ContractContext {

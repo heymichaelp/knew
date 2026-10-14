@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { z } from "zod";
 import {
   adapterDefinitionSchema,
   adapterProblems,
@@ -176,7 +177,8 @@ describe("Scenario: The vocabulary carries the move prompt, and the move call is
     const toned = compileAdapter({ ...bare, fields: { tone: { description: "How warm.", kind: "enum", values: ["warm", "plain"] } } }, vocabulary);
     const tone = (value: string | null) => moveSchemaFor(toned).safeParse(answer({ proposed: [{ label: "A word", factIds: ["f"], fields: { tone: value } }] })).success;
     assert.deepEqual([tone("warm"), tone(null), tone("cold")], [true, true, false]);
-    assert.deepEqual(Object.keys(moveSchemaFor(compileAdapter(bare, vocabulary)).shape.proposed.element.shape), ["label", "factIds"]);
+    const bareJson = z.toJSONSchema(moveSchemaFor(compileAdapter(bare, vocabulary))) as { properties: { proposed: { items: { required: string[] } } } };
+    assert.deepEqual(bareJson.properties.proposed.items.required, ["label", "factIds"]);
   });
 });
 
