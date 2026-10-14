@@ -8,12 +8,14 @@ import type {
   Gap,
   Intelligence,
   IntelligenceScope,
+  Move,
   Proposal,
   Readiness,
   ReconciliationPlan,
   StatelessExtraction,
   StatelessExtractRequest,
   StatelessIntelligence,
+  StatelessMove,
   StatelessNext,
   SubjectExport,
 } from "./types.ts";
@@ -108,6 +110,21 @@ function reviveProposal(raw: Json): Proposal {
     value: (raw.value as string | null) ?? null,
     status: raw.status as Proposal["status"],
     createdAt: dateRequired(raw.createdAt),
+    resolvedAt: date(raw.resolvedAt),
+  };
+}
+
+function reviveMove(raw: Json): Move {
+  return {
+    id: String(raw.id),
+    entityId: String(raw.entityId),
+    adapter: String(raw.adapter),
+    label: String(raw.label),
+    fields: (raw.fields as Record<string, string | null>) ?? {},
+    factIds: (raw.factIds as string[]) ?? [],
+    episodeId: String(raw.episodeId),
+    proposedAt: dateRequired(raw.proposedAt),
+    status: raw.status as Move["status"],
     resolvedAt: date(raw.resolvedAt),
   };
 }
@@ -351,6 +368,20 @@ export function intelligenceClient(options: IntelligenceClientOptions): Intellig
         timeoutMs: timeouts.write,
       });
     },
+    async moves(scope, listOptions = {}) {
+      const raw = await call<Json[]>("GET", "/moves", {
+        ...q(scope, { entityId: listOptions.entityId, adapter: listOptions.adapter, status: listOptions.status, asOf: listOptions.asOf?.toISOString() }),
+        timeoutMs: timeouts.read,
+      });
+      return raw.map(reviveMove);
+    },
+    async resolveMove(scope, moveId, resolution, resolveOptions = {}) {
+      await call("POST", `/moves/${encodeURIComponent(moveId)}/resolve`, {
+        scope,
+        body: { resolution, at: resolveOptions.at?.toISOString() },
+        timeoutMs: timeouts.write,
+      });
+    },
     async exportSubject(scope) {
       const raw = await call<{ episodes: Json[] }>("GET", "/subject/export", { scope, timeoutMs: timeouts.export });
       return {
@@ -392,6 +423,17 @@ export function intelligenceClient(options: IntelligenceClientOptions): Intellig
       return {
         plan: raw.plan as StatelessNext["plan"],
         calls: (raw.calls as StatelessNext["calls"]) ?? [],
+        promptVersion: String(raw.promptVersion),
+      };
+    },
+    async move(request) {
+      const raw = await call<Json>("POST", "/stateless/move", {
+        body: { ...request, referenceAt: request.referenceAt?.toISOString() },
+        timeoutMs: timeouts.stateless,
+      });
+      return {
+        plan: raw.plan as StatelessMove["plan"],
+        calls: (raw.calls as StatelessMove["calls"]) ?? [],
         promptVersion: String(raw.promptVersion),
       };
     },

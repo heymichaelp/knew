@@ -1,6 +1,6 @@
 import { ENGINE_DEFAULTS } from "./defaults.ts";
 import type { NextAnswer } from "./schemas.ts";
-import type { DirectionPlan, Fact, NewDirection, ProposedDirection } from "./types.ts";
+import type { DirectionPlan, Fact, Grounded, NewDirection, ProposedDirection } from "./types.ts";
 import type { Vocabulary } from "./vocabulary.ts";
 
 /**
@@ -161,23 +161,23 @@ export function applyDirectionPlan(
   return minted;
 }
 
-/** A fact superseded: every direction that grew from it grows from its replacement now. */
-export function regroundDirections(directions: ProposedDirection[], from: string, to: string): void {
-  for (const direction of directions) {
-    if (direction.factIds.includes(from)) direction.factIds = [...new Set(direction.factIds.map((id) => (id === from ? to : id)))];
+/** A fact superseded: every direction or move that grew from it grows from its replacement now. */
+export function regroundDirections(grounded: Grounded[], from: string, to: string): void {
+  for (const item of grounded) {
+    if (item.factIds.includes(from)) item.factIds = [...new Set(item.factIds.map((id) => (id === from ? to : id)))];
   }
 }
 
-/** An open direction whose every ground is gone is withdrawn: nothing it grew
- *  from is believed any more. One that grew from nothing stands. Returns the
- *  ids withdrawn. */
-export function withdrawUngrounded(directions: ProposedDirection[], isCurrent: (factId: string) => boolean, at: Date): string[] {
+/** An open direction or move whose every ground is gone is withdrawn: nothing
+ *  it grew from is believed any more. One that grew from nothing stands.
+ *  Returns the ids withdrawn. */
+export function withdrawUngrounded(grounded: Grounded[], isCurrent: (factId: string) => boolean, at: Date): string[] {
   const withdrawn: string[] = [];
-  for (const direction of directions) {
-    if (direction.status === "open" && direction.factIds.length > 0 && !direction.factIds.some(isCurrent)) {
-      direction.status = "withdrawn";
-      direction.resolvedAt = at;
-      withdrawn.push(direction.id);
+  for (const item of grounded) {
+    if (item.status === "open" && item.factIds.length > 0 && !item.factIds.some(isCurrent)) {
+      item.status = "withdrawn";
+      item.resolvedAt = at;
+      withdrawn.push(item.id);
     }
   }
   return withdrawn;

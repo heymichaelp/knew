@@ -2,9 +2,26 @@
 
 ## Unreleased — 1.0.0
 
-knew reports understanding by dimension: what is understood, what a goal still needs, and what to
-learn next. It writes no questions.
+knew reports understanding by dimension: what is understood, what a goal still needs, what to
+learn next and, under an adapter, what a kind of move calls for. It writes no questions and
+performs no action.
 
+- **Adapters and moves.** An `AdapterDefinition` is one kind of move an app may make about an
+  entity, registered like a lens: a `noun`, `instructions` for the model, `fields` a move carries
+  (`text`, `date` or `enum`), `perEntity`, `lapse` and the `dimensions` a move may rest on.
+  Once a note is folded in, after `next`, a fourth call, `move`, asks the model under each
+  adapter which open moves no longer stand and what the kind calls for now. A `Move` rests on
+  current facts in the adapter's dimensions, never a pinned one; a line, not a question; no
+  repeat of one open or dismissed. `moves()` lists them newest first, never ranked, as of a date
+  and by status; `resolveMove` marks one `done` or `dismissed`; a retraction withdraws what rested
+  on it and a supersession moves it to the replacement; one nobody acts on lapses the day after
+  the day its date field names, else after `lapse.afterDays` (90). Replay drops them. knew
+  performs none of them: a move is the app's to act on, and a search is parameters. The person
+  preset ships `moments` and `watches`; `extendAdapter` makes a product's own.
+  `statelessIntelligence({ adapters }).move`, with `planMoves` and `applyMovePlan`, for an app with
+  its own store. The HTTP client binds `moves`, `resolveMove` and the stateless `move` ahead of
+  the service, which does not serve `PUT /v1/adapter`, `GET /v1/moves`,
+  `POST /v1/moves/:id/resolve` or `POST /v1/stateless/move` yet.
 - **Directions.** Once a note is folded in, a third call, `next`, asks the model what to learn
   about each entity the note changed, inside the vocabulary's dimensions and from what is known;
   someone newly added gets first directions in the background. A `ProposedDirection` is a topic,

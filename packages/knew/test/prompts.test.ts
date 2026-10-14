@@ -12,7 +12,7 @@ describe("Scenario: The embedded prompts are the markdown files, byte for byte",
     for (const [ref, text] of Object.entries(PROMPT_TEXT)) {
       assert.equal(text, readFileSync(join(promptsDir, `${ref}.md`), "utf8"), `${ref}: run \`npm run prompts\``);
     }
-    assert.deepEqual(Object.keys(PROMPT_TEXT).sort(), ["extract.v1", "extract.v2", "next.v1", "reconcile.v1", "reconcile.v2"]);
+    assert.deepEqual(Object.keys(PROMPT_TEXT).sort(), ["extract.v1", "extract.v2", "move.v1", "next.v1", "reconcile.v1", "reconcile.v2"]);
   });
 
   it("names no domain: the defaults speak of entries and a charter, nothing more", () => {
@@ -22,8 +22,8 @@ describe("Scenario: The embedded prompts are the markdown files, byte for byte",
   });
 
   it("the defaults speak of entries rather than people, and call nothing a memory", () => {
-    assert.deepEqual(DEFAULT_PROMPT_REFS, { extract: "extract.v2", reconcile: "reconcile.v2", next: "next.v1" });
-    for (const ref of ["extract.v2", "reconcile.v2", "next.v1"]) {
+    assert.deepEqual(DEFAULT_PROMPT_REFS, { extract: "extract.v2", reconcile: "reconcile.v2", next: "next.v1", move: "move.v1" });
+    for (const ref of ["extract.v2", "reconcile.v2", "next.v1", "move.v1"]) {
       const text = PROMPT_TEXT[ref]!;
       assert.doesNotMatch(text, /\bmemory\b/i, `${ref} calls itself a memory`);
       assert.doesNotMatch(text, /personId|\bthe people in\b/, `${ref} assumes the list is people`);
@@ -31,5 +31,13 @@ describe("Scenario: The embedded prompts are the markdown files, byte for byte",
     assert.match(PROMPT_TEXT["extract.v2"]!, /`entityId`/);
     assert.match(PROMPT_TEXT["extract.v2"]!, /The question they were answering/);
     assert.match(PROMPT_TEXT["next.v1"]!, /A topic, not a question/, "the next call proposes what to learn; the app writes any question");
+  });
+
+  it("the move prompt names no kind of move and performs nothing: the kind is the adapter's, and the move is the app's", () => {
+    const text = PROMPT_TEXT["move.v1"]!;
+    assert.match(text, /You act on nothing: you send, book, buy,\nsearch and remind nobody/);
+    assert.match(text, /under "This kind of move"/, "the kind comes from the adapter, beside the prompt");
+    assert.doesNotMatch(text, /\bmoments?\b|\bwatches\b|hospitality/i, "no preset's kind is named in the core's prompt");
+    assert.match(text, /One line, not a question/);
   });
 });

@@ -30,6 +30,7 @@ export const ROUTE_GROUPS: RouteGroup[] = [
     routes: [
       { method: "PUT", path: "/v1/vocabulary", client: null, budget: null, summary: "Register a vocabulary version. Refused if it does not parse or compile." },
       { method: "PUT", path: "/v1/lens", client: null, budget: null, summary: "Register a lens version. Every reference into the vocabulary must resolve." },
+      { method: "PUT", path: "/v1/adapter", client: null, budget: null, summary: "Register an adapter version. Every dimension it names must exist, and none may be about the knower." },
     ],
   },
   {
@@ -89,6 +90,15 @@ export const ROUTE_GROUPS: RouteGroup[] = [
     ],
   },
   {
+    title: "Moves",
+    blurb:
+      "What each registered adapter's kind of move calls for, proposed by the model once a note is read: each rests on facts, and each is the app's to act on. Listed, never ranked; knew performs none of them.",
+    routes: [
+      { method: "GET", path: "/v1/moves", client: "moves", budget: "read", summary: "The open moves live as of a date, newest first; with ?status=, every move of that status as of then." },
+      { method: "POST", path: "/v1/moves/:id/resolve", client: "resolveMove", budget: "write", summary: "The app did it, or the knower waved it away. A dismissed move is refused the model as a repeat." },
+    ],
+  },
+  {
     title: "The knower",
     blurb: "One knower's whole record.",
     routes: [
@@ -103,6 +113,7 @@ export const ROUTE_GROUPS: RouteGroup[] = [
     routes: [
       { method: "POST", path: "/v1/stateless/extract", client: "extract", budget: "stateless", summary: "Send an episode and the facts you hold; get a reconciliation plan." },
       { method: "POST", path: "/v1/stateless/next", client: "next", budget: "stateless", summary: "Send an entity's facts and open directions; get a plan of what to learn next." },
+      { method: "POST", path: "/v1/stateless/move", client: "move", budget: "stateless", summary: "Send an entity's facts and its moves under one adapter; get a plan of what that kind calls for now." },
     ],
   },
   {

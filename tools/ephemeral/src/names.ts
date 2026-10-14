@@ -20,8 +20,9 @@ const asJsonSchema = (schema: z.ZodType) => z.toJSONSchema(schema, { unrepresent
 
 /**
  * The package's names: every runtime export of its three entry points, and
- * every property of its two definition schemas. A brief must say none of them
- * (`briefLeaks`); a finding is grouped by the first one it mentions (`findings.ts`).
+ * every property of its three definition schemas. A brief must say none of
+ * them (`briefLeaks`); a finding is grouped by the first one it mentions
+ * (`findings.ts`).
  */
 export function packageNames(): Set<string> {
   return new Set([
@@ -30,5 +31,6 @@ export function packageNames(): Set<string> {
     ...Object.keys(testing),
     ...propertyNames(asJsonSchema(core.vocabularyDefinitionSchema)),
     ...propertyNames(asJsonSchema(core.lensDefinitionSchema)),
+    ...propertyNames(asJsonSchema(core.adapterDefinitionSchema)),
   ]);
 }

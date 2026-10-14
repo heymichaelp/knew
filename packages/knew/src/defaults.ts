@@ -24,6 +24,11 @@ export const ENGINE_DEFAULTS = {
   /** Days after it was proposed that a direction nobody acted on leaves
    *  `next`. Read-time arithmetic, like a revisit window. */
   directionLapseDays: 180,
+  /** Open moves an adapter may hold per entity, when it names no number. */
+  movesPerEntity: 3,
+  /** Days after it was proposed that a move nobody acted on leaves the list,
+   *  when the adapter names no window and the move has no day of its own. */
+  moveLapseDays: 90,
   /** The page's size: what fits a reader's context beside its own material. */
   briefMaxChars: 3_500,
 } as const;

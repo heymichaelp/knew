@@ -1,4 +1,4 @@
-import type { Entity, Episode, Fact, IntelligenceScope, Proposal, ProposedDirection } from "./types.ts";
+import type { Entity, Episode, Fact, IntelligenceScope, Move, Proposal, ProposedDirection } from "./types.ts";
 
 /**
  * Where the local driver keeps one knower's notebook: the roster, the
@@ -40,11 +40,13 @@ export interface StoredEpisode extends Episode {
 }
 
 /** An entity as the driver keeps it: the contract's, with its facts, its
- *  directions, and when the model was last asked what to learn about it. */
+ *  directions and when the model was last asked what to learn about it, and
+ *  its moves under every adapter. */
 export interface StoredEntity extends Entity {
   facts: Fact[];
   directions: ProposedDirection[];
   directionsAt: Date | null;
+  moves: Move[];
 }
 
 /** The working state of one scope. */
@@ -108,6 +110,13 @@ export function toScopeRecord(state: ScopeState): ScopeRecord {
         resolvedAt: iso(direction.resolvedAt),
       })),
       directionsAt: iso(entity.directionsAt),
+      moves: entity.moves.map((move) => ({
+        ...move,
+        fields: { ...move.fields },
+        factIds: [...move.factIds],
+        proposedAt: move.proposedAt.toISOString(),
+        resolvedAt: iso(move.resolvedAt),
+      })),
     })),
     episodes: state.episodes.map((episode) => ({
       ...episode,
@@ -151,6 +160,14 @@ export function fromScopeRecord(record: ScopeRecord): ScopeState {
             resolvedAt: day(direction.resolvedAt),
           })),
           directionsAt: day(entity.directionsAt),
+          // A record written before adapters holds no moves; the shape is otherwise the same.
+          moves: (entity.moves ?? []).map((move) => ({
+            ...move,
+            fields: { ...move.fields },
+            factIds: [...move.factIds],
+            proposedAt: dayRequired(move.proposedAt),
+            resolvedAt: day(move.resolvedAt),
+          })),
         },
       ]),
     ),

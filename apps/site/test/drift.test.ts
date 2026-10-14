@@ -5,10 +5,12 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { ENGINE_DEFAULTS } from "@popjoker/knew";
+import { adapterDefinitionSchema, ENGINE_DEFAULTS } from "@popjoker/knew";
 import * as presets from "@popjoker/knew/presets";
 
 import {
+  adapterFields,
+  adapterNestedFields,
   clientMethods,
   contractCaseSummaries,
   engineDefaults,
@@ -19,6 +21,7 @@ import {
   vocabularyNestedFields,
   type DefinitionField,
 } from "../lib/engine";
+import { ADAPTER_FIELD_NOTES, ADAPTER_NESTED_NOTES } from "../lib/adapter-notes";
 import { DOCUMENTED_METHODS } from "../lib/api-routes";
 import { DEFAULT_NOTES } from "../lib/default-notes";
 import { LENS_FIELD_NOTES, LENS_NESTED_NOTES } from "../lib/lens-notes";
@@ -42,13 +45,20 @@ describe("the definitions pages cannot fall behind the schemas", () => {
     explainsExactly(lensFields(), LENS_FIELD_NOTES, "LENS_FIELD_NOTES");
   });
 
-  it("explains every field inside a fact type, a dimension, an ask and a section", () => {
+  it("explains every adapter field the schema defines, and invents none", () => {
+    explainsExactly(adapterFields(), ADAPTER_FIELD_NOTES, "ADAPTER_FIELD_NOTES");
+  });
+
+  it("explains every field inside a fact type, a dimension, an ask, a section and a move field", () => {
     const vocabulary = vocabularyNestedFields();
     const lens = lensNestedFields();
+    const adapter = adapterNestedFields();
     assert.deepEqual(Object.keys(VOCABULARY_NESTED_NOTES).sort(), Object.keys(vocabulary).sort(), "VOCABULARY_NESTED_NOTES must have a block per nested field");
     assert.deepEqual(Object.keys(LENS_NESTED_NOTES).sort(), Object.keys(lens).sort(), "LENS_NESTED_NOTES must have a block per nested field");
+    assert.deepEqual(Object.keys(ADAPTER_NESTED_NOTES).sort(), Object.keys(adapter).sort(), "ADAPTER_NESTED_NOTES must have a block per nested field");
     for (const [path, fields] of Object.entries(vocabulary)) explainsExactly(fields, VOCABULARY_NESTED_NOTES[path]!, `VOCABULARY_NESTED_NOTES["${path}"]`);
     for (const [path, fields] of Object.entries(lens)) explainsExactly(fields, LENS_NESTED_NOTES[path]!, `LENS_NESTED_NOTES["${path}"]`);
+    for (const [path, fields] of Object.entries(adapter)) explainsExactly(fields, ADAPTER_NESTED_NOTES[path]!, `ADAPTER_NESTED_NOTES["${path}"]`);
   });
 });
 
@@ -71,6 +81,16 @@ describe("the presets page is the presets", () => {
       const filed = dimensions.flatMap((dimension) => dimension.types.map((type) => ({ key: type.key, under: dimension.id })));
       assert.deepEqual(filed.map((type) => type.key).sort(), [...vocabulary.factTypeKeys].sort(), `${name}: every type, once`);
       for (const type of filed) assert.equal(type.under, vocabulary.factTypes[type.key]!.dimension, `${name}: ${type.key}`);
+    }
+  });
+
+  it("lists every adapter each preset exports, compiled against the preset's own vocabulary", () => {
+    for (const outline of presetOutlines()) {
+      const exported = (Object.entries(presets[outline.name as keyof typeof presets]) as Array<[string, unknown]>)
+        .filter(([name, value]) => !["vocabulary", "lens"].includes(name) && typeof value === "function" && adapterDefinitionSchema.safeParse((value as () => unknown)()).success)
+        .map(([name]) => name);
+      assert.deepEqual(outline.adapters.map(({ name }) => name), exported, `${outline.name}: every adapter, once`);
+      for (const { name, adapter } of outline.adapters) assert.equal(adapter.vocabulary.id, outline.vocabulary.id, `${outline.name}.${name} reads another vocabulary`);
     }
   });
 

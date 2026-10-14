@@ -16,6 +16,7 @@
   "allow": [
     "id",
     "name",
-    "about"
+    "about",
+    "move"
   ]
 }

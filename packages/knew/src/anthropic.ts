@@ -21,9 +21,9 @@ export interface AnthropicModelOptions {
   apiKey?: string;
   /** A client the app built itself — another base URL, a proxy, or a test double. Wins over `apiKey`. */
   client?: Pick<Anthropic, "messages">;
-  /** One model for every call, or one per call; `next` left out takes the
-   *  reconcile model. Default `claude-opus-5-5`. */
-  model?: string | { extract: string; reconcile: string; next?: string };
+  /** One model for every call, or one per call; `next` and `move` left out
+   *  take the reconcile model. Default `claude-opus-5-5`. */
+  model?: string | { extract: string; reconcile: string; next?: string; move?: string };
   /** How hard the model thinks. Default: the model's own (medium). */
   effort?: "low" | "medium" | "high";
   /** The most an answer may run to, thinking included. Default 16,000. */
@@ -36,7 +36,7 @@ export function anthropicModel(options: AnthropicModelOptions = {}): Model {
   const client = options.client ?? new Anthropic(options.apiKey !== undefined ? { apiKey: options.apiKey } : {});
   const modelFor = (task: ModelRequest["task"]) => {
     if (typeof options.model === "string") return options.model;
-    return options.model?.[task] ?? (task === "next" ? options.model?.reconcile : undefined) ?? DEFAULT_ANTHROPIC_MODEL;
+    return options.model?.[task] ?? (task === "next" || task === "move" ? options.model?.reconcile : undefined) ?? DEFAULT_ANTHROPIC_MODEL;
   };
   return async (request) => {
     const model = modelFor(request.task);

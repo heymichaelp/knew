@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  compileAdapter,
   compileLens,
   compileVocabulary,
   KNOWER_ID,
@@ -11,7 +12,16 @@ import {
   type ModelRequest,
   type ScopeRecord,
 } from "../src/index.ts";
-import { extracted, extraction, fixtureGiftLens, fixtureLens, fixtureLensDefinition, fixtureVocabularyDefinition } from "../src/testing.ts";
+import {
+  extracted,
+  extraction,
+  fixtureAdapter,
+  fixtureAdapterDefinition,
+  fixtureGiftLens,
+  fixtureLens,
+  fixtureLensDefinition,
+  fixtureVocabularyDefinition,
+} from "../src/testing.ts";
 
 /**
  * The engine in your process: a note read with the app's own model function,
@@ -22,6 +32,7 @@ import { extracted, extraction, fixtureGiftLens, fixtureLens, fixtureLensDefinit
 type Answer = unknown | Error | ((request: ModelRequest) => unknown);
 
 const NOTHING_NEXT = { answered: [], withdrawn: [], proposed: [] };
+const NO_MOVE = { closed: [], proposed: [] };
 
 function cannedModel(answers: Partial<Record<ModelRequest["task"], Answer[]>>, usage = { inputTokens: 1_000, outputTokens: 100, costUsd: 0.01 }) {
   const asked: ModelRequest[] = [];
@@ -29,8 +40,9 @@ function cannedModel(answers: Partial<Record<ModelRequest["task"], Answer[]>>, u
     asked.push(request);
     const next = answers[request.task]?.shift();
     if (next === undefined) {
-      // What to learn next is asked after every note; a test that says nothing about it has nothing proposed.
+      // What to learn next, and what each adapter calls for, is asked after every note; a test that says nothing about them has nothing proposed.
       if (request.task === "next") return { output: NOTHING_NEXT, model: "canned", usage };
+      if (request.task === "move") return { output: NO_MOVE, model: "canned", usage };
       throw new Error(`unscripted ${request.task}`);
     }
     if (next instanceof Error) throw next;
@@ -287,5 +299,164 @@ describe("Scenario: Once a note is folded in, the model is asked what to learn n
     const done = (await knew.extractNow(scope, { maxEpisodes: 1 })).episodes[0]!;
     assert.deepEqual(asked.map((request) => request.task), ["extract", "reconcile"]);
     if (done.status === "ingested") assert.deepEqual(done.directions, { proposed: 0, answered: 0, withdrawn: 0, rejected: 0 });
+  });
+});
+
+describe("Scenario: Once a note is folded in, each adapter is asked what its kind of move calls for", () => {
+  const entering = () => extraction([extracted("linda", "LIKES", "Gardening"), extracted("linda", "EVENT", "Entering the village show on 4 October", { validAt: "2026-10-04" })]);
+  /** The model, under the fixture adapter: a moment for the show, and a question, which is refused. */
+  const proposes = (request: ModelRequest) => {
+    const show = /^- (\S+) \| EVENT \| Entering the village show/m.exec(request.prompt)![1]!;
+    return {
+      closed: [],
+      proposed: [
+        { label: "Wish her luck at the village show", factIds: [show], fields: { when: "2026-10-04", why: "She is entering" } },
+        { label: "Is she entering the show again?", factIds: [show], fields: { when: null, why: null } },
+      ],
+    };
+  };
+  const movesOf = (record: ScopeRecord, entityId: string) => record.entities.find((entity) => entity.id === entityId)!.moves;
+
+  it("asks under the adapter after next, with its instructions, its dimensions, the kind's fields and the room; keeps what it proposed under the adapter, and counts what it refused", async () => {
+    const { model, asked } = cannedModel({ extract: [entering()], reconcile: [{ decisions: [], summary: "Linda gardens." }], move: [proposes] });
+    const store = memoryStore();
+    const knew = localIntelligence({ lenses: [fixtureLens()], adapters: [fixtureAdapter()], model, store, background: false });
+    await knew.upsertEntity(scope, { id: "linda", name: "Linda", fields: { relationship: "mother" } });
+    await knew.addEpisode(scope, { source: "note", content: "Mom gardens, and is entering the village show on 4 October", entityHints: ["linda"], referenceAt: said });
+    const now = await knew.extractNow(scope, { maxEpisodes: 1 });
+    assert.deepEqual(now.calls.map((call) => call.method), ["extract", "reconcile", "next", "move"]);
+    const done = now.episodes[0]!;
+    assert.equal(done.status, "ingested");
+    if (done.status === "ingested") assert.deepEqual([done.moves, done.calls, done.costUsd], [{ proposed: 1, closed: 0, rejected: 1 }, 4, 0.04]);
+
+    const move = asked.find((request) => request.task === "move")!;
+    assert.match(move.system, /^# Task: Propose moves/);
+    assert.match(move.system, /\n\n---\n\n## This kind of move\n\n\*\*A moment\*\* is a small thing to do for them/);
+    assert.match(move.system, /\n\n---\n\n# Charter\n/);
+    assert.match(move.system, /## Dimensions\n\n- has: Already has \(about the entry\)\. Informed by: HAS, SKILL\.\n- likes: .*\n- life: .*\n- people: .*$/);
+    assert.doesNotMatch(move.system, /- never-cross:/, "only the dimensions the adapter names");
+    assert.ok(move.prompt.startsWith("Moves of kind fixture-moment for this person: Linda (mother)\n\nToday (when this was learned): 2026-10-01"));
+    assert.match(move.prompt, /Just learned \(id \| type \| fact \| dates\):\n- \S+ \| LIKES \| Gardening \| told us 2026-10-01\n- \S+ \| EVENT \| Entering the village show on 4 October \| true since 2026-10-04; told us 2026-10-01\n\nAlso known/);
+    assert.match(move.prompt, /Fields \(name \| kind \| description\):\n- when \| date \| The day it is for/);
+    assert.match(move.prompt, /Open moves \(id \| label \| fields \| grew from\):\n\(none yet\)\n\nRoom for new moves: 2$/);
+    assert.deepEqual((move.schema as { required: string[] }).required, ["closed", "proposed"]);
+    assert.ok(asked.indexOf(asked.find((request) => request.task === "next")!) < asked.indexOf(move), "what to learn is asked before what to do");
+
+    // Kept under the adapter, in the app's own store, dated when the note was said.
+    const record = (await store.get(scope))!;
+    const show = record.entities.find((entity) => entity.id === "linda")!.facts.find((fact) => fact.type === "EVENT")!;
+    assert.deepEqual(
+      movesOf(record, "linda").map((item) => [item.adapter, item.label, item.fields, item.factIds, item.status, item.proposedAt, item.resolvedAt, item.episodeId === done.episodeId]),
+      [["fixture-moment", "Wish her luck at the village show", { when: "2026-10-04", why: "She is entering" }, [show.id], "open", said.toISOString(), null, true]],
+    );
+  });
+
+  it("keeps the facts when a move call fails, and counts the call: thrown, it leaves the note unpriced", async () => {
+    const { model } = cannedModel({ extract: [entering()], reconcile: [{ decisions: [], summary: "" }], move: [new Error("provider down")] });
+    const store = memoryStore();
+    const knew = localIntelligence({ lenses: [fixtureLens()], adapters: [fixtureAdapter()], model, store, background: false });
+    await knew.upsertEntity(scope, { id: "linda", name: "Linda" });
+    await knew.addEpisode(scope, { source: "note", content: "Mom gardens", entityHints: ["linda"], referenceAt: said });
+    const now = await knew.extractNow(scope, { maxEpisodes: 1 });
+    assert.equal(now.outcome, "extracted", "a failed move never fails the note");
+    const done = now.episodes[0]!;
+    assert.equal(done.status, "ingested");
+    if (done.status === "ingested") assert.deepEqual([done.calls, done.costUsd, done.moves], [4, null, { proposed: 0, closed: 0, rejected: 0 }]);
+    assert.equal((await knew.getEntity(scope, "linda"))!.facts.length, 2);
+    assert.deepEqual(movesOf((await store.get(scope))!, "linda"), []);
+  });
+
+  it("asks under every adapter, in the order given, for each entity the note changed and never the knower, whether or not the vocabulary proposes directions", async () => {
+    const quiet = compileLens(fixtureLensDefinition(), compileVocabulary({ ...fixtureVocabularyDefinition(), directions: false }));
+    const moments = compileAdapter(fixtureAdapterDefinition(), quiet.vocabulary);
+    const nudges = compileAdapter({ id: "nudges", version: 1, vocabulary: "fixture", noun: "nudge", instructions: "**A nudge** is a word in season." }, quiet.vocabulary);
+    const { model, asked } = cannedModel({
+      extract: [extraction([extracted("linda", "LIKES", "Gardening"), extracted(KNOWER_ID, "MEANS", "Can spend about £40")])],
+      reconcile: [{ decisions: [], summary: "" }, { decisions: [], summary: "" }],
+    });
+    const knew = localIntelligence({ lenses: [quiet], adapters: [moments, nudges], model, background: false });
+    await knew.upsertEntity(scope, { id: "linda", name: "Linda" });
+    await knew.addEpisode(scope, { source: "note", content: "Mom gardens; I can spend about £40.", entityHints: ["linda"], referenceAt: said });
+    const done = (await knew.extractNow(scope, { maxEpisodes: 1 })).episodes[0]!;
+    assert.deepEqual(asked.map((request) => request.task), ["extract", "reconcile", "reconcile", "move", "move"], "no next for a vocabulary without directions, and no move for the knower");
+    assert.deepEqual(
+      asked.filter((request) => request.task === "move").map((request) => request.prompt.split("\n")[0]),
+      ["Moves of kind fixture-moment for this person: Linda", "Moves of kind nudges for this person: Linda"],
+    );
+    assert.equal((asked[4]!.schema as { properties: { proposed: { items: { required: string[] } } } }).properties.proposed.items.required.join(), "label,factIds", "an adapter with no fields asks for none");
+    assert.equal(done.status, "ingested");
+    if (done.status === "ingested") assert.deepEqual([done.directions, done.moves], [{ proposed: 0, answered: 0, withdrawn: 0, rejected: 0 }, { proposed: 0, closed: 0, rejected: 0 }]);
+  });
+
+  it("proposes no move for someone just added: a move rests on facts a note brought, and there are none yet", async () => {
+    const { model, asked } = cannedModel({});
+    const knew = localIntelligence({ lenses: [fixtureLens()], adapters: [fixtureAdapter()], model });
+    await knew.upsertEntity(scope, { id: "linda", name: "Linda" });
+    await knew.settled();
+    assert.deepEqual(asked.map((request) => request.task), ["next"]);
+  });
+
+  it("closes what a later note settles, follows a correction to its replacement, withdraws a move whose ground is retracted, and reads it all back from the store in a new process", async () => {
+    const store = memoryStore();
+    const first = cannedModel({ extract: [entering()], reconcile: [{ decisions: [], summary: "" }], move: [proposes] });
+    const knew = localIntelligence({ lenses: [fixtureLens()], adapters: [fixtureAdapter()], model: first.model, store, background: false });
+    await knew.upsertEntity(scope, { id: "linda", name: "Linda" });
+    await knew.addEpisode(scope, { source: "note", content: "Mom gardens, and is entering the village show on 4 October", entityHints: ["linda"], referenceAt: said });
+    await knew.extractNow(scope, { maxEpisodes: 1 });
+    const [wish] = movesOf((await store.get(scope))!, "linda");
+
+    // A week on, in a new process over the same store: she won. The correction replaces the
+    // entry fact, so the open move rests on the replacement by the time the model is asked;
+    // the model closes it as done and proposes what follows.
+    const later = new Date("2026-10-08T09:00:00Z");
+    const second = cannedModel({
+      extract: [extraction([extracted("linda", "EVENT", "Won second prize at the village show", { validAt: "2026-10-04" })])],
+      reconcile: [
+        (request: ModelRequest) => {
+          const entered = /^- (f\d+) \| EVENT \| Entering the village show/m.exec(request.prompt)![1]!;
+          return { decisions: [{ newIndex: 0, action: "supersede", factId: entered, invalidAt: null }], summary: "Linda, a prize-winner." };
+        },
+      ],
+      move: [
+        (request: ModelRequest) => {
+          const won = /^- (\S+) \| EVENT \| Won second prize/m.exec(request.prompt)![1]!;
+          const open = /^- (\S+) \| Wish her luck at the village show \| when: 2026-10-04; why: She is entering \| (\S+) \(lapsed\)$/m.exec(request.prompt)!;
+          assert.deepEqual([open[1], open[2]], [wish!.id, won], "the open move is shown resting on the replacement, and lapsed, its day having passed");
+          return { closed: [{ moveId: open[1]!, reason: "done" }], proposed: [{ label: "Congratulate her on second prize", factIds: [won], fields: { when: null, why: "She won" } }] };
+        },
+      ],
+    });
+    const again = localIntelligence({ lenses: [fixtureLens()], adapters: [fixtureAdapter()], model: second.model, store, background: false });
+    await again.addEpisode(scope, { source: "note", content: "Mom won second prize at the show!", entityHints: ["linda"], referenceAt: later });
+    const done = (await again.extractNow(scope, { maxEpisodes: 1 })).episodes[0]!;
+    assert.equal(done.status, "ingested");
+    if (done.status === "ingested") assert.deepEqual([done.facts, done.moves], [{ added: 0, merged: 0, superseded: 1 }, { proposed: 1, closed: 1, rejected: 0 }]);
+    const won = (await again.searchFacts(scope, "second prize"))[0]!;
+    assert.deepEqual(
+      movesOf((await store.get(scope))!, "linda").map((item) => [item.label, item.status, item.resolvedAt, item.factIds]),
+      [
+        ["Wish her luck at the village show", "done", later.toISOString(), [won.id]],
+        ["Congratulate her on second prize", "open", null, [won.id]],
+      ],
+    );
+
+    // The knower takes the prize back: the move resting on it alone is withdrawn, dated to the retraction.
+    const retracted = new Date("2026-10-09T00:00:00Z");
+    await again.invalidateFact(scope, won.id, { at: retracted });
+    assert.deepEqual(
+      movesOf((await store.get(scope))!, "linda").map((item) => [item.label, item.status, item.resolvedAt]),
+      [
+        ["Wish her luck at the village show", "done", later.toISOString()],
+        ["Congratulate her on second prize", "withdrawn", retracted.toISOString()],
+      ],
+    );
+  });
+
+  it("refuses an adapter over another vocabulary, and two of one name", () => {
+    const elsewhere = compileVocabulary({ ...fixtureVocabularyDefinition(), id: "elsewhere" });
+    const other = compileAdapter({ ...fixtureAdapterDefinition(), vocabulary: "elsewhere" }, elsewhere);
+    const { model } = cannedModel({});
+    assert.throws(() => localIntelligence({ lenses: [fixtureLens()], adapters: [other], model }), /every adapter reads the one vocabulary, and fixture-moment reads elsewhere, not fixture/);
+    assert.throws(() => localIntelligence({ lenses: [fixtureLens()], adapters: [fixtureAdapter(), fixtureAdapter()], model }), /two adapters named fixture-moment/);
   });
 });

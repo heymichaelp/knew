@@ -4,8 +4,11 @@ import { dirname, join } from "node:path";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 import {
+  adapterProblems,
+  compileAdapter,
   compileLens,
   compileVocabulary,
+  extendAdapter,
   extendLens,
   extendVocabulary,
   lensProblems,
@@ -75,6 +78,26 @@ describe("Scenario: The person preset is a vocabulary and a lens a client can us
     const mine = person.vocabulary();
     mine.factTypes.WORK!.description = "changed";
     assert.notEqual(person.vocabulary().factTypes.WORK!.description, "changed");
+  });
+
+  it("comes with two adapters, moments and watches, each resting only on dimensions a move of its kind should", () => {
+    assert.deepEqual(Object.keys(person).sort(), ["PRESET", "lens", "moments", "vocabulary", "watches"]);
+    for (const definition of [person.moments(), person.watches()]) assert.deepEqual(adapterProblems(definition, vocabulary), []);
+    const moments = compileAdapter(person.moments(), vocabulary);
+    assert.deepEqual(
+      [moments.id, moments.noun, moments.fields.map((field) => [field.name, field.kind]), moments.perEntity, moments.lapse, moments.dimensions],
+      ["moments", "moment", [["when", "date"]], 3, { afterDays: 90, field: "when" }, ["ahead", "pursuits", "people", "together"]],
+    );
+    const watches = compileAdapter(person.watches(), vocabulary);
+    assert.deepEqual(
+      [watches.id, watches.noun, watches.fields.map((field) => [field.name, field.kind]), watches.perEntity, watches.lapse, watches.dimensions],
+      ["watches", "search", [["query", "text"], ["why", "text"]], 3, { afterDays: 90, field: null }, ["background", "work", "pursuits", "ahead"]],
+    );
+    assert.match(watches.instructions, /you search nothing, and the app decides/);
+    for (const adapter of [moments, watches]) {
+      assert.ok(!adapter.dimensions.some((id) => ["avoid", "has", "you"].includes(id)), `${adapter.id} rests on nothing pinned and nothing about the knower`);
+      assert.match(adapter.instructions, /Their words only/);
+    }
   });
 });
 
@@ -215,6 +238,24 @@ describe("Scenario: A client extends a preset, saying only what differs", () => 
     const pursuits = readiness.needs.find((a) => a.id === "pursuits")!;
     assert.deepEqual([pursuits.state, pursuits.waitingOn, pursuits.strength], ["waiting", ["work"], 0.5]);
     assert.equal(readiness.dimensions.find((d) => d.id === "pursuits")!.facts, 1);
+
+    const moments = extendAdapter(person.moments(), { id: "moments", version: 1, vocabulary: "relationships", dimensions: ["ahead", "pursuits", "people", "context"] });
+    assert.deepEqual(adapterProblems(moments, vocabulary), [], "a preset's adapter, pointed at the client's own vocabulary and dimensions");
+    assert.throws(() => compileAdapter(person.moments(), vocabulary), /reads vocabulary person, and was given relationships/);
+  });
+
+  it("extends a preset's adapter into a product's own kind of move: a host's moments, with its own instructions and a field more", () => {
+    const vocabulary = compileVocabulary(parseVocabularyDefinition(person.vocabulary()));
+    const hospitality = extendAdapter(person.moments(), {
+      id: "hospitality",
+      version: 1,
+      instructions: "**A moment** is a small kindness at the table: a dish they mentioned, a seat by the window, a word about the thing they are training for.",
+      fields: { gesture: { description: "What the host does.", kind: "enum", values: ["dish", "table", "word"] } },
+    });
+    assert.deepEqual(adapterProblems(hospitality, vocabulary), []);
+    const compiled = compileAdapter(hospitality, vocabulary);
+    assert.deepEqual([compiled.id, compiled.noun, compiled.fields.map((field) => field.name), compiled.lapse, compiled.dimensions], ["hospitality", "moment", ["when", "gesture"], { afterDays: 90, field: "when" }, ["ahead", "pursuits", "people", "together"]]);
+    assert.notEqual(person.moments().instructions, hospitality.instructions, "the preset is untouched");
   });
 
   it("patches a lens that leaves its needs to the dimensions, once it is handed the vocabulary", () => {

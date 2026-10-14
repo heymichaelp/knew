@@ -1,7 +1,9 @@
+import type { Adapter } from "./adapter.ts";
 import { dayOf } from "./dates.ts";
 import { isLapsed } from "./directions.ts";
-import type { Fact, ProposedDirection, RosterEntry } from "./types.ts";
-import { KNOWER_ID, whoLabel, type Vocabulary } from "./vocabulary.ts";
+import { liveMovesAt } from "./moves.ts";
+import type { Fact, Move, ProposedDirection, RosterEntry } from "./types.ts";
+import { factType, KNOWER_ID, whoLabel, type Vocabulary } from "./vocabulary.ts";
 
 /**
  * What the model calls are shown — pure, so what the model sees is
@@ -236,6 +238,64 @@ export function nextInput(
   sections.push(
     `Open directions (id | dimension | label | grew from):\n${directions.length > 0 ? directions.join("\n") : "(none yet)"}`,
     `Room for new directions (dimension | open now | room left):\n${room.join("\n")}`,
+  );
+  return sections.join("\n\n");
+}
+
+/**
+ * What the `move` call is shown about one entity under one adapter: the
+ * pinned facts to keep clear of (never a ground), what was just learned, the
+ * rest of what is known, the knower's facts where the vocabulary has a
+ * relationship dimension, the adapter's fields, the moves of this kind already
+ * open (a lapsed one marked, so the model may close it) and the room left.
+ * The first line names the adapter, so a test model can tell the call apart.
+ */
+export function moveInput(
+  vocabulary: Vocabulary,
+  adapter: Adapter,
+  input: {
+    entity: { name: string; fields: Readonly<Record<string, string | null>> };
+    /** When this was learned: the note's date. */
+    referenceAt: Date;
+    /** The entity's current facts. */
+    facts: Fact[];
+    /** The knower's current facts. */
+    knower: Fact[];
+    /** The facts this note added or retold, by id. */
+    learned: readonly string[];
+    /** The entity's moves under this adapter; only the open ones are shown. */
+    moves: Move[];
+  },
+): string {
+  const learned = new Set(input.learned);
+  const pinned = (fact: Fact) => factType(vocabulary, fact.type).pinned;
+  const honor = input.facts.filter(pinned);
+  const rest = input.facts.filter((fact) => !pinned(fact));
+  const just = rest.filter((fact) => learned.has(fact.id));
+  const known = rest.filter((fact) => !learned.has(fact.id));
+  const open = input.moves.filter((move) => move.status === "open");
+  const live = new Set(liveMovesAt(open, adapter, input.referenceAt));
+  const fieldsOf = (move: Move) => adapter.fields.map((field) => `${field.name}: ${move.fields[field.name] ?? "null"}`).join("; ") || "none";
+  const sections = [
+    `Moves of kind ${adapter.id} for this ${vocabulary.kind}: ${whoLabel(vocabulary, input.entity)}`,
+    `Today (when this was learned): ${dayOf(input.referenceAt)}`,
+  ];
+  if (honor.length > 0) sections.push(`Honor (id | type | fact | dates): never a ground, and nothing near it:\n${honor.map(factLine).join("\n")}`);
+  sections.push(
+    `Just learned (id | type | fact | dates):\n${just.length > 0 ? just.map(factLine).join("\n") : "(nothing new)"}`,
+    `Also known (id | type | fact | dates):\n${known.length > 0 ? known.map(factLine).join("\n") : "(nothing else)"}`,
+  );
+  if (input.knower.length > 0 && vocabulary.dimensions.some((dimension) => dimension.about === "relationship")) {
+    sections.push(`About the writer (id | type | fact | dates):\n${input.knower.map(factLine).join("\n")}`);
+  }
+  if (adapter.fields.length > 0) {
+    const fields = adapter.fields.map((field) => `- ${field.name} | ${field.kind}${field.values ? ` (${field.values.join(" | ")})` : ""} | ${field.description}`);
+    sections.push(`Fields (name | kind | description):\n${fields.join("\n")}`);
+  }
+  const moves = open.map((move) => `- ${move.id} | ${move.label} | ${fieldsOf(move)} | ${move.factIds.join(", ")}${live.has(move) ? "" : " (lapsed)"}`);
+  sections.push(
+    `Open moves (id | label | fields | grew from):\n${moves.length > 0 ? moves.join("\n") : "(none yet)"}`,
+    `Room for new moves: ${Math.max(0, adapter.perEntity - live.size)}`,
   );
   return sections.join("\n\n");
 }

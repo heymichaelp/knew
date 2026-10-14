@@ -7,7 +7,7 @@ import { describe, it } from "node:test";
  * the on-device adapter use nothing Node-only, and nothing Hermes lacks.
  */
 
-const ON_DEVICE = ["local.ts", "store.ts", "read.ts", "model.ts", "directions.ts", "stateless.ts", "fallback.ts", "apple.ts", "timers.ts", "testing.ts"];
+const ON_DEVICE = ["local.ts", "store.ts", "read.ts", "model.ts", "directions.ts", "adapter.ts", "moves.ts", "stateless.ts", "fallback.ts", "apple.ts", "timers.ts", "testing.ts"];
 const FORBIDDEN = [/from "node:/, /\bprocess\./, /\bBuffer\b/, /\bstructuredClone\b/, /AbortSignal\.timeout/, /AbortSignal\.any/, /\brequire\(/];
 
 describe("Scenario: The engine runs on a phone", () => {

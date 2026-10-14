@@ -1,8 +1,8 @@
 import { test } from "node:test";
 import { localIntelligence } from "../src/local.ts";
 import type { Model } from "../src/model.ts";
-import { contractSuite, fakeIntelligence, fixtureGiftLens, fixtureLens, fixtureVisitLens, type ScriptedTurn } from "../src/testing.ts";
-import type { Fact, ProposedDirection } from "../src/types.ts";
+import { contractSuite, fakeIntelligence, fixtureAdapter, fixtureGiftLens, fixtureLens, fixtureVisitLens, type ScriptedTurn } from "../src/testing.ts";
+import type { Fact, Move, ProposedDirection } from "../src/types.ts";
 
 /**
  * The contract, twice: on the fake, and on `localIntelligence` with a model
@@ -31,8 +31,9 @@ contractSuite({
 
 /**
  * A model that answers from a script, reading what it is asked the way a
- * model would: the reconcile and next prompts' own lines give the entity's
- * name, its facts by id, the new facts in order, and the directions open.
+ * model would: the reconcile, next and move prompts' own lines give the
+ * entity's name, its facts by id, the new facts in order, the directions open
+ * and the moves open under the adapter named.
  */
 function scriptedModel(turns: ScriptedTurn[]): Model {
   let current: ScriptedTurn | undefined;
@@ -47,7 +48,7 @@ function scriptedModel(turns: ScriptedTurn[]): Model {
       return { output: JSON.stringify(current.extraction), model: "scripted" };
     }
     const lines = request.prompt.split("\n");
-    const name = lines[0]!.replace(/^(About this|Directions for this) [^:]+: /, "").replace(/ \([^)]*\)$/, "");
+    const name = lines[0]!.replace(/^(About this|Directions for this|Moves of kind \S+ for this) [^:]+: /, "").replace(/ \([^)]*\)$/, "");
     const section = (heading: string) => {
       const start = lines.findIndex((line) => line.startsWith(heading));
       const out: string[][] = [];
@@ -68,6 +69,17 @@ function scriptedModel(turns: ScriptedTurn[]): Model {
       const shown = { name, learned: section("Just learned").map(factOf), known: section("Also known").map(factOf), open };
       return { output: current?.next?.(shown) ?? { answered: [], withdrawn: [], proposed: [] }, model: "scripted" };
     }
+    if (request.task === "move") {
+      const adapter = /^Moves of kind (\S+) /.exec(lines[0]!)![1]!;
+      const open: Move[] = section("Open moves").map(([id, label, fields, from]) => ({
+        id: id!, entityId: "", adapter, label: label!,
+        fields: fields === "none" ? {} : Object.fromEntries(fields!.split("; ").map((pair) => pair.split(": ")).map(([key, value]) => [key!, value === "null" ? null : value!])),
+        factIds: (from ?? "").replace(/ \(lapsed\)$/, "").split(", ").filter(Boolean),
+        episodeId: "", proposedAt: new Date(0), status: "open", resolvedAt: null,
+      }));
+      const shown = { name, learned: section("Just learned").map(factOf), known: section("Also known").map(factOf), open };
+      return { output: current?.move?.(adapter, shown) ?? { closed: [], proposed: [] }, model: "scripted" };
+    }
     const facts = section("Current facts").map(factOf);
     const incoming = section("New facts").map(([, type, fact]) => ({ type: type!, fact: fact! }));
     return { output: current?.reconcile?.({ name, current: facts }, incoming) ?? { decisions: [], summary: `About ${name}.` }, model: "scripted" };
@@ -79,7 +91,7 @@ contractSuite({
   scripted: true,
   open: async () => {
     const turns: ScriptedTurn[] = [];
-    const local = localIntelligence({ lenses: [fixtureLens(), fixtureVisitLens(), fixtureGiftLens()], model: scriptedModel(turns), background: false });
+    const local = localIntelligence({ lenses: [fixtureLens(), fixtureVisitLens(), fixtureGiftLens()], adapters: [fixtureAdapter()], model: scriptedModel(turns), background: false });
     n += 1;
     return {
       intelligence: local,

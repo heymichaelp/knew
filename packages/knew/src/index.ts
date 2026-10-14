@@ -2,6 +2,8 @@ export * from "./types.ts";
 export * from "./defaults.ts";
 export * from "./vocabulary.ts";
 export * from "./lens.ts";
+export * from "./adapter.ts";
+export * from "./moves.ts";
 export * from "./brief.ts";
 export * from "./readiness.ts";
 export * from "./reconcile.ts";
@@ -16,4 +18,4 @@ export { localIntelligence, type LocalIntelligence, type LocalIntelligenceOption
 export { ModelAnswerError, type Model, type ModelAnswer, type ModelRequest } from "./model.ts";
 export { memoryStore, type LocalStore, type RosterRecord, type ScopeRecord, type StoredEntity, type StoredEpisode } from "./store.ts";
 export { statelessIntelligence } from "./stateless.ts";
-export { EXTRACT_V1, EXTRACT_V2, NEXT_V1, RECONCILE_V1, RECONCILE_V2, PROMPT_TEXT } from "./prompts/index.ts";
+export { EXTRACT_V1, EXTRACT_V2, MOVE_V1, NEXT_V1, RECONCILE_V1, RECONCILE_V2, PROMPT_TEXT } from "./prompts/index.ts";

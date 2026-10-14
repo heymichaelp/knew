@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { z } from "zod";
 import { appleModel, appleSchemaOf, withNulls, type AppleCall, type AppleSchema } from "../src/apple.ts";
-import { localIntelligence, ModelContextError, ModelUnavailableError, extractSchemaFor, nextSchemaFor, reconcileSchema } from "../src/index.ts";
-import { extracted, extraction, fixtureLens, fixtureVocabulary } from "../src/testing.ts";
+import { compileAdapter, localIntelligence, ModelContextError, ModelUnavailableError, extractSchemaFor, moveSchemaFor, nextSchemaFor, reconcileSchema } from "../src/index.ts";
+import { extracted, extraction, fixtureAdapter, fixtureLens, fixtureVocabulary } from "../src/testing.ts";
 
 /**
  * On the device: knew's schemas in the shape Apple's guided generation takes,
@@ -44,6 +44,21 @@ describe("Scenario: knew's schemas, in the shape Apple's guided generation takes
     assert.deepEqual([property(proposal, "factIds").schema.kind, property(proposal, "label").optional], ["array", false]);
   });
 
+  it("asks the move call for an adapter's fields as optional strings, an enum as choices, and leaves the key out of an adapter with none", () => {
+    const schema = jsonSchema(moveSchemaFor(fixtureAdapter()));
+    const move = appleSchemaOf(schema);
+    const proposal = (property(move, "proposed").schema as Extract<AppleSchema, { kind: "array" }>).items;
+    const fields = property(proposal, "fields");
+    assert.deepEqual([fields.optional, property(fields.schema, "when").optional, property(fields.schema, "why").schema], [false, true, { kind: "string" }]);
+    const closure = (property(move, "closed").schema as Extract<AppleSchema, { kind: "array" }>).items;
+    assert.deepEqual(property(closure, "reason").schema, { kind: "string", choices: ["done", "answered", "stale"], name: "Answer_closed_item_reason" });
+    const answer = withNulls(schema, { closed: [], proposed: [{ label: "Wish her luck", factIds: ["f"], fields: { when: "2026-03-14" } }] });
+    assert.deepEqual(answer, { closed: [], proposed: [{ label: "Wish her luck", factIds: ["f"], fields: { when: "2026-03-14", why: null } }] });
+    const bare = compileAdapter({ id: "nudges", version: 1, vocabulary: "fixture", noun: "nudge", instructions: "A word in season." }, fixtureVocabulary());
+    const bareProposal = (property(appleSchemaOf(jsonSchema(moveSchemaFor(bare))), "proposed").schema as Extract<AppleSchema, { kind: "array" }>).items;
+    assert.deepEqual((bareProposal as Extract<AppleSchema, { kind: "object" }>).properties.map((p) => p.name), ["label", "factIds"]);
+  });
+
   it("puts back as null every field Apple left out that knew allows to be null, so the answer passes knew's own check", () => {
     const schema = jsonSchema(reconcileSchema);
     const answer = withNulls(schema, { decisions: [{ newIndex: 0, action: "add" }], summary: "Linda." });
@@ -63,9 +78,10 @@ describe("Scenario: A note read on the device", () => {
         return JSON.stringify({ facts: facts.map(({ attributes: _a, validAt: _v, invalidAt: _i, ...rest }) => rest), aliases: [], unresolvedNames: [], fieldUpdates: [] });
       }
       if (call.prompt.startsWith("Directions")) return JSON.stringify({ answered: [], withdrawn: [], proposed: [] });
+      if (call.prompt.startsWith("Moves of kind")) return JSON.stringify({ closed: [], proposed: [] });
       return JSON.stringify({ decisions: [], summary: "Linda gardens." });
     };
-    const knew = localIntelligence({ lenses: [fixtureLens()], model: appleModel({ respond }), background: false });
+    const knew = localIntelligence({ lenses: [fixtureLens()], adapters: [fixtureAdapter()], model: appleModel({ respond }), background: false });
     const scope = { clientId: "phone", subjectId: "me" };
     await knew.upsertEntity(scope, { id: "linda", name: "Linda" });
     await knew.addEpisode(scope, { source: "note", content: "Mom gardens", entityHints: ["linda"] });
@@ -75,10 +91,13 @@ describe("Scenario: A note read on the device", () => {
       ["extract", "apple-foundation-models", 0],
       ["reconcile", "apple-foundation-models", 0],
       ["next", "apple-foundation-models", 0],
+      ["move", "apple-foundation-models", 0],
     ]);
     assert.deepEqual((await knew.getEntity(scope, "linda"))!.facts.map((f) => f.fact), ["Gardening"]);
     assert.match(calls[0]!.instructions, /# Charter/);
     assert.equal(calls[0]!.schema.kind, "object");
+    assert.match(calls[3]!.instructions, /## This kind of move/);
+    assert.equal(property(calls[3]!.schema, "proposed").schema.kind, "array", "the adapter's schema went through the same translation");
   });
 
   it("refuses a request too long for the model before calling it, and maps the bridge's errors", async () => {
