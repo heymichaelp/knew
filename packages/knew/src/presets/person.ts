@@ -3,15 +3,20 @@ import type { VocabularyDefinition } from "../vocabulary.ts";
 
 /**
  * A person, as anyone who keeps track of the people in their life would
- * carve them up: what to steer clear of, what is coming up, how their life is
- * arranged, their work, their people, what they love, what they already
- * have, where they are from; how the two of you know each other and what is
- * between you; and, about the knower, what shapes what they can do. Generic
- * on purpose — drawn from what the first two products over people share, and
+ * carve them up: what to steer clear of, what is coming up, their work,
+ * their people, what they love, what they already have, where they live and
+ * have come from; how the two of you know each other and what is between
+ * you; and, about the knower, what shapes what they can do. Generic on
+ * purpose — drawn from what the first two products over people share, and
  * named for neither.
  *
- * Revisit windows are set only where a fact plainly drifts unheard
- * (circumstances, standing habits, work); a client switches any off with
+ * Every dimension is one a reader can act on and could, in time, fill. There
+ * is no "how their life is arranged": it was never complete, so as a
+ * direction it was never useful. Where they live is background; a standing
+ * habit is something they love.
+ *
+ * Revisit windows are set only where a fact plainly drifts unheard (where
+ * they live, standing habits, work); a client switches any off with
  * `revisitAfterDays: null`.
  */
 
@@ -28,7 +33,7 @@ const CHARTER = `# What is worth keeping
 **Small talk yields nothing.** Returning no facts is a proper answer.
 `;
 
-/** The person vocabulary: seventeen types across twelve dimensions, two about the relationship and one about the knower. */
+/** The person vocabulary: seventeen types across eleven dimensions, two about the relationship and one about the knower. */
 export function vocabulary(): VocabularyDefinition {
   return {
     id: PRESET.id,
@@ -50,35 +55,13 @@ export function vocabulary(): VocabularyDefinition {
         description: "Something said once, in passing, that would be worth asking about next time: a thing they meant to try, a worry, a hope.",
         dimension: "ahead",
       },
-      CIRCUMSTANCE: {
-        description:
-          "How their life is arranged for now: where they live, a schedule, a busy season, who they care for. It changes, so give a date when one was said.",
-        dimension: "life",
-        revisitAfterDays: 180,
-      },
-      LIFE_EVENT: {
-        description: "A dated change in circumstance: a move, a new job, a retirement, a birth, an illness, a loss, a marriage, a separation.",
-        dimension: "life",
-        attributes: [
-          {
-            name: "kind",
-            kind: "enum",
-            values: ["moved", "new_job", "retired", "new_baby", "illness", "bereavement", "marriage", "separation", "other"],
-          },
-        ],
-      },
-      RITUAL: {
-        description: "A standing habit: the Sunday run, the monthly dinner, the annual trip.",
-        dimension: "life",
-        revisitAfterDays: 365,
-      },
       WORK: {
         description: "What they do: their role, employer or field, and what they are working on.",
         dimension: "work",
         revisitAfterDays: 365,
       },
       RELATION: {
-        description: "Someone in their life and how they relate: a partner, a child, a parent, a friend, a colleague.",
+        description: "Someone in their life and how they relate: a partner, a child, a parent, a friend, a colleague, someone they care for.",
         dimension: "people",
       },
       INTEREST: {
@@ -95,6 +78,11 @@ export function vocabulary(): VocabularyDefinition {
         description: "What they like and dislike, in their own words: food, music, books, style.",
         dimension: "pursuits",
         enduring: true,
+      },
+      RITUAL: {
+        description: "A standing habit: the Sunday run, the monthly dinner, the annual trip.",
+        dimension: "pursuits",
+        revisitAfterDays: 365,
       },
       HAS: {
         description: "Something they already have, so nobody suggests what they own or gives it twice.",
@@ -116,9 +104,25 @@ export function vocabulary(): VocabularyDefinition {
         dimension: "you",
       },
       ORIGIN: {
-        description: "Where they are from or have lived: a hometown, a country, where they grew up or studied.",
+        description: "Where they are from or have lived before: a hometown, a country, where they grew up or studied.",
         dimension: "background",
         enduring: true,
+      },
+      HOME: {
+        description: "Where they live now, and who with. It changes, so give a date when one was said.",
+        dimension: "background",
+        revisitAfterDays: 365,
+      },
+      LIFE_EVENT: {
+        description: "A dated change in their life: a move, a new job, a retirement, a birth, an illness, a loss, a marriage, a separation.",
+        dimension: "background",
+        attributes: [
+          {
+            name: "kind",
+            kind: "enum",
+            values: ["moved", "new_job", "retired", "new_baby", "illness", "bereavement", "marriage", "separation", "other"],
+          },
+        ],
       },
       OTHER: {
         description: "A statement worth keeping that fits no other type.",
@@ -128,7 +132,6 @@ export function vocabulary(): VocabularyDefinition {
     dimensions: {
       avoid: { label: "Steer clear of" },
       ahead: { label: "Coming up" },
-      life: { label: "How life is arranged" },
       work: { label: "Work" },
       people: { label: "People in their life" },
       pursuits: { label: "What they love" },
@@ -147,10 +150,10 @@ export function vocabulary(): VocabularyDefinition {
 
 /**
  * The starter lens: know them well enough to meet them well next time. Its
- * needs run coarse to fine: work, people, how you know each other, how life
- * is arranged, where they are from, then what they love, what is coming up,
- * what is between you, what they have, and what to steer clear of. Every need
- * weighs the same, so that is the order of the directions.
+ * needs run coarse to fine: work, people, how you know each other, where
+ * they live and come from, then what they love, what is coming up, what is
+ * between you, what they have, and what to steer clear of. Every need weighs
+ * the same, so that is the order of the directions.
  */
 export function lens(): LensDefinition {
   return {
@@ -161,6 +164,6 @@ export function lens(): LensDefinition {
     header: "What you know about {who}:",
     overHeading: "No longer the case",
     attributeTags: ["level"],
-    needs: ["work", "people", "between", "life", "background", "pursuits", "ahead", "together", "has", "avoid"].map((dimension) => ({ id: dimension, dimension })),
+    needs: ["work", "people", "between", "background", "pursuits", "ahead", "together", "has", "avoid"].map((dimension) => ({ id: dimension, dimension })),
   };
 }

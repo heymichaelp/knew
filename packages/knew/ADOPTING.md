@@ -135,7 +135,7 @@ import { person } from "@popjoker/knew/presets";
 export const vocabulary = extendVocabulary(person.vocabulary(), {
   id: "my-app",
   version: 1,
-  factTypes: { CIRCUMSTANCE: { revisitAfterDays: null } }, // switch a preset default off
+  factTypes: { HOME: { revisitAfterDays: null } }, // switch a preset default off
   charter: "# What we keep\n\n…",
 });
 

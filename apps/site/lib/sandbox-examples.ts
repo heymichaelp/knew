@@ -77,7 +77,7 @@ export const EXAMPLES: SandboxExample[] = [
     lens: presets.person.lens(),
     facts: drafts("mum", [
       { type: "AVOID", text: "Never bring up Jamie.", said: "2025-03-02" },
-      { type: "CIRCUMSTANCE", text: "Living in Lisbon for the year.", said: "2025-09-10", until: "2026-09-28" },
+      { type: "HOME", text: "Living in Lisbon for the year.", said: "2025-09-10", until: "2026-09-28" },
       { type: "LIFE_EVENT", text: "Moved home from Lisbon.", said: "2026-10-04", from: "2026-09-28", attributes: { kind: "moved" } },
       { type: "WORK", text: "Starts a new job at the hospital.", said: "2026-10-04", from: "2026-10-12" },
       { type: "SKILL", text: "Makes ceramics.", said: "2026-10-04", attributes: { level: "serious" } },
